@@ -1,0 +1,42 @@
+tranid,FROM,TO,DESCRIPTION,AMOUNT
+TRAN010824080000,Salary,ICICI Salary Account,Monthly Salary - August,125000.00
+TRAN010824080500,Freelance Income,HDFC Savings,Consulting Payment,42000.00
+TRAN010824090000,ICICI Salary Account,House Rent,Rent - August,25000.00
+TRAN010824100000,ICICI Salary Account,Home Loan,Home Loan EMI,35000.00
+TRAN010824103000,ICICI Salary Account,Car Loan,Car Loan EMI,18000.00
+TRAN020824080000,ICICI Salary Account,Groceries,Monthly Groceries,4000.00
+TRAN020824120000,Cash,Dining Out,Lunch,580.00
+TRAN030824083000,ICICI Salary Account,Fuel,Petrol,2350.00
+TRAN030824140000,HDFC Credit Card,Shopping,Amazon Independence Sale,8800.00
+TRAN040824090000,ICICI Salary Account,Utilities,Electricity,1700.00
+TRAN040824110000,ICICI Salary Account,Internet & Mobile,Airtel Bills,1899.00
+TRAN050824080000,ICICI Salary Account,Groceries,Weekly Groceries,3300.00
+TRAN050824123000,HDFC Credit Card,Dining Out,Family Dinner,1950.00
+TRAN060824100000,ICICI Salary Account,Gym & Fitness,Gym Fee,2000.00
+TRAN070824083000,ICICI Salary Account,Fuel,Fuel,2600.00
+TRAN080924090000,ICICI Salary Account,Groceries,Groceries,3400.00
+TRAN080824143000,SBI Credit Card,Shopping,Flipkart,6800.00
+TRAN090824080000,HDFC Savings,Investments,Mutual Fund,10000.00
+TRAN100824090000,ICICI Salary Account,Healthcare,Medicine,980.00
+TRAN110824083000,ICICI Salary Account,Fuel,Petrol,2450.00
+TRAN120824090000,ICICI Salary Account,Groceries,Groceries,3700.00
+TRAN130824100000,ICICI Salary Account,Education,Books,2100.00
+TRAN140824083000,ICICI Salary Account,Fuel,Diesel,2700.00
+TRAN150824090000,ICICI Salary Account,Groceries,Independence Day Shopping,4800.00
+TRAN150824143000,HDFC Credit Card,Shopping,Festive Shopping,9200.00
+TRAN160824100000,ICICI Salary Account,Gifts & Donations,Festival Gifts,3800.00
+TRAN170824083000,ICICI Salary Account,Fuel,Petrol,2500.00
+TRAN180824090000,ICICI Salary Account,Groceries,Groceries,3200.00
+TRAN190824100000,ICICI Salary Account,Healthcare,Checkup,1600.00
+TRAN200824083000,ICICI Salary Account,Fuel,Gas,2650.00
+TRAN210824090000,ICICI Salary Account,Groceries,Shopping,3850.00
+TRAN220824100000,ICICI Salary Account,Internet & Mobile,Mobile Recharge,599.00
+TRAN230824083000,ICICI Salary Account,Fuel,Petrol,2750.00
+TRAN240824090000,ICICI Salary Account,Groceries,Provisions,3500.00
+TRAN250824100000,ICICI Salary Account,Gifts & Donations,Raksha Bandhan Gifts,4200.00
+TRAN260824083000,ICICI Salary Account,Fuel,Fuel,2600.00
+TRAN270824090000,ICICI Salary Account,Groceries,Monthly Stock,4400.00
+TRAN280824100000,ICICI Salary Account,Healthcare,Hospital Bill,2800.00
+TRAN290824083000,ICICI Salary Account,Fuel,Petrol,2550.00
+TRAN300824090000,ICICI Salary Account,Groceries,Month End,4900.00
+TRAN310824100000,HDFC Savings,Investments,FD,20000.00

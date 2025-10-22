@@ -1,0 +1,70 @@
+tranid,FROM,TO,DESCRIPTION,AMOUNT
+TRAN010924080000,Salary,ICICI Salary Account,Monthly Salary - September,125000.00
+TRAN010924080500,Freelance Income,HDFC Savings,Client Project Payment,38000.00
+TRAN010924090000,ICICI Salary Account,House Rent,Monthly Rent Payment,25000.00
+TRAN010924100000,ICICI Salary Account,Home Loan,EMI Payment - Home Loan,35000.00
+TRAN010924103000,ICICI Salary Account,Car Loan,EMI Payment - Car Loan,18000.00
+TRAN020924080000,ICICI Salary Account,Groceries,BigBasket Order,4200.00
+TRAN020924120000,Cash,Dining Out,Lunch at Starbucks,650.00
+TRAN020924190000,HDFC Credit Card,Dining Out,Dinner at TGI Friday's,2500.00
+TRAN030924083000,ICICI Salary Account,Fuel,Petrol Fill-up,2400.00
+TRAN030924140000,HDFC Credit Card,Shopping,Flipkart Sale Shopping,9500.00
+TRAN030924183000,Cash,Entertainment,Movie & Snacks,1400.00
+TRAN040924090000,ICICI Salary Account,Utilities,Electricity Bill,1650.00
+TRAN040924093000,ICICI Salary Account,Utilities,Water Bill,550.00
+TRAN040924110000,ICICI Salary Account,Internet & Mobile,Broadband,1200.00
+TRAN050924080000,ICICI Salary Account,Groceries,Weekly Shopping,3500.00
+TRAN050924123000,HDFC Credit Card,Dining Out,Breakfast Meeting,850.00
+TRAN050924193000,Cash,Transportation,Cab to Airport,450.00
+TRAN060924100000,ICICI Salary Account,Gym & Fitness,Gym Membership,2000.00
+TRAN060924143000,HDFC Credit Card,Shopping,Pantaloons - Clothes,4800.00
+TRAN070924083000,ICICI Salary Account,Fuel,Diesel Fill,2700.00
+TRAN070924120000,Cash,Dining Out,Food Court,380.00
+TRAN080924090000,ICICI Salary Account,Groceries,Supermarket,3100.00
+TRAN080924143000,SBI Credit Card,Shopping,Amazon - Electronics,7500.00
+TRAN090924080000,HDFC Savings,Investments,SIP Payment,10000.00
+TRAN090924120000,Cash,Dining Out,Restaurant,1100.00
+TRAN100924090000,ICICI Salary Account,Healthcare,Pharmacy Bills,1100.00
+TRAN100924143000,HDFC Credit Card,Shopping,Lifestyle Store,5200.00
+TRAN110924083000,ICICI Salary Account,Fuel,Petrol Station,2500.00
+TRAN110924120000,Cash,Dining Out,Coffee Shop,320.00
+TRAN120924090000,ICICI Salary Account,Groceries,Fresh Vegetables,2800.00
+TRAN120924143000,HDFC Credit Card,Shopping,Online Shopping,3800.00
+TRAN130924100000,ICICI Salary Account,Education,Online Course Fee,3200.00
+TRAN130924143000,SBI Credit Card,Shopping,Electronics Store,11000.00
+TRAN140924083000,ICICI Salary Account,Fuel,Gas Station,2600.00
+TRAN140924120000,Cash,Dining Out,Quick Bite,550.00
+TRAN150924090000,ICICI Salary Account,Groceries,Monthly Stock,4500.00
+TRAN150924143000,HDFC Credit Card,Shopping,Fashion Store,6200.00
+TRAN160924100000,ICICI Salary Account,Gifts & Donations,Gift Purchase,2500.00
+TRAN160924143000,SBI Credit Card,Shopping,Departmental Store,5800.00
+TRAN170924083000,ICICI Salary Account,Fuel,Fuel Station,2750.00
+TRAN170924120000,Cash,Dining Out,Lunch Special,680.00
+TRAN180924090000,ICICI Salary Account,Groceries,Grocery Shopping,3600.00
+TRAN180924143000,HDFC Credit Card,Shopping,Branded Showroom,7800.00
+TRAN190924100000,ICICI Salary Account,Healthcare,Medical Checkup,2200.00
+TRAN190924143000,SBI Credit Card,Shopping,Mall Shopping,8200.00
+TRAN200924083000,ICICI Salary Account,Fuel,Refuel,2650.00
+TRAN200924120000,Cash,Dining Out,Evening Snacks,420.00
+TRAN210924090000,ICICI Salary Account,Groceries,Weekly Buy,3900.00
+TRAN210924143000,HDFC Credit Card,Shopping,Shoe Store,5500.00
+TRAN220924100000,ICICI Salary Account,Internet & Mobile,Phone Bill,650.00
+TRAN220924143000,SBI Credit Card,Shopping,Watch Purchase,9500.00
+TRAN230924083000,ICICI Salary Account,Fuel,Filling Station,2800.00
+TRAN230924120000,Cash,Dining Out,Sandwich Shop,380.00
+TRAN240924090000,ICICI Salary Account,Groceries,Provisions,3300.00
+TRAN240924143000,HDFC Credit Card,Shopping,Accessories,4200.00
+TRAN250924100000,ICICI Salary Account,Gifts & Donations,Festival Shopping,3500.00
+TRAN250924143000,SBI Credit Card,Travel,Travel Booking,6500.00
+TRAN260924083000,ICICI Salary Account,Fuel,Petrol Pump,2550.00
+TRAN260924120000,Cash,Dining Out,Dine Out,750.00
+TRAN270924090000,ICICI Salary Account,Groceries,Grocery Run,4100.00
+TRAN270924143000,HDFC Credit Card,Shopping,Brand Store,7200.00
+TRAN280924100000,ICICI Salary Account,Healthcare,Doctor Visit,1800.00
+TRAN280924143000,SBI Credit Card,Shopping,Home Appliance,13500.00
+TRAN290924083000,ICICI Salary Account,Fuel,Gas Fill,2700.00
+TRAN290924120000,Cash,Dining Out,Tea Time,280.00
+TRAN300924090000,ICICI Salary Account,Groceries,Month End Buy,5200.00
+TRAN300924143000,HDFC Credit Card,Shopping,Miscellaneous,3600.00
+TRAN200925005000,ICICI Salary Account,Cash,e34rt,900000000.00
+TRAN210925171300,Salary,ICICI Salary Account,Res,100000.00

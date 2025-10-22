@@ -1,0 +1,9 @@
+accountName,accountCategory,includeInNetWorth,currentBalance,dueDate,lastPaymentDate,budget
+Cash,Assets,yes,0.00,,,
+Bank Account,Assets,yes,0.00,,,
+Credit Card,Liabilities,yes,0.00,,,
+Salary,Revenue,no,-100.00,,,
+BackupExpenses,Expenses,no,0.00,,,0.00
+ICICI,Assets,yes,53.00,,,
+Transportation,Expenses,no,35.00,,,1000.00
+Food &amp; Dining,Expenses,no,12.00,,,1000.00
