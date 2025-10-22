@@ -121,7 +121,7 @@ func UpdateMonthlyReport(transactionDate time.Time) error {
 		if fromCat == "Revenue" {
 			monthIncome += t.Amount
 		}
-		if toCat == "Expenses" && t.To != "BackupExpenses" {
+		if toCat == "Expenses" {
 			monthExpenses += t.Amount
 		}
 	}
@@ -129,7 +129,7 @@ func UpdateMonthlyReport(transactionDate time.Time) error {
 	// Calculate total budget
 	var totalBudget float64
 	for _, acc := range accounts {
-		if acc.Category == "Expenses" && acc.Name != "BackupExpenses" && acc.Budget > 0 {
+		if acc.Category == "Expenses" && acc.Budget > 0 {
 			totalBudget += acc.Budget
 		}
 	}

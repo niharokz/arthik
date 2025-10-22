@@ -9,7 +9,6 @@ import (
 	"arthik/config"
 	"arthik/handlers"
 	"arthik/middleware"
-	"arthik/models"
 	"arthik/services"
 )
 
@@ -31,16 +30,6 @@ func main() {
 		services.InitializeDefaultAccounts()
 	}
 
-	// Ensure BackupExpenses account exists
-	if !services.AccountExists("BackupExpenses") {
-		services.AddAccount(models.Account{
-			Name:              "BackupExpenses",
-			Category:          "Expenses",
-			IncludeInNetWorth: false,
-			CurrentBalance:    0,
-		})
-	}
-
 	// Start cleanup goroutine for rate limiters
 	go middleware.CleanupRateLimiters()
 
@@ -49,7 +38,7 @@ func main() {
 
 	// Start server
 	fmt.Println("🚀 arthik.app starting on http://localhost:8081")
-	fmt.Println("⚠️  WARNING: Using HTTP. For production, use HTTPS with TLS certificates")
+//	fmt.Println("⚠️  WARNING: Using HTTP. For production, use HTTPS with TLS certificates")
 	log.Fatal(http.ListenAndServe(config.ServerPort, nil))
 }
 

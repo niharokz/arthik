@@ -41,7 +41,7 @@ func CalculateDashboardStats() (models.DashboardStats, error) {
 		if fromCat == "Revenue" {
 			monthIncome += t.Amount
 		}
-		if toCat == "Expenses" && t.To != "BackupExpenses" {
+		if toCat == "Expenses" {
 			monthExpenses += t.Amount
 			categoryExpenses[t.To] += t.Amount
 		}

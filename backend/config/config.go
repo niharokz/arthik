@@ -58,7 +58,6 @@ var DefaultAccounts = []struct {
 	{"Salary", "Revenue", false},
 	{"Food & Dining", "Expenses", false},
 	{"Transportation", "Expenses", false},
-	{"BackupExpenses", "Expenses", false},
 }
 
 // Security headers configuration
