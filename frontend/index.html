@@ -3,417 +3,282 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>arthik.app - Personal Finance</title>
+    <title>arthik - Personal Finance Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Login Screen -->
-    <div id="loginScreen" class="login-screen">
+    <!-- Login Page -->
+    <div id="loginPage" class="login-container">
         <div class="login-card">
-            <h2>🔒 arthik.app</h2>
-            <input type="password" id="passwordInput" placeholder="Enter your password">
-            <button id="loginButton">Login</button>
-            <p style="text-align: center; margin-top: 1rem; font-size: 0.875rem; color: var(--text-secondary);">
-                Default password: admin123
-            </p>
+            <h1>arthik</h1>
+            <p>Personal Finance Dashboard</p>
+            <form id="loginForm">
+                <div class="input-field">
+                    <input type="password" id="password" placeholder="Enter Password" required>
+                    <span class="material-icons">lock</span>
+                </div>
+                <button type="submit" class="btn-primary">Login</button>
+                <div id="loginError" class="error-message"></div>
+            </form>
         </div>
     </div>
-
-    <!-- Main Application -->
-    <div id="mainApp" class="container hidden">
-        <!-- Header -->
-        <div class="header">
-            <div class="header-content">
-                <h1>
-                    <span class="material-icons">account_balance_wallet</span>
-                    arthik.app
-                </h1>
-                <div class="settings-container">
-                    <button class="settings-btn" id="settingsBtn" title="Settings">
-                        <span class="material-icons">settings</span>
-                    </button>
-                    <div class="settings-dropdown" id="settingsDropdown">
-                        <div class="settings-item">
-                            <span class="material-icons">palette</span>
-                            <span>Theme</span>
-                            <div class="theme-toggle">
-                                <button class="theme-btn" data-theme="light" onclick="changeTheme('light')" title="Light Mode">
-                                    <span class="material-icons">light_mode</span>
-                                </button>
-                                <button class="theme-btn" data-theme="dark" onclick="changeTheme('dark')" title="Dark Mode">
-                                    <span class="material-icons">dark_mode</span>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="settings-item" onclick="showChangePasswordModal()">
-                            <span class="material-icons">lock</span>
-                            <span>Change Password</span>
-                        </div>
-                        <div class="settings-item logout-item" onclick="logout()">
-                            <span class="material-icons">logout</span>
-                            <span>Logout</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Navigation Tabs -->
-        <div class="tabs">
-            <div class="tab active" data-tab="dashboard">
-                <span class="material-icons">dashboard</span>
-                Dashboard
-            </div>
-            <div class="tab" data-tab="ledger">
-                <span class="material-icons">receipt_long</span>
-                Ledger
-            </div>
-            <div class="tab" data-tab="accounts">
-                <span class="material-icons">account_balance</span>
-                Accounts
-            </div>
-            <div class="tab" data-tab="planner">
-                <span class="material-icons">event_repeat</span>
-                Planner
-            </div>
-        </div>
-        
-        <!-- Dashboard Tab -->
-        <div id="dashboard" class="content active">
-            <!-- Top Stats -->
-            <div class="grid grid-4">
-                <div class="stat-card">
-                    <div class="stat-label">
-                        <span class="material-icons">trending_up</span>
-                        Net Worth
-                    </div>
-                    <div class="stat-value" id="netWorth">Rs 0</div>
-                </div>
-                <div class="stat-card success">
-                    <div class="stat-label">
-                        <span class="material-icons">account_balance</span>
-                        Total Assets
-                    </div>
-                    <div class="stat-value" id="totalAssets">Rs 0</div>
-                </div>
-                <div class="stat-card error">
-                    <div class="stat-label">
-                        <span class="material-icons">credit_card</span>
-                        Liabilities
-                    </div>
-                    <div class="stat-value" id="totalLiabilities">Rs 0</div>
-                </div>
-                <div class="stat-card warning">
-                    <div class="stat-label">
-                        <span class="material-icons">savings</span>
-                        Monthly Savings
-                    </div>
-                    <div class="stat-value" id="monthSavings">Rs 0</div>
-                </div>
-            </div>
-            
-            <!-- Charts Row 1 -->
-            <div class="grid grid-2">
-                <div class="card chart-card">
-                    <h3>
-                        <span class="material-icons">pie_chart</span>
-                        This Month Overview
-                    </h3>
-                    <div class="chart-wrapper">
-                        <canvas id="monthlyOverviewChart"></canvas>
-                    </div>
-                    <div class="chart-legend">
-                        <div class="legend-item">
-                            <div class="legend-color" style="background: #4caf50;"></div>
-                            <div class="legend-text">
-                                <span>Income</span>
-                                <strong class="positive" id="monthIncome">Rs 0</strong>
-                            </div>
-                        </div>
-                        <div class="legend-item">
-                            <div class="legend-color" style="background: #f44336;"></div>
-                            <div class="legend-text">
-                                <span>Expenses</span>
-                                <strong class="negative" id="monthExpenses">Rs 0</strong>
-                            </div>
-                        </div>
-                        <div class="legend-item">
-                            <div class="legend-color" style="background: #ff9800;"></div>
-                            <div class="legend-text">
-                                <span>Net Savings</span>
-                                <strong id="monthSavings2">Rs 0</strong>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="card chart-card">
-                    <h3>
-                        <span class="material-icons">bar_chart</span>
-                        Budget vs Expenses
-                    </h3>
-                    <div class="chart-wrapper">
-                        <canvas id="budgetChart"></canvas>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Progress Chart -->
-            <div class="card chart-card">
-                <h3>
-                    <span class="material-icons">show_chart</span>
-                    Financial Progress
-                </h3>
-                <div class="chart-wrapper" style="height: 350px;">
-                    <canvas id="progressChart"></canvas>
-                </div>
-            </div>
-            
-            <!-- Charts Row 2 -->
-            <div class="grid grid-2">
-                <div class="card chart-card">
-                    <h3>
-                        <span class="material-icons">donut_large</span>
-                        Asset Distribution
-                    </h3>
-                    <div class="chart-wrapper">
-                        <canvas id="assetDistributionChart"></canvas>
-                    </div>
-                </div>
-                
-                <div class="card chart-card">
-                    <h3>
-                        <span class="material-icons">insights</span>
-                        Quick Stats
-                    </h3>
-                    <div id="quickStatsContainer" class="quick-stats-grid"></div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Ledger Tab -->
-        <div id="ledger" class="content">
-            <button class="fab" id="fabButton">
-                <span class="material-icons">add</span>
-            </button>
-            
-            <!-- New Transaction Form -->
-            <div id="newTransactionForm" class="hidden edit-form">
-                <input type="date" id="txnDate" required>
-                <input type="time" id="txnTime" required>
-                <select id="txnFrom">
-                    <option value="">From Account</option>
-                </select>
-                <select id="txnTo">
-                    <option value="">To Account</option>
-                </select>
-                <input type="text" id="txnDesc" placeholder="Description">
-                <input type="number" id="txnAmount" placeholder="Amount" step="0.01">
-                <div class="edit-actions">
-                    <button class="btn-icon save" id="saveTxnBtn" title="Save">
-                        <span class="material-icons">check</span>
-                    </button>
-                    <button class="btn-icon cancel" id="cancelTxnBtn" title="Cancel">
-                        <span class="material-icons">close</span>
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Transactions List -->
-            <div class="card">
-                <h3>Transactions</h3>
-                <ul class="transaction-list" id="transactionsList"></ul>
-                <div class="pagination">
-                    <button id="prevPageBtn">
-                        <span class="material-icons">chevron_left</span>
-                    </button>
-                    <span class="page-info" id="pageInfo">Page 1</span>
-                    <button id="nextPageBtn">
-                        <span class="material-icons">chevron_right</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Accounts Tab -->
-        <div id="accounts" class="content">
-            <button class="fab" id="fabAddAccount">
-                <span class="material-icons">add</span>
-            </button>
-            
-            <!-- New Account Form -->
-            <div id="newAccountForm" class="hidden edit-form">
-                <h3 style="width: 100%; margin-bottom: 1rem;">Add New Account</h3>
-                
-                <input type="text" id="accName" placeholder="Account Name *" required style="flex: 1; min-width: 200px;">
-                
-                <select id="accCategory" required style="flex: 1; min-width: 150px;">
-                    <option value="">Select Account Type *</option>
-                    <option value="Assets">Assets</option>
-                    <option value="Liabilities">Liabilities</option>
-                    <option value="Equity">Equity</option>
-                    <option value="Revenue">Revenue</option>
-                    <option value="Expenses">Expenses</option>
-                </select>
-                
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0;">
-                    <input type="checkbox" id="accInclude" checked style="width: auto; margin: 0;">
-                    <span style="font-size: 0.875rem; white-space: nowrap;">Include in Net Worth</span>
-                </label>
-                
-                <!-- Liabilities Fields -->
-                <div id="liabilitiesFields" class="hidden conditional-fields">
-                    <div style="flex: 1; min-width: 150px;">
-                        <label for="accDueDate" style="display: block; font-size: 0.875rem; margin-bottom: 0.25rem; color: var(--text-secondary);">Next Due Date</label>
-                        <input type="date" id="accDueDate" style="margin: 0;">
-                    </div>
-                    <div style="flex: 1; min-width: 150px;">
-                        <label for="accLastPaymentDate" style="display: block; font-size: 0.875rem; margin-bottom: 0.25rem; color: var(--text-secondary);">Last Payment Date</label>
-                        <input type="date" id="accLastPaymentDate" style="margin: 0;">
-                    </div>
-                </div>
-                
-                <!-- Expenses Fields -->
-                <div id="expensesFields" class="hidden conditional-fields">
-                    <div style="flex: 1; min-width: 150px;">
-                        <label for="accBudget" style="display: block; font-size: 0.875rem; margin-bottom: 0.25rem; color: var(--text-secondary);">Monthly Budget (Rs)</label>
-                        <input type="number" id="accBudget" step="0.01" min="0" value="0" style="margin: 0;">
-                    </div>
-                </div>
-                
-                <div class="edit-actions" style="width: 100%; justify-content: flex-end;">
-                    <button class="btn-icon save" id="saveAccountBtn" title="Save">
-                        <span class="material-icons">check</span>
-                    </button>
-                    <button class="btn-icon cancel" id="cancelAddAccountBtn" title="Cancel">
-                        <span class="material-icons">close</span>
-                    </button>
-                </div>
-            </div>
-            
-            <div id="accountsList"></div>
-        </div>
-        
-        <!-- Planner Tab -->
-        <div id="planner" class="content">
-            <button class="fab" id="fabAddRecurrence">
-                <span class="material-icons">repeat</span>
-            </button>
-            
-            <!-- New Recurrence Form -->
-            <div id="newRecurrenceForm" class="hidden edit-form">
-                <h3 style="width: 100%; margin-bottom: 1rem;">Add Recurring Transaction</h3>
-                
-                <input type="number" id="recDayOfMonth" placeholder="Day of Month (1-31)" min="1" max="31" required style="flex: 1; min-width: 150px;">
-                
-                <select id="recFrom" required style="flex: 1; min-width: 150px;">
-                    <option value="">From Account</option>
-                </select>
-                
-                <select id="recTo" required style="flex: 1; min-width: 150px;">
-                    <option value="">To Account</option>
-                </select>
-                
-                <input type="text" id="recDesc" placeholder="Description" required style="flex: 2; min-width: 200px;">
-                
-                <input type="number" id="recAmount" placeholder="Amount" step="0.01" required style="flex: 1; min-width: 120px;">
-                
-                <div class="edit-actions" style="width: 100%; justify-content: flex-end;">
-                    <button class="btn-icon save" id="saveRecurrenceBtn" title="Save">
-                        <span class="material-icons">check</span>
-                    </button>
-                    <button class="btn-icon cancel" id="cancelRecurrenceBtn" title="Cancel">
-                        <span class="material-icons">close</span>
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Recurring Transactions List -->
-            <div class="card">
-                <h3>Recurring Transactions</h3>
-                <ul class="transaction-list" id="recurrenceList"></ul>
-            </div>
-            
-            <!-- Add Note Button -->
-            <button class="add-note-btn" id="addNoteBtn">
-                <span class="material-icons">add</span>
-                Add Note
-            </button>
-            
-            <!-- New Note Form -->
-            <div id="newNoteForm" class="hidden card">
-                <h3>Add Note</h3>
-                <input type="text" id="noteHeading" placeholder="Note Heading" required style="margin-bottom: 0.5rem;">
-                <textarea id="noteContent" placeholder="Note content..." rows="6" required style="margin-bottom: 0.5rem;"></textarea>
-                <div style="display: flex; gap: 0.5rem;">
-                    <button class="btn-secondary" onclick="cancelNote()">Cancel</button>
-                    <button class="btn-primary" onclick="saveNote()">Save Note</button>
-                </div>
-            </div>
-            
-            <!-- Notes List -->
-            <div class="card">
-                <h3>Notes</h3>
-                <div id="notesList"></div>
-            </div>
-        </div>
-        
-        <!-- Change Password Modal -->
-        <div id="changePasswordModal" class="modal">
-            <div class="modal-content password-modal">
-                <span class="close" onclick="closeChangePasswordModal()">&times;</span>
-                <h2>Change Password</h2>
-                
-                <form id="changePasswordForm" onsubmit="changePassword(event)">
-                    <div class="form-group">
-                        <label for="oldPassword">Current Password</label>
-                        <input type="password" id="oldPassword" required placeholder="Enter current password">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="newPassword">New Password</label>
-                        <input type="password" id="newPassword" required placeholder="Enter new password" minlength="6">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="confirmPassword">Confirm New Password</label>
-                        <input type="password" id="confirmPassword" required placeholder="Confirm new password" minlength="6">
-                    </div>
-                    
-                    <div class="form-actions">
-                        <button type="button" class="btn-secondary" onclick="closeChangePasswordModal()">Cancel</button>
-                        <button type="submit" class="btn-primary">Change Password</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Scripts - Load in correct order -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-
-    <!-- Core -->
-    <script src="/js/state.js"></script>
-    <script src="/js/api.js"></script>
-    <script src="/js/auth.js"></script>
-
-    <!-- Utils -->
-    <script src="/js/utils/validation.js"></script>
-    <script src="/js/utils/helpers.js"></script>
-
-    <!-- Charts -->
-    <script src="/js/charts/charts.js"></script>
-
-    <!-- Components -->
-    <script src="/js/components/dashboard.js"></script>
-    <script src="/js/components/ledger.js"></script>
-    <script src="/js/components/accounts.js"></script>
-    <script src="/js/components/planner.js"></script>
-    <script src="/js/components/settings.js"></script>
 
     <!-- Main App -->
-    <script src="/js/app.js"></script>
+    <div id="mainApp" style="display: none;">
+        <!-- Header -->
+        <header class="app-header">
+            <h1>arthik</h1>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="tab-navigation">
+            <button class="tab-btn active" data-tab="dashboard">DASHBOARD</button>
+            <button class="tab-btn" data-tab="ledger">LEDGER</button>
+            <button class="tab-btn" data-tab="account">ACCOUNT</button>
+            <button class="tab-btn" data-tab="setting">SETTING</button>
+        </nav>
+
+        <!-- Dashboard Tab -->
+        <div id="dashboard" class="tab-content active">
+            <!-- Net Worth Section - Two Column Layout -->
+            <div class="net-worth-container">
+                <div class="card net-worth-card">
+                    <h2>Net Worth</h2>
+                    <div class="net-worth-display">
+                        <div class="net-worth-main">
+                            <span class="currency">₹</span>
+                            <span id="netWorthValue" class="amount-large">0.00</span>
+                        </div>
+                        <div class="net-worth-breakdown">
+                            <div class="breakdown-item assets">
+                                <span class="breakdown-label">Total Assets</span>
+                                <span class="breakdown-value">₹<span id="totalAssets">0.00</span></span>
+                            </div>
+                            <div class="breakdown-divider"></div>
+                            <div class="breakdown-item liabilities">
+                                <span class="breakdown-label">Total Liabilities</span>
+                                <span class="breakdown-value">₹<span id="totalLiabilities">0.00</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card net-worth-chart-card">
+                    <h2>Net Worth Trend</h2>
+                    <canvas id="netWorthChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Budget vs Expenses Chart -->
+            <div class="card">
+                <h2>Budget vs Expenses</h2>
+                <div class="budget-summary">
+                    <div class="summary-item">
+                        <span class="label">Total Spent</span>
+                        <span class="value spent">₹<span id="totalSpent">0</span></span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">Total Budget</span>
+                        <span class="value budget">₹<span id="totalBudget">0</span></span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">Usage</span>
+                        <span class="value percentage"><span id="budgetPercentage">0</span>%</span>
+                    </div>
+                </div>
+                <canvas id="budgetChart"></canvas>
+            </div>
+
+            <!-- All Accounts Pills -->
+            <div class="card">
+                <h2>All Accounts</h2>
+                <div id="accountPills" class="account-pills"></div>
+            </div>
+
+            <!-- Investment Portfolio -->
+            <div class="card">
+                <h2>Investment Portfolio</h2>
+                <canvas id="portfolioChart"></canvas>
+                <div id="portfolioLegend" class="chart-legend"></div>
+            </div>
+
+            <!-- Upcoming Bills -->
+            <div class="card">
+                <h2>Upcoming Bills (Next 30 Days)</h2>
+                <div class="table-container">
+                    <table id="billsTable">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Due Date</th>
+                                <th>Amount</th>
+                                <th>Days Left</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ledger Tab -->
+        <div id="ledger" class="tab-content">
+            <!-- Add Transaction Form (Top) -->
+            <div id="addTransactionForm" class="transaction-card add-form" style="display: none;">
+                <div class="transaction-grid">
+                    <input type="date" id="tranDate" required>
+                    <input type="time" id="tranTime" required>
+                    <select id="fromAccount" required>
+                        <option value="">From</option>
+                    </select>
+                    <select id="toAccount" required>
+                        <option value="">To</option>
+                    </select>
+                    <input type="text" id="description" placeholder="Description" maxlength="50" required>
+                    <input type="number" id="amount" placeholder="Amount" step="0.01" required>
+                    <div class="action-buttons">
+                        <button class="btn-icon btn-save" data-action="save-transaction" title="Save">
+                            <span class="material-icons">check</span>
+                        </button>
+                        <button class="btn-icon btn-cancel" data-action="cancel-transaction" title="Cancel">
+                            <span class="material-icons">close</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transaction List -->
+            <div id="transactionList" class="transaction-list"></div>
+            
+            <!-- Pagination -->
+            <div class="pagination">
+                <button id="prevPage" class="btn-secondary" data-action="prev-page">
+                    <span class="material-icons">chevron_left</span> Previous
+                </button>
+                <span id="pageInfo">Page 1</span>
+                <button id="nextPage" class="btn-secondary" data-action="next-page">
+                    Next <span class="material-icons">chevron_right</span>
+                </button>
+            </div>
+
+            <!-- Floating Add Button -->
+            <button class="fab" data-action="show-add-transaction">
+                <span class="material-icons">add</span>
+            </button>
+        </div>
+
+        <!-- Account Tab -->
+        <div id="account" class="tab-content">
+            <!-- Add Account Form (Top) -->
+            <div id="addAccountForm" class="account-card add-form" style="display: none;">
+                <div class="account-grid">
+                    <input type="text" id="accountName" placeholder="Account Name" required>
+                    <select id="accountType" required data-change="toggle-account-fields">
+                        <option value="">Type</option>
+                        <option value="ASSET">Asset</option>
+                        <option value="LIABILITIES">Liabilities</option>
+                        <option value="INCOME">Income</option>
+                        <option value="EXPENSE">Expense</option>
+                    </select>
+                    <input type="number" id="accountAmount" placeholder="Amount" step="0.01" required>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="iinw" value="Yes">
+                            <span>In Net Worth</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="iinw" value="No" checked>
+                            <span>Not in Net Worth</span>
+                        </label>
+                    </div>
+                    <input type="number" id="accountBudget" placeholder="Budget (for expenses)" step="0.01" style="display: none;">
+                    <input type="date" id="accountDueDate" placeholder="Due Date" style="display: none;">
+                    <div class="action-buttons">
+                        <button class="btn-icon btn-save" data-action="save-account" title="Save">
+                            <span class="material-icons">check</span>
+                        </button>
+                        <button class="btn-icon btn-cancel" data-action="cancel-account" title="Cancel">
+                            <span class="material-icons">close</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Account List -->
+            <div id="accountList" class="account-list"></div>
+
+            <!-- Floating Add Button -->
+            <button class="fab" data-action="show-add-account">
+                <span class="material-icons">add</span>
+            </button>
+        </div>
+
+        <!-- Setting Tab -->
+        <div id="setting" class="tab-content">
+            <div class="card">
+                <h2>Settings</h2>
+                
+                <div class="setting-item">
+                    <span>Dark Mode</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="darkModeToggle" data-change="toggle-dark-mode">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="setting-item">
+                    <span>Hide Amounts</span>
+                    <label class="toggle">
+                        <input type="checkbox" id="hideAmountToggle" data-change="toggle-hide-amount">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <div class="setting-item">
+                    <h3>Theme Color</h3>
+                    <div class="color-picker">
+                        <button class="color-option purple" data-theme="purple" title="Purple">
+                            <span class="material-icons">check</span>
+                        </button>
+                        <button class="color-option blue" data-theme="blue" title="Blue">
+                            <span class="material-icons">check</span>
+                        </button>
+                        <button class="color-option green" data-theme="green" title="Green">
+                            <span class="material-icons">check</span>
+                        </button>
+                        <button class="color-option orange" data-theme="orange" title="Orange">
+                            <span class="material-icons">check</span>
+                        </button>
+                        <button class="color-option pink" data-theme="pink" title="Pink">
+                            <span class="material-icons">check</span>
+                        </button>
+                        <button class="color-option teal" data-theme="teal" title="Teal">
+                            <span class="material-icons">check</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <h3>Change Password</h3>
+                    <div class="password-form">
+                        <input type="password" id="newPassword" placeholder="New Password (min 8 characters)">
+                        <button class="btn-primary" data-action="change-password">Update Password</button>
+                    </div>
+                </div>
+
+                <div class="setting-item" style="border-bottom: none;">
+                    <h3>Logout</h3>
+                    <button class="btn-danger" data-action="logout">
+                        <span class="material-icons">logout</span>
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
