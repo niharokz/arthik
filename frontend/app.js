@@ -20,6 +20,7 @@ function escapeHtml(text) {
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     checkAuthentication();
+    fetchReadonlyInfo();
 
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -110,6 +111,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     loadSettings();
 });
+
+// Fetch readonly mode info
+async function fetchReadonlyInfo() {
+    try {
+        const response = await fetch('/api/readonly-info', {
+            method: 'GET',
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data.readOnlyMode && data.password) {
+                document.getElementById('readonlyPassword').style.display = 'block';
+                document.getElementById('passwordDisplay').textContent = data.password;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to fetch readonly info:', error);
+    }
+}
 
 // Check authentication
 async function checkAuthentication() {

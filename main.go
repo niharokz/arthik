@@ -35,15 +35,16 @@ const (
 )
 
 var (
-	PASSWORD_HASH    string
-	sessions         = make(map[string]*Session)
-	sessionMutex     sync.RWMutex
-	loginAttempts    = make(map[string]*LoginAttempt)
-	loginAttemptsMux sync.RWMutex
-	fileMutex        sync.Mutex
-	csrfTokens       = make(map[string]time.Time)
-	csrfMutex        sync.RWMutex
-	readOnlyMode     = false
+	PASSWORD_HASH     string
+	READONLY_PASSWORD string
+	sessions          = make(map[string]*Session)
+	sessionMutex      sync.RWMutex
+	loginAttempts     = make(map[string]*LoginAttempt)
+	loginAttemptsMux  sync.RWMutex
+	fileMutex         sync.Mutex
+	csrfTokens        = make(map[string]time.Time)
+	csrfMutex         sync.RWMutex
+	readOnlyMode      = false
 )
 
 type Session struct {
@@ -96,6 +97,7 @@ func main() {
 
 	// Handle password flag
 	if *passwordFlag != "" {
+		READONLY_PASSWORD = *passwordFlag
 		hasher := sha256.New()
 		hasher.Write([]byte(*passwordFlag))
 		PASSWORD_HASH = hex.EncodeToString(hasher.Sum(nil))
@@ -131,6 +133,7 @@ func main() {
 	mux.HandleFunc("/api/transactions", requireAuth(handleTransactions))
 	mux.HandleFunc("/api/accounts", requireAuth(handleAccounts))
 	mux.HandleFunc("/api/settings", requireAuth(handleSettings))
+	mux.HandleFunc("/api/readonly-info", handleReadonlyInfo)
 	mux.HandleFunc("/health", handleHealth)
 
 	// Static files
@@ -245,6 +248,20 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 		"status": "healthy",
 		"time":   time.Now().Format(time.RFC3339),
 	})
+}
+
+func handleReadonlyInfo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	response := map[string]interface{}{
+		"readOnlyMode": readOnlyMode,
+	}
+	
+	if readOnlyMode && READONLY_PASSWORD != "" {
+		response["password"] = READONLY_PASSWORD
+	}
+	
+	json.NewEncoder(w).Encode(response)
 }
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {

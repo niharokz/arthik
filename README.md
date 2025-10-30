@@ -1,6 +1,12 @@
 # ARTHIK - Personal Finance Dashboard
 
+**Version 0.9**
+
 A complete Material Design personal finance management system with Go backend and vanilla JavaScript frontend.
+
+**Website:** [arthik.nihars.com](https://arthik.nihars.com)  
+**Live Demo (Read-Only):** [demoarthik.nihars.com](https://demoarthik.nihars.com)  
+**License:** MIT License (Open Source)
 
 ## Quick Start
 
@@ -13,16 +19,47 @@ go build -o arthik main.go
 Open browser: http://localhost:8080  
 Default password: **admin123**
 
+## Features
+
+### Dashboard Tab
+- Large net worth display with assets and liabilities breakdown
+- Net worth trend chart (multi-line: net worth, assets, liabilities, expenses)
+- Budget vs expenses with visual progress bar
+- All accounts as colored pills
+- Investment portfolio pie chart
+- Upcoming bills (30 days, color-coded by urgency)
+
+### Ledger Tab
+- Add/edit/delete transactions
+- Automatic account balance updates
+- Auto-sort by date and time
+- Pagination (30 per page)
+- Backdated transaction support
+- Cross-year transaction management
+
+### Account Tab
+- Four account types: ASSET, LIABILITIES, INCOME, EXPENSE
+- Net worth inclusion toggle
+- Budget field for expense accounts
+- Due date field for liabilities
+- Automatic balance calculation
+
+### Settings Tab
+- Dark/light mode toggle
+- Theme color selection (6 colors)
+- Hide/show amounts toggle
+- Change password
+
 ## Project Structure
 
 ```
 arthik/
-├── main.go              # Go backend server with all APIs
+├── main.go              # Go backend server
 ├── go.mod               # Go module file
 ├── frontend/
 │   ├── index.html       # Material Design UI
-│   ├── app.js          # All frontend logic
-│   └── style.css       # Responsive Material Design CSS
+│   ├── app.js          # Frontend logic
+│   └── style.css       # Material Design CSS
 ├── data/
 │   ├── account.csv     # Account master data
 │   ├── tran_2025.csv   # Current year transactions
@@ -30,60 +67,12 @@ arthik/
 └── logs/               # Server and batch logs
 ```
 
-## Features
+## Data Files
 
-### Dashboard Tab
-✓ Large net worth display  
-✓ Multi-line chart (net worth, assets, liabilities, expenses)  
-✓ Budget vs expenses progress bar with percentage  
-✓ All accounts displayed as colored pills  
-✓ Investment portfolio pie chart with percentages  
-✓ Upcoming bills table (30 days, color-coded by urgency)
-
-### Ledger Tab
-✓ Add new transactions via floating action button  
-✓ Edit existing transactions inline  
-✓ Delete transactions with confirmation  
-✓ Auto-sort latest to oldest  
-✓ Pagination (30 per page)  
-✓ Automatic account balance updates  
-✓ Backdated transaction support  
-✓ Cross-year transaction management
-
-### Account Tab
-✓ Add/edit/delete accounts  
-✓ Four account types: ASSET, LIABILITIES, INCOME, EXPENSE  
-✓ Net worth inclusion toggle  
-✓ Budget field for expense accounts  
-✓ Due date field for liabilities  
-✓ Automatic balance calculation
-
-### Settings Tab
-✓ Dark/light mode toggle (persisted)  
-✓ Hide/show amounts toggle (persisted)  
-✓ Change password functionality
-
-## Technical Details
-
-### Backend (Go)
-- RESTful API with JSON responses
-- SHA-256 password hashing
-- Automatic daily batch processing
-- CSV file management with proper sorting
-- Concurrent-safe operations
-- Comprehensive error logging
-
-### Frontend (Vanilla JS + Chart.js)
-- No framework dependencies (except Chart.js)
-- Material Design components
-- Responsive layout (mobile-first)
-- Local storage for preferences
-- Real-time data updates
-
-### Data Files
+All data is stored in human-readable CSV format for easy manual editing.
 
 **account.csv**
-```
+```csv
 Account,Type,Amount,IINW,Budget,DueDate
 Salary,INCOME,-1000.00,No,0.00,
 ICICIBank,ASSET,950.00,Yes,0.00,
@@ -91,34 +80,26 @@ Food,EXPENSE,50.00,No,500.00,
 ```
 
 **tran_2025.csv** (auto-creates tran_2026.csv etc)
-```
+```csv
 TranDate,TranTime,From,To,Description,Amount
 29-10-2025,17:00,ICICIBank,Food,Dinner,50.00
 28-10-2025,13:00,Salary,ICICIBank,SalaryCredit,1000.00
 ```
 
 **record.csv** (auto-updated daily)
-```
+```csv
 Date,NetWorth,Assets,Liabilities,Expenses
 28-10-2025,950.00,950.00,0.00,0.00
 29-10-2025,900.00,900.00,0.00,50.00
 ```
 
-## API Endpoints
+## Technical Stack
 
-```
-POST   /api/login           - Authenticate user
-GET    /api/dashboard       - Get dashboard data
-GET    /api/transactions    - List transactions (paginated)
-POST   /api/transactions    - Create transaction
-PUT    /api/transactions    - Update transaction
-DELETE /api/transactions    - Delete transaction
-GET    /api/accounts        - List accounts
-POST   /api/accounts        - Create account
-PUT    /api/accounts        - Update account
-DELETE /api/accounts        - Delete account
-POST   /api/settings        - Update settings
-```
+**Backend:** Go 1.22+  
+**Frontend:** Vanilla JavaScript  
+**Charts:** Chart.js 4.4.0  
+**Design:** Material Design principles  
+**Data Storage:** CSV files (no database required)
 
 ## Automatic Features
 
@@ -134,26 +115,54 @@ POST   /api/settings        - Update settings
    - Fix data inconsistencies
    - Log all operations
 
-3. **Data Integrity**
-   - Validate all CSV operations
-   - Maintain transaction ordering
-   - Ensure balance accuracy
-   - Cross-reference accounts
-
 ## Security
 
-- Password: SHA-256 hashed (default: admin123)
-- Token-based session management
-- Input validation on all fields
-- Safe CSV file operations
-- No SQL injection risks (file-based)
+- SHA-256 password hashing
+- Session-based authentication with CSRF protection
+- Rate limiting on login attempts
+- Read-only mode for safe sharing
+- Input validation and sanitization
+- Security headers (XSS, CSRF, Clickjacking protection)
 
-## Responsive Design
+## Command Line Options
 
-✓ Desktop: Full multi-column layout  
-✓ Tablet: Adaptive 2-column grid  
-✓ Mobile: Single column, optimized navigation  
-✓ All buttons and forms touch-friendly
+```bash
+# Set custom password
+./arthik -p "YourSecurePassword"
+
+# Run in read-only mode
+./arthik -r
+
+# Read-only mode with password display
+./arthik -r -p "DemoPassword123"
+```
+
+## Environment Variables
+
+```bash
+# Set password hash (production)
+export ARTHIK_PASSWORD_HASH="your_sha256_hash"
+./arthik
+```
+
+## API Endpoints
+
+```
+POST   /api/login           - Authenticate user
+POST   /api/logout          - Logout user
+GET    /api/dashboard       - Get dashboard data
+GET    /api/transactions    - List transactions (paginated)
+POST   /api/transactions    - Create transaction
+PUT    /api/transactions    - Update transaction
+DELETE /api/transactions    - Delete transaction
+GET    /api/accounts        - List accounts
+POST   /api/accounts        - Create account
+PUT    /api/accounts        - Update account
+DELETE /api/accounts        - Delete account
+POST   /api/settings        - Update password
+GET    /api/readonly-info   - Get readonly mode status
+GET    /health              - Health check
+```
 
 ## Color Coding
 
@@ -164,33 +173,67 @@ POST   /api/settings        - Update settings
 - Expenses: Orange
 
 **Bill Urgency:**
-- <3 days: Red background
-- <7 days: Yellow background
+- <3 days: Red (high urgency)
+- <7 days: Yellow (medium urgency)
 - >7 days: Normal
 
-## Notes
+## Responsive Design
 
-- CSV files are NOT encrypted (manual editing allowed)
-- Batch process validates and fixes manual edits
-- All amounts: 2 decimal places
-- Date format: DD-MM-YYYY
-- Time format: HH:MM (24-hour)
-- Server runs on port 8080
+- Desktop: Full multi-column layout
+- Tablet: Adaptive 2-column grid
+- Mobile: Single column with optimized navigation
+- Touch-friendly buttons and forms
 
 ## Browser Support
 
-✓ Chrome/Edge (recommended)  
-✓ Firefox  
-✓ Safari  
-✓ Mobile browsers
+- Chrome/Edge (recommended)
+- Firefox
+- Safari
+- Mobile browsers
 
 ## Requirements
 
-- Go 1.22+
+- Go 1.22 or higher
 - Modern web browser
 - Port 8080 available
 
+## To Be Added
+
+### 1. AI-Featured Auto-Completion for Transactions
+- Intelligent transaction suggestions based on historical data
+- Auto-complete account names and descriptions
+- Smart amount predictions
+- Learning from user patterns
+- Category recommendations
+
+### 2. Search Feature
+- Full-text search across all transactions
+- Advanced filters (date range, account, amount range)
+- Search by description, account names, or amounts
+- Quick search shortcuts
+- Search result highlighting
+
+### 3. Modularity
+- Plugin system for custom features
+- Modular account types
+- Custom report generators
+- Theme extensions
+- Export/import modules
+- API extensions for third-party integrations
+
+## Contributing
+
+This is an open-source project under MIT License. Contributions are welcome!
+
+## Notes
+
+- Date format: DD-MM-YYYY
+- Time format: HH:MM (24-hour)
+- All amounts: 2 decimal places
+- CSV files can be manually edited
+- Server runs on port 8080
+
 ---
 
-**Created with Material Design principles**  
-**Backend: Go | Frontend: Vanilla JS | Charts: Chart.js**
+**arthik v0.9** - Personal Finance Dashboard  
+**License:** MIT | **Website:** arthik.nihars.com | **Demo:** demoarthik.nihars.com
