@@ -1,0 +1,120 @@
+# .gitlab-ci.yml - GitLab CI/CD for arthik binary releases
+
+stages:
+  - build
+  - release
+
+variables:
+  BINARY_NAME: arthik
+  VERSION: "0.9"
+
+# Build binaries for multiple platforms
+build:
+  stage: build
+  image: golang:1.22-alpine
+  script:
+    # Install required tools
+    - apk add --no-cache git zip tar
+    
+    # Build for Linux AMD64
+    - GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_NAME}-linux-amd64 main.go
+    
+    # Build for Linux ARM64
+    - GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o ${BINARY_NAME}-linux-arm64 main.go
+    
+    # Build for macOS AMD64
+    - GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_NAME}-darwin-amd64 main.go
+    
+    # Build for macOS ARM64 (M1/M2)
+    - GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ${BINARY_NAME}-darwin-arm64 main.go
+    
+    # Build for Windows AMD64
+    - GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_NAME}-windows-amd64.exe main.go
+    
+    # Create release archives
+    - mkdir -p releases
+    
+    # Linux AMD64
+    - tar -czf releases/${BINARY_NAME}-v${VERSION}-linux-amd64.tar.gz ${BINARY_NAME}-linux-amd64 frontend/ README.md
+    
+    # Linux ARM64
+    - tar -czf releases/${BINARY_NAME}-v${VERSION}-linux-arm64.tar.gz ${BINARY_NAME}-linux-arm64 frontend/ README.md
+    
+    # macOS AMD64
+    - tar -czf releases/${BINARY_NAME}-v${VERSION}-darwin-amd64.tar.gz ${BINARY_NAME}-darwin-amd64 frontend/ README.md
+    
+    # macOS ARM64
+    - tar -czf releases/${BINARY_NAME}-v${VERSION}-darwin-arm64.tar.gz ${BINARY_NAME}-darwin-arm64 frontend/ README.md
+    
+    # Windows AMD64
+    - zip -r releases/${BINARY_NAME}-v${VERSION}-windows-amd64.zip ${BINARY_NAME}-windows-amd64.exe frontend/ README.md
+    
+    # Generate checksums
+    - cd releases && sha256sum *.tar.gz *.zip > checksums.txt
+    
+  artifacts:
+    paths:
+      - releases/
+    expire_in: 1 week
+  only:
+    - tags
+    - main
+
+# Create GitLab Release (only on tags)
+release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs:
+    - build
+  script:
+    - echo "Creating release for ${CI_COMMIT_TAG}"
+  release:
+    tag_name: '${CI_COMMIT_TAG}'
+    description: |
+      ## arthik ${CI_COMMIT_TAG}
+      
+      Personal Finance Dashboard - Open Source
+      
+      ### Downloads
+      - Linux AMD64: arthik-${CI_COMMIT_TAG}-linux-amd64.tar.gz
+      - Linux ARM64: arthik-${CI_COMMIT_TAG}-linux-arm64.tar.gz
+      - macOS Intel: arthik-${CI_COMMIT_TAG}-darwin-amd64.tar.gz
+      - macOS Apple Silicon: arthik-${CI_COMMIT_TAG}-darwin-arm64.tar.gz
+      - Windows: arthik-${CI_COMMIT_TAG}-windows-amd64.zip
+      
+      ### Quick Start
+      ```bash
+      # Extract the archive
+      tar -xzf arthik-*.tar.gz  # or unzip for Windows
+      
+      # Run arthik
+      ./arthik-*  # or arthik-*.exe for Windows
+      ```
+      
+      Open browser: http://localhost:8080
+      Default password: admin123
+      
+      ### What's New
+      - Initial v0.9 release
+      - Material Design UI
+      - Budget tracking
+      - Investment portfolio
+      - Dark mode support
+      
+      See full changelog: https://arthik.nihars.com
+    assets:
+      links:
+        - name: 'Linux AMD64'
+          url: '${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/file/releases/${BINARY_NAME}-${CI_COMMIT_TAG}-linux-amd64.tar.gz'
+        - name: 'Linux ARM64'
+          url: '${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/file/releases/${BINARY_NAME}-${CI_COMMIT_TAG}-linux-arm64.tar.gz'
+        - name: 'macOS Intel'
+          url: '${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/file/releases/${BINARY_NAME}-${CI_COMMIT_TAG}-darwin-amd64.tar.gz'
+        - name: 'macOS Apple Silicon'
+          url: '${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/file/releases/${BINARY_NAME}-${CI_COMMIT_TAG}-darwin-arm64.tar.gz'
+        - name: 'Windows AMD64'
+          url: '${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/file/releases/${BINARY_NAME}-${CI_COMMIT_TAG}-windows-amd64.zip'
+        - name: 'Checksums'
+          url: '${CI_PROJECT_URL}/-/jobs/${CI_JOB_ID}/artifacts/file/releases/checksums.txt'
+  only:
+    - tags
