@@ -1549,7 +1549,16 @@ input:checked + .slider:before {
 /* Hide Amounts */
 .hide-amounts .amount,
 .hide-amounts .amount-large,
-.hide-amounts .account-pill .amount {
+.hide-amounts .pill-amount,
+.hide-amounts .breakdown-value,
+.hide-amounts .value,
+.hide-amounts .field-value,
+.hide-amounts td:nth-child(3),
+.hide-amounts #netWorthValue,
+.hide-amounts #totalAssets,
+.hide-amounts #totalLiabilities,
+.hide-amounts #totalSpent,
+.hide-amounts #totalBudget {
     filter: blur(10px);
     user-select: none;
 }
@@ -1683,16 +1692,21 @@ input:checked + .slider:before {
     .net-worth-display {
         padding: var(--spacing-md);
     }
-    
+
     .net-worth-breakdown {
         flex-direction: row;
         gap: var(--spacing-md);
+        padding: 0; 
     }
     
     .breakdown-value {
         font-size: 1.1rem;
     }
-    
+        
+    .breakdown-item {
+        min-width: 100px;  /* Fixed: reduced from 120px */
+        flex: 1;  /* Fixed: added flexibility */
+    }
     .currency {
         font-size: 24px;
     }

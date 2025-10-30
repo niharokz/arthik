@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"html"
 	"log"
@@ -42,6 +43,7 @@ var (
 	fileMutex        sync.Mutex
 	csrfTokens       = make(map[string]time.Time)
 	csrfMutex        sync.RWMutex
+	readOnlyMode     = false
 )
 
 type Session struct {
@@ -87,12 +89,31 @@ type ErrorResponse struct {
 }
 
 func main() {
-	// Load password hash from environment variable
-	PASSWORD_HASH = os.Getenv("ARTHIK_PASSWORD_HASH")
-	if PASSWORD_HASH == "" {
-		// Default for development only - CHANGE IN PRODUCTION
-		PASSWORD_HASH = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9" // admin123
-		log.Println("WARNING: Using default password. Set ARTHIK_PASSWORD_HASH environment variable in production!")
+	// Command line flags
+	passwordFlag := flag.String("p", "", "Set password for login")
+	readOnlyFlag := flag.Bool("r", false, "Run in read-only mode (no edits allowed)")
+	flag.Parse()
+
+	// Handle password flag
+	if *passwordFlag != "" {
+		hasher := sha256.New()
+		hasher.Write([]byte(*passwordFlag))
+		PASSWORD_HASH = hex.EncodeToString(hasher.Sum(nil))
+		log.Printf("Using password from command line flag")
+	} else {
+		// Load password hash from environment variable
+		PASSWORD_HASH = os.Getenv("ARTHIK_PASSWORD_HASH")
+		if PASSWORD_HASH == "" {
+			// Default for development only - CHANGE IN PRODUCTION
+			PASSWORD_HASH = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9" // admin123
+			log.Println("WARNING: Using default password. Set ARTHIK_PASSWORD_HASH environment variable in production!")
+		}
+	}
+
+	// Handle read-only mode
+	if *readOnlyFlag {
+		readOnlyMode = true
+		log.Println("Running in READ-ONLY mode - no modifications allowed")
 	}
 
 	initDirectories()
@@ -196,6 +217,12 @@ func requireAuth(handler http.HandlerFunc) http.HandlerFunc {
 
 		// Verify CSRF token for state-changing operations
 		if r.Method == "POST" || r.Method == "PUT" || r.Method == "DELETE" {
+			// Check if read-only mode
+			if readOnlyMode {
+				respondError(w, "Application is in read-only mode", http.StatusForbidden)
+				return
+			}
+
 			csrfToken := r.Header.Get("X-CSRF-Token")
 			if csrfToken == "" || csrfToken != session.CSRFToken {
 				respondError(w, "Invalid CSRF token", http.StatusForbidden)
@@ -326,6 +353,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":   true,
 		"csrfToken": csrfToken,
+		"readOnly":  readOnlyMode,
 	})
 }
 
@@ -432,6 +460,7 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 		"budget":        budgetData,
 		"upcomingBills": upcomingBills,
 		"csrfToken":     session.CSRFToken,
+		"readOnly":      readOnlyMode,
 	}
 
 	json.NewEncoder(w).Encode(response)
