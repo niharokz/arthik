@@ -1171,7 +1171,7 @@ async function logout() {
 
 // Utility functions
 function formatAmount(amount) {
-    return Math.abs(parseFloat(amount) || 0).toFixed(2);
+    return (parseFloat(amount) || 0).toFixed(2);
 }
 
 function formatDateForInput(date) {
