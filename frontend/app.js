@@ -804,7 +804,7 @@ async function loadAccounts() {
                     <div><strong>Name:</strong> ${escapeHtml(acc.account)}</div>
                     <div><strong>Amount:</strong> ₹${formatAmount(acc.amount)}</div>
                     <div><strong>In Net Worth:</strong> ${escapeHtml(acc.iinw)}</div>
-                    ${acc.budget > 0 ? `<div><strong>Budget:</strong> ₹${formatAmount(acc.budget)}</div>` : ''}
+                    ${acc.budget > 0 ? `<div><strong>Budget:</strong> ₹${acc.amount.toFixed(2)}</div>` : ''}
                     ${acc.dueDate ? `<div><strong>Due Date:</strong> ${escapeHtml(acc.dueDate)}</div>` : ''}
                     <div class="action-buttons">
                         <button class="btn-icon btn-edit" data-action="edit-account" data-account="${escapeHtml(acc.account)}" title="Edit">

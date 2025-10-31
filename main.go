@@ -458,7 +458,7 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 				netWorth += acc.Amount
 				assets += acc.Amount
 			} else if acc.Type == "LIABILITIES" {
-				netWorth -= acc.Amount
+				netWorth += acc.Amount
 				liabilities += acc.Amount
 			}
 		}
