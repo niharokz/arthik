@@ -830,9 +830,20 @@ canvas {
     height: auto !important;
 }
 
+/* Budget chart needs more height for horizontal bars */
+#budgetChart {
+    max-height: 400px !important;
+    min-height: 300px !important;
+}
+
 /* Specific sizing for dashboard charts */
 #dashboard canvas {
     max-height: 200px !important;
+}
+
+#dashboard #budgetChart {
+    max-height: 400px !important;
+    min-height: 300px !important;
 }
 
 @media (min-width: 768px) {
@@ -843,6 +854,16 @@ canvas {
     #dashboard canvas {
         max-height: 220px !important;
     }
+    
+    #budgetChart {
+        max-height: 450px !important;
+        min-height: 350px !important;
+    }
+    
+    #dashboard #budgetChart {
+        max-height: 450px !important;
+        min-height: 350px !important;
+    }
 }
 
 @media (min-width: 1024px) {
@@ -852,6 +873,16 @@ canvas {
     
     #dashboard canvas {
         max-height: 240px !important;
+    }
+    
+    #budgetChart {
+        max-height: 500px !important;
+        min-height: 400px !important;
+    }
+    
+    #dashboard #budgetChart {
+        max-height: 500px !important;
+        min-height: 400px !important;
     }
 }
 

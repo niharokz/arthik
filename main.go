@@ -448,6 +448,9 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sort accounts by usage
+	accounts = sortAccountsByUsage(accounts, transactions)
+
 	netWorth := 0.0
 	assets := 0.0
 	liabilities := 0.0
@@ -458,7 +461,7 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 				netWorth += acc.Amount
 				assets += acc.Amount
 			} else if acc.Type == "LIABILITIES" {
-				netWorth += acc.Amount
+				netWorth += acc.Amount  // acc.Amount is already negative
 				liabilities += acc.Amount
 			}
 		}
@@ -611,6 +614,13 @@ func handleAccounts(w http.ResponseWriter, r *http.Request) {
 			respondError(w, "Failed to load accounts", http.StatusInternalServerError)
 			return
 		}
+		
+		// Sort accounts by usage
+		transactions, err := readAllTransactions()
+		if err == nil {
+			accounts = sortAccountsByUsage(accounts, transactions)
+		}
+		
 		json.NewEncoder(w).Encode(accounts)
 
 	case http.MethodPost:
@@ -989,6 +999,23 @@ func readAccounts() ([]Account, error) {
 	return accounts, nil
 }
 
+func sortAccountsByUsage(accounts []Account, transactions []Transaction) []Account {
+	usageCount := make(map[string]int)
+	
+	// Count usage of each account in transactions
+	for _, tran := range transactions {
+		usageCount[tran.From]++
+		usageCount[tran.To]++
+	}
+	
+	// Sort accounts by usage (highest first)
+	sort.Slice(accounts, func(i, j int) bool {
+		return usageCount[accounts[i].Name] > usageCount[accounts[j].Name]
+	})
+	
+	return accounts
+}
+
 func addAccount(acc Account) error {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
@@ -1021,6 +1048,20 @@ func updateAccount(acc Account) error {
 		return err
 	}
 
+	// Update the account
+	for i := range accounts {
+		if accounts[i].Name == acc.Name {
+			accounts[i] = acc
+			break
+		}
+	}
+	
+	// Read all transactions to calculate usage and sort
+	transactions, err := readAllTransactions()
+	if err == nil {
+		accounts = sortAccountsByUsage(accounts, transactions)
+	}
+
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 
@@ -1034,9 +1075,6 @@ func updateAccount(acc Account) error {
 	writer.Write([]string{"Account", "Type", "Amount", "IINW", "Budget", "DueDate"})
 
 	for _, a := range accounts {
-		if a.Name == acc.Name {
-			a = acc
-		}
 		writer.Write([]string{
 			a.Name,
 			a.Type,
@@ -1065,6 +1103,26 @@ func updateAccountWithNameChange(oldName string, acc Account) error {
 		}
 	}
 
+	// Update the account
+	found := false
+	for i := range accounts {
+		if accounts[i].Name == oldName {
+			accounts[i] = acc
+			found = true
+			break
+		}
+	}
+	
+	if !found {
+		return errors.New("Account not found")
+	}
+	
+	// Read all transactions to calculate usage and sort
+	transactions, err := readAllTransactions()
+	if err == nil {
+		accounts = sortAccountsByUsage(accounts, transactions)
+	}
+
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 
@@ -1077,13 +1135,7 @@ func updateAccountWithNameChange(oldName string, acc Account) error {
 	writer := csv.NewWriter(file)
 	writer.Write([]string{"Account", "Type", "Amount", "IINW", "Budget", "DueDate"})
 
-	found := false
 	for _, a := range accounts {
-		if a.Name == oldName {
-			// Update this account with new data
-			a = acc
-			found = true
-		}
 		writer.Write([]string{
 			a.Name,
 			a.Type,
@@ -1095,10 +1147,6 @@ func updateAccountWithNameChange(oldName string, acc Account) error {
 	}
 	writer.Flush()
 	
-	if !found {
-		return errors.New("Account not found")
-	}
-	
 	return writer.Error()
 }
 
@@ -1106,6 +1154,20 @@ func deleteAccount(name string) error {
 	accounts, err := readAccounts()
 	if err != nil {
 		return err
+	}
+
+	// Filter out the account to delete
+	var filteredAccounts []Account
+	for _, a := range accounts {
+		if a.Name != name {
+			filteredAccounts = append(filteredAccounts, a)
+		}
+	}
+	
+	// Read all transactions to calculate usage and sort
+	transactions, err := readAllTransactions()
+	if err == nil {
+		filteredAccounts = sortAccountsByUsage(filteredAccounts, transactions)
 	}
 
 	fileMutex.Lock()
@@ -1120,17 +1182,15 @@ func deleteAccount(name string) error {
 	writer := csv.NewWriter(file)
 	writer.Write([]string{"Account", "Type", "Amount", "IINW", "Budget", "DueDate"})
 
-	for _, a := range accounts {
-		if a.Name != name {
-			writer.Write([]string{
-				a.Name,
-				a.Type,
-				fmt.Sprintf("%.2f", a.Amount),
-				a.IINW,
-				fmt.Sprintf("%.2f", a.Budget),
-				a.DueDate,
-			})
-		}
+	for _, a := range filteredAccounts {
+		writer.Write([]string{
+			a.Name,
+			a.Type,
+			fmt.Sprintf("%.2f", a.Amount),
+			a.IINW,
+			fmt.Sprintf("%.2f", a.Budget),
+			a.DueDate,
+		})
 	}
 	writer.Flush()
 	return writer.Error()
@@ -1401,7 +1461,7 @@ func recalculateAllData() error {
 					netWorth += currentBalance
 				} else if acc.Type == "LIABILITIES" {
 					liabilities += currentBalance
-					netWorth -= currentBalance
+					netWorth += currentBalance  // currentBalance is already negative
 				}
 			}
 		}
@@ -1440,6 +1500,20 @@ func updateAccountBalance(name string, balance float64) error {
 		return err
 	}
 
+	// Update balance
+	for i := range accounts {
+		if accounts[i].Name == name {
+			accounts[i].Amount = balance
+			break
+		}
+	}
+	
+	// Read all transactions to calculate usage and sort
+	transactions, err := readAllTransactions()
+	if err == nil {
+		accounts = sortAccountsByUsage(accounts, transactions)
+	}
+
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 
@@ -1453,9 +1527,6 @@ func updateAccountBalance(name string, balance float64) error {
 	writer.Write([]string{"Account", "Type", "Amount", "IINW", "Budget", "DueDate"})
 
 	for _, acc := range accounts {
-		if acc.Name == name {
-			acc.Amount = balance
-		}
 		writer.Write([]string{
 			acc.Name,
 			acc.Type,

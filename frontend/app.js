@@ -306,13 +306,16 @@ function renderNetWorthChart(records) {
     };
     const colors = colorMap[theme];
 
+    // Reverse the records to show oldest to newest
+    const reversedRecords = [...records].reverse();
+
     netWorthChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: records.map(r => r.date),
+            labels: reversedRecords.map(r => r.date),
             datasets: [{
                 label: 'Net Worth',
-                data: records.map(r => r.netWorth),
+                data: reversedRecords.map(r => r.netWorth),
                 borderColor: colors.primary,
                 backgroundColor: colors.secondary + '20',
                 fill: true,
@@ -383,10 +386,11 @@ function renderBudgetChart(budget) {
             ]
         },
         options: {
+            indexAxis: 'y',
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             scales: {
-                y: {
+                x: {
                     beginAtZero: true,
                     ticks: {
                         callback: function(value) {
@@ -804,7 +808,7 @@ async function loadAccounts() {
                     <div><strong>Name:</strong> ${escapeHtml(acc.account)}</div>
                     <div><strong>Amount:</strong> ₹${formatAmount(acc.amount)}</div>
                     <div><strong>In Net Worth:</strong> ${escapeHtml(acc.iinw)}</div>
-                    ${acc.budget > 0 ? `<div><strong>Budget:</strong> ₹${acc.amount.toFixed(2)}</div>` : ''}
+                    ${acc.budget > 0 ? `<div><strong>Budget:</strong> ₹${acc.budget.toFixed(2)}</div>` : ''}
                     ${acc.dueDate ? `<div><strong>Due Date:</strong> ${escapeHtml(acc.dueDate)}</div>` : ''}
                     <div class="action-buttons">
                         <button class="btn-icon btn-edit" data-action="edit-account" data-account="${escapeHtml(acc.account)}" title="Edit">
