@@ -1,0 +1,32 @@
+# arthik — double-entry personal finance (PWA).
+# Every host-specific value comes from .env (gitignored; template: .env.example).
+services:
+  arthik:
+    build: .
+    image: arthik:latest
+    container_name: arthik
+    restart: unless-stopped
+    user: "${PUID:-1000}:${PGID:-1000}"
+    env_file: .env
+    environment:
+      ARTHIK_DATA: /data/finance
+      ARTHIK_LISTEN: ":8080"
+    volumes:
+      - ${FINANCE_PATH:?set FINANCE_PATH in .env}:/data/finance
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks: [homelab]
+
+networks:
+  homelab:
+    external: true

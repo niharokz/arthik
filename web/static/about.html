@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#3a807a">
+  <meta name="description" content="arthik — self-hosted, double-entry personal finance. Accounts, categories, budgets, scheduled transactions and reports, stored as plain YAML files.">
+  <title>arthik — double-entry personal finance</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<main class="about">
+  <nav>
+    <a class="brand" href="/"><img src="/icon.svg" alt="">arthik</a>
+    <a class="btn" href="/app">Sign in</a>
+  </nav>
+
+  <h1 class="lead">Every rupee, <em>debited somewhere</em> and <em>credited somewhere else</em>.</h1>
+  <p class="intro">arthik is a self-hosted personal finance app with the everyday feel of a phone money tracker and the
+    rigour of double-entry bookkeeping. It installs as an app on your phone, works offline, and keeps your data
+    as plain, readable files you own.</p>
+  <div class="cta">
+    <a class="btn primary" href="/app">Try the demo</a>
+    <a class="btn" href="/app">Sign in</a>
+  </div>
+  <p class="muted">The demo is read-only and full of made-up data; its user name and password are shown on the sign-in screen.</p>
+
+  <section class="feat">
+    <div class="card"><h2>🏦 Accounts</h2><p>Bank, cash, wallet, investments, deposits, property, credit cards and loans — balances to the paisa, cleared vs projected, credit-card limits, statements and due dates, and reconciliation.</p></div>
+    <div class="card"><h2>🗂️ Categories</h2><p>Two-level income and expense categories with totals for any week, month, quarter, half-year, year or custom range. A “both ways” kind covers things like market gains and losses.</p></div>
+    <div class="card"><h2>🧾 Transactions</h2><p>Expense, income, transfer and split entries, with a calculator amount field, remembered items, labels, notes and cleared/reconciled status. Past dates fix history; future dates post themselves on the day.</p></div>
+    <div class="card"><h2>⏰ Scheduled</h2><p>Recurring bills, salary, SIPs and EMIs — daily to yearly or every N days/weeks/months — posted automatically, with skip, pause, end date or count, and month-end dates that never drift.</p></div>
+    <div class="card"><h2>🎯 Budgets</h2><p>Weekly, monthly, quarterly, half-yearly or yearly budgets per category, scaled to the period you view and reset each period, with progress against the calendar.</p></div>
+    <div class="card"><h2>📊 Reports</h2><p>Cash flow, spending and income by category with drill-down, category trends, net worth over time, balance sheet, account flow, labels and a calendar view. Every chart has a table.</p></div>
+    <div class="card"><h2>🔍 Search &amp; export</h2><p>Search titles, notes and amounts, filter by anything, act on many transactions at once, and export exactly what you filtered as CSV — which imports straight back.</p></div>
+    <div class="card"><h2>📱 Offline PWA</h2><p>Install it on your phone. Add transactions with no signal — they sync when you are back online. Comfortable on a laptop too.</p></div>
+    <div class="card"><h2>📄 Plain files</h2><p>Data lives in YAML <code>.md</code> files next to your notes. Edit them in any app; arthik notices and re-syncs every balance and total within seconds.</p></div>
+  </section>
+
+  <h2 style="margin:36px 0 10px">What it stores</h2>
+  <p class="muted">A grocery run of ₹540 paid by UPI is one balanced transaction: the wallet is credited, the category is debited.</p>
+  <div class="ledger">  - id: t-20261001-55c7e6
+    date: "2026-10-01"
+    type: expense
+    title: Groceries
+    status: cleared
+    postings:
+      - account: wallet
+        amount: '-540.00'
+      - category: food-groceries
+        amount: '540.00'</div>
+
+  <footer>arthik · self-hosted, no tracking, no third-party services · MIT licence</footer>
+</main>
+</body>
+</html>

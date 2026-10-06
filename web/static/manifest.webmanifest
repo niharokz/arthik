@@ -1,0 +1,20 @@
+{
+  "name": "arthik",
+  "short_name": "arthik",
+  "description": "Double-entry personal finance — accounts, categories, budgets, scheduled transactions and reports.",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f8f7",
+  "theme_color": "#3a807a",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Add transaction", "url": "/app#/home?add=1" },
+    { "name": "Transactions", "url": "/app#/tx" },
+    { "name": "Budgets", "url": "/app#/budgets" }
+  ]
+}

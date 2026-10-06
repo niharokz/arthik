@@ -1,562 +1,184 @@
-# Arthik System Architecture
+# arthik — Architecture (internal)
 
-## Overview
-
-Arthik is a single-page application (SPA) with a Go backend server, using CSV files for data persistence.
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         USER BROWSER                         │
-│                                                              │
-│  ┌────────────────────────────────────────────────────┐    │
-│  │              Frontend (SPA)                         │    │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐        │    │
-│  │  │ HTML/CSS │  │JavaScript│  │ Chart.js │        │    │
-│  │  │ Material │  │  ES6+    │  │Visualiz. │        │    │
-│  │  │ Design   │  │          │  │          │        │    │
-│  │  └──────────┘  └──────────┘  └──────────┘        │    │
-│  │                                                     │    │
-│  │  Components:                                       │    │
-│  │  • Login Screen                                    │    │
-│  │  • Dashboard (Charts, Widgets)                     │    │
-│  │  • Ledger (Transaction Management)                 │    │
-│  │  • Account (Account Management)                    │    │
-│  │  • Settings (Preferences)                          │    │
-│  └────────────────────────────────────────────────────┘    │
-│                            │                                 │
-│                            │ HTTP/REST API                   │
-│                            ▼                                 │
-└────────────────────────────┼─────────────────────────────────┘
-                             │
-                             │
-┌────────────────────────────┼─────────────────────────────────┐
-│                            │    Go Server (Port 8080)        │
-│                            ▼                                 │
-│  ┌────────────────────────────────────────────────────┐    │
-│  │              API Router                             │    │
-│  │  ┌──────────────────────────────────────────┐     │    │
-│  │  │ /api/accounts    (GET/POST/PUT/DELETE)   │     │    │
-│  │  │ /api/transactions (GET/POST/PUT/DELETE)  │     │    │
-│  │  │ /api/records     (GET)                   │     │    │
-│  │  │ /                (Serve Frontend)        │     │    │
-│  │  └──────────────────────────────────────────┘     │    │
-│  └────────────────────────────────────────────────────┘    │
-│                            │                                 │
-│                            │                                 │
-│                            ▼                                 │
-│  ┌────────────────────────────────────────────────────┐    │
-│  │           Business Logic Layer                      │    │
-│  │  • Account Management                               │    │
-│  │  • Transaction Processing                           │    │
-│  │  • Balance Calculation                              │    │
-│  │  • Record Generation                                │    │
-│  │  • Sorting & Pagination                             │    │
-│  │  • Data Validation                                  │    │
-│  └────────────────────────────────────────────────────┘    │
-│                            │                                 │
-│                            │                                 │
-│                            ▼                                 │
-│  ┌────────────────────────────────────────────────────┐    │
-│  │           Daily Batch Job Scheduler                 │    │
-│  │  • 24-Hour Ticker                                   │    │
-│  │  • End-of-Day Calculations                          │    │
-│  │  • Record Updates                                   │    │
-│  │  • Data Validation                                  │    │
-│  │  • Log Generation                                   │    │
-│  └────────────────────────────────────────────────────┘    │
-│                            │                                 │
-│                            │                                 │
-└────────────────────────────┼─────────────────────────────────┘
-                             │
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     File System Storage                      │
-│                                                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │   data/      │  │   logs/      │  │  frontend/   │     │
-│  │              │  │              │  │              │     │
-│  │ • account.csv│  │ • batch.log  │  │ • index.html │     │
-│  │ • record.csv │  │              │  │ • app.js     │     │
-│  │ • tran_YYYY  │  │              │  │ • style.css  │     │
-│  │   .csv       │  │              │  │              │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## Component Details
-
-### Frontend Layer
-
-#### HTML Structure (index.html)
-```
-┌─ Login Screen
-│  └─ Password Form
-│
-├─ Main App
-│  ├─ Header ("arthik")
-│  │
-│  ├─ Navigation Tabs
-│  │  ├─ Dashboard
-│  │  ├─ Ledger
-│  │  ├─ Account
-│  │  └─ Settings
-│  │
-│  └─ Tab Content Areas
-│     ├─ Dashboard Content
-│     │  ├─ Net Worth Card + Chart
-│     │  ├─ Budget Progress
-│     │  ├─ Account Pills
-│     │  ├─ Portfolio Chart
-│     │  └─ Bills Table
-│     │
-│     ├─ Ledger Content
-│     │  ├─ Transaction Form
-│     │  ├─ Transaction List
-│     │  ├─ Pagination
-│     │  └─ FAB (+) Button
-│     │
-│     ├─ Account Content
-│     │  ├─ Account Form
-│     │  ├─ Accounts Grid
-│     │  └─ FAB (+) Button
-│     │
-│     └─ Settings Content
-│        ├─ Dark Mode Toggle
-│        ├─ Hide Amounts Toggle
-│        ├─ Password Change
-│        └─ Logout Button
-```
-
-#### JavaScript Architecture (app.js)
-```
-Global State
-├─ isAuthenticated
-├─ password
-├─ darkMode
-├─ hideAmounts
-├─ accounts []
-├─ transactions []
-├─ records []
-└─ pagination state
-
-Event Listeners
-├─ Authentication
-├─ Tab Navigation
-├─ Transaction CRUD
-├─ Account CRUD
-└─ Settings Management
-
-API Communication
-├─ loadData()
-├─ fetch() calls
-└─ Error handling
-
-UI Updates
-├─ Dashboard rendering
-├─ Chart updates
-├─ List rendering
-└─ Form management
-
-Helper Functions
-├─ formatNumber()
-├─ formatDate()
-├─ sortTransactions()
-└─ calculateBalances()
-```
-
-#### CSS Structure (style.css)
-```
-Base Styles
-├─ Reset & Normalize
-├─ CSS Custom Properties (Theme Variables)
-└─ Typography
-
-Components
-├─ Login Screen
-├─ Header & Navigation
-├─ Cards & Containers
-├─ Forms & Inputs
-├─ Buttons & FABs
-├─ Tables & Lists
-├─ Charts & Legends
-└─ Settings Controls
-
-Utilities
-├─ Responsive Breakpoints
-├─ Animations
-├─ Dark Mode Overrides
-└─ Scrollbar Styling
-```
-
-### Backend Layer
-
-#### Go Server Structure (main.go)
-```
-main()
-├─ initDirectories()
-├─ loadData()
-├─ initializeSampleData()
-├─ scheduleDailyBatch()
-└─ setupRoutes() + ListenAndServe()
-
-Data Structures
-├─ Account struct
-├─ Transaction struct
-└─ Record struct
-
-HTTP Handlers
-├─ handleAccounts() - CRUD operations
-├─ handleTransactions() - CRUD operations
-├─ handleRecords() - Read operations
-└─ serveFile() - Static file serving
-
-Data Operations
-├─ loadAccounts()
-├─ loadTransactions()
-├─ loadRecords()
-├─ saveAccounts()
-├─ saveTransactions()
-└─ saveRecords()
-
-Business Logic
-├─ addTransaction()
-├─ updateTransaction()
-├─ deleteTransaction()
-├─ updateAccountBalances()
-├─ recalculateAll()
-├─ calculateDailyRecord()
-└─ sortTransactions()
-
-Batch Processing
-├─ scheduleDailyBatch()
-├─ runDailyBatch()
-└─ logBatch()
-```
-
-### Data Layer
-
-#### CSV File Relationships
-```
-account.csv
-├─ Stores: All account definitions
-├─ Updated: On account CRUD, transaction processing
-└─ Read by: API, Dashboard, Forms
-
-tran_YYYY.csv (Year-based)
-├─ Stores: Transactions for specific year
-├─ Updated: On transaction CRUD
-├─ Read by: API, Ledger, Calculations
-└─ Multiple files: tran_2024.csv, tran_2025.csv, etc.
-
-record.csv
-├─ Stores: Daily financial snapshots
-├─ Updated: Daily batch job, backdated transactions
-├─ Read by: Dashboard charts
-└─ Chronologically ordered
-
-logs/batch.log
-├─ Stores: System operation logs
-├─ Updated: Daily batch job
-└─ Used for: Debugging, audit trail
-```
-
-## Data Flow Diagrams
-
-### Transaction Creation Flow
-```
-User Input
-    │
-    ▼
-Frontend Form
-    │
-    ▼
-Validation
-    │
-    ▼
-POST /api/transactions
-    │
-    ▼
-Go Handler
-    │
-    ├──▶ Parse JSON
-    │
-    ├──▶ Add to tran_YYYY.csv
-    │
-    ├──▶ Sort transactions
-    │
-    ├──▶ Update account balances
-    │
-    ├──▶ Update records.csv
-    │
-    └──▶ Save to disk
-         │
-         ▼
-    Return Success
-         │
-         ▼
-    Frontend Reload
-         │
-         ▼
-    Update UI (Dashboard, Ledger)
-```
-
-### Dashboard Refresh Flow
-```
-User Switches to Dashboard Tab
-    │
-    ▼
-updateDashboard()
-    │
-    ├──▶ updateNetworth()
-    │    ├─ Calculate from records
-    │    └─ Render chart
-    │
-    ├──▶ updateBudgetProgress()
-    │    ├─ Sum expense budgets
-    │    ├─ Sum actual expenses
-    │    └─ Calculate percentage
-    │
-    ├──▶ updateAccountsPills()
-    │    └─ Render asset/liability accounts
-    │
-    ├──▶ updatePortfolioChart()
-    │    ├─ Filter asset accounts
-    │    ├─ Calculate percentages
-    │    └─ Render pie chart
-    │
-    └──▶ updateUpcomingBills()
-         ├─ Filter liabilities by due date
-         ├─ Sort by urgency
-         └─ Render table with color coding
-```
-
-### Daily Batch Job Flow
-```
-24-Hour Ticker Fires
-    │
-    ▼
-runDailyBatch()
-    │
-    ├──▶ Get today's date
-    │
-    ├──▶ calculateDailyRecord()
-    │    │
-    │    ├─ Sum all assets (IINW=Yes)
-    │    │
-    │    ├─ Sum all liabilities
-    │    │
-    │    ├─ Sum all expenses
-    │    │
-    │    ├─ Calculate net worth
-    │    │
-    │    └─ Create/Update record entry
-    │
-    ├──▶ saveRecords()
-    │
-    └──▶ logBatch()
-         │
-         └─ Write to logs/batch.log
-```
-
-## Security Architecture
-
-### Authentication Flow
-```
-User Access
-    │
-    ▼
-Login Screen
-    │
-    ├──▶ Enter Password
-    │
-    ├──▶ Validate against stored password
-    │
-    ├──▶ If Valid:
-    │    ├─ Set localStorage('arthik_auth', 'true')
-    │    ├─ Update state.isAuthenticated
-    │    └─ Show Main App
-    │
-    └──▶ If Invalid:
-         └─ Show error message
-
-On Subsequent Visits
-    │
-    ▼
-checkAuthentication()
-    │
-    ├──▶ Check localStorage('arthik_auth')
-    │
-    ├──▶ If 'true':
-    │    └─ Auto-login (skip login screen)
-    │
-    └──▶ If not:
-         └─ Show login screen
-
-On Logout
-    │
-    ▼
-logout()
-    │
-    ├──▶ Clear localStorage('arthik_auth')
-    │
-    ├──▶ Set state.isAuthenticated = false
-    │
-    └──▶ Show login screen
-```
-
-### API Security
-```
-Browser Request
-    │
-    ▼
-CORS Middleware
-    │
-    ├──▶ Set Access-Control-Allow-Origin: *
-    │
-    ├──▶ Set Access-Control-Allow-Methods
-    │
-    └──▶ Set Access-Control-Allow-Headers
-         │
-         ▼
-    Route Handler
-         │
-         ├──▶ Process Request
-         │
-         ├──▶ Validate Data
-         │
-         └──▶ Return Response
-```
-
-## Performance Optimizations
-
-### Frontend Optimizations
-- Pagination (30 items per page) - reduces DOM nodes
-- CSS transforms for animations (GPU accelerated)
-- Debounced form inputs (future enhancement)
-- Chart.js canvas rendering (efficient for large datasets)
-- localStorage caching of settings
-- Lazy chart initialization (only when tab visible)
-
-### Backend Optimizations
-- CSV parsing with buffered readers
-- In-memory caching of current data
-- Efficient sorting algorithms
-- Minimal file I/O operations
-- Goroutine for batch job (non-blocking)
-
-## Scalability Considerations
-
-### Current Limits
-- Handles 10,000+ transactions efficiently
-- Chart performance degrades after 1000 data points
-- CSV file size manageable up to ~10MB
-- Browser localStorage limit: 5-10MB
-
-### Scaling Strategies
-- Pagination keeps UI responsive
-- Year-based transaction files prevent single file bloat
-- Selective data loading (only current + previous year)
-- Chart data point limiting (show last N records)
-
-## Deployment Architecture
-
-### Development
-```
-Developer Machine
-├─ Clone/Download project
-├─ Run start.sh or start.bat
-├─ Go server starts on localhost:8080
-└─ Access via browser
-```
-
-### Production (Simple)
-```
-Server/VPS
-├─ Install Go runtime
-├─ Upload project files
-├─ Configure firewall (allow port 8080)
-├─ Run: go build main.go
-├─ Execute: ./main (or use systemd service)
-└─ Access via server IP/domain
-```
-
-### Production (Advanced)
-```
-                    ┌─────────┐
-                    │  Nginx  │ (Reverse Proxy)
-                    │  :80/:443│
-                    └────┬────┘
-                         │ SSL/TLS
-                         │
-                    ┌────▼────┐
-                    │  Go App │
-                    │  :8080  │
-                    └────┬────┘
-                         │
-                    ┌────▼────┐
-                    │  Files  │
-                    │  System │
-                    └─────────┘
-```
-
-## Technology Stack Summary
-
-```
-┌───────────────────────────────────────┐
-│          Frontend Stack               │
-├───────────────────────────────────────┤
-│ • HTML5 (Semantic markup)             │
-│ • CSS3 (Custom properties, Flexbox,   │
-│   Grid, Animations)                   │
-│ • JavaScript ES6+ (Async/await,       │
-│   Modules, Arrow functions)           │
-│ • Chart.js 4.4.0 (Visualization)      │
-│ • Material Design (UI framework)      │
-│ • Google Fonts (Roboto)               │
-│ • Material Icons                      │
-└───────────────────────────────────────┘
-
-┌───────────────────────────────────────┐
-│          Backend Stack                │
-├───────────────────────────────────────┤
-│ • Go 1.16+ (Programming language)     │
-│ • Standard library (net/http,         │
-│   encoding/csv, encoding/json)        │
-│ • No external dependencies            │
-└───────────────────────────────────────┘
-
-┌───────────────────────────────────────┐
-│          Data & Storage               │
-├───────────────────────────────────────┤
-│ • CSV files (Data storage)            │
-│ • File system (Persistence)           │
-│ • localStorage (Settings/Session)     │
-└───────────────────────────────────────┘
-```
+> Internal reference for the Nimory homelab. Share this file (plus only the files being
+> changed) instead of the full source. No secret values — only names and paths.
+> Last reviewed: 2026-10-06 (v1.0.0, replaces the old CSV-based Arthik and demoarthik).
 
 ---
 
-## Integration Points
+## 1. Context
 
-### Browser ↔ Go Server
-- **Protocol**: HTTP/REST
-- **Format**: JSON
-- **Methods**: GET, POST, PUT, DELETE
-- **CORS**: Enabled for cross-origin
+arthik is a standalone double-entry finance PWA with Bluecoins-style screens. It shares
+nothing with Omnimo/Kronos/Natlas except the vault: its files live in
+`<notes vault>/data/finance` on nimory (`FINANCE_PATH` in `.env`, mounted at `/data/finance`).
 
-### Go Server ↔ File System
-- **Operations**: Read, Write, Create
-- **Format**: CSV (RFC 4180)
-- **Encoding**: UTF-8
-- **Atomicity**: File replacement on write
+| URL | What |
+|---|---|
+| `arthik.nihars.com/` | public about page (static, no JS) |
+| `arthik.nihars.com/app` | the PWA (sign-in: owner from `.env`, or the read-only demo user) |
+| `demoarthik.nihars.com` | retired — the demo is a user now |
 
-### Frontend ↔ Charts
-- **Library**: Chart.js
-- **Format**: JavaScript objects
-- **Update**: Destroy and recreate
-- **Theme**: Dynamic color injection
+No locks on data files (Nimory rule): any app may edit them; arthik re-reads on change.
 
 ---
 
-*This architecture provides a solid foundation for a personal finance application while maintaining simplicity and ease of maintenance.*
+## 2. Deployment
+
+| Item | Value |
+|---|---|
+| Image | `golang:1.23-alpine` (runs `go vet` + `go test`) → `alpine:3.20`, binary `/usr/local/bin/arthik` |
+| Command | `arthik serve`, listens on `:8080` |
+| User | `.env` `PUID:PGID`, `init`, `read_only` root fs, `no-new-privileges` |
+| Volume | `$FINANCE_PATH → /data/finance` (rw) |
+| Port | `${BIND_ADDR}:${PORT} → 8080` (default `127.0.0.1:8085`); Caddy/Cloudflare tunnel in front |
+| `.env` | compose: `FINANCE_PATH PUID PGID BIND_ADDR PORT TZ` · app: `ARTHIK_USER ARTHIK_PASSWORD ARTHIK_SECRET ARTHIK_DEMO ARTHIK_DEMO_USER ARTHIK_DEMO_PASSWORD ARTHIK_WATCH_SECONDS` |
+| Health | `GET /healthz`; `arthik health` is the Docker healthcheck |
+| Logs | stdout (json-file 10 MB × 3) |
+
+Rebuild after code changes (`docker compose up -d --build`); restart after `.env` changes.
+Front-end changes need a rebuild too (assets are embedded). Bump `VERSION` in `web/static/sw.js`
+only if you want installed PWAs to drop their offline cache.
+
+---
+
+## 3. Code map
+
+```
+cmd/arthik/main.go          CLI: serve | hash-password | check [--demo] | rebuild | demo-seed | health | version
+internal/config/            .env loader + Config (container-side values only)
+internal/money/             Amount = int64 paise; Parse/String/Format(₹ Indian grouping)/MulDiv; YAML+JSON as "123.45"
+internal/dates/             Date (calendar day), AddMonths with anchor day
+internal/period/            weekly|monthly|quarterly|halfyearly|yearly|custom ranges; week/month/year start opts; Buckets; Resolve
+internal/recur/             repeat rules ("monthly", "2 weeks" …) + Next with anchor day
+internal/store/             YAML .md read/write: FileError(file,line), atomic write, skip-if-unchanged, emoji unescape
+internal/model/             records as stored: Settings, Account(+AccountTypes), Category, Label, Posting, Transaction, Reminder
+internal/book/              the ledger engine (one Book per dataset)
+  book.go                     load/reload, fixups, Mutate (copy → validate → persist touched files → recompute), DryRun
+  entry.go                    Entry (UI shape) ↔ Transaction (postings): BuildTx, EntryOf, ValidateTx, ids, EnsureLabels
+  compute.go                  Computed: balances, cleared, projected, net worth, period totals; writes computed fields + money.md
+  schedule.go                 PostDue (reminders), Upcoming, RunScheduler (day change + due reminders)
+  watch.go                    polling watcher for external edits (acts once a change is stable for one tick)
+internal/query/             shared transaction filter (list, search, export, reports)
+internal/view/              API shapes: Tx, Account(+Card statement info), BudgetFor (period scaling)
+internal/httpx/             Router (auth, CSRF header, read-only guard, panic recovery), JSON helpers
+internal/auth/              users, HMAC session cookie, bcrypt/plain password, login rate limit, /api/login|logout|me
+internal/feature/<name>/    one package per feature, each with Register(rt):
+  state        GET /api/state, GET /api/period
+  accounts     POST/PUT/DELETE /api/accounts, /{id}/history, /{id}/reconcile
+  categories   POST/PUT/DELETE(?move_to=) /api/categories, GET /api/categories/totals
+  labels       POST/PUT/DELETE /api/labels
+  transactions GET/POST /api/transactions, GET/PUT/DELETE /{id}, POST /bulk, GET /api/suggest
+  reminders    POST/PUT/DELETE /api/reminders, POST /{id}/skip, GET /api/upcoming
+  budgets      GET /api/budgets
+  reports      GET /api/reports/{cashflow,categories,trend,networth,balance-sheet,labels,accounts,calendar}
+  settings     PUT /api/settings
+  importexport GET /api/export.csv, POST /api/import (?dry_run=1&create_missing=1)
+internal/demo/              demo generator (6 months, relative to today, deterministic per month)
+internal/server/            mux: public pages, auth, features, security headers (CSP self-only)
+web/static/                 embedded front end (no build step)
+  about.html app.html sw.js manifest.webmanifest icon.svg icon-*.png css/app.css
+  js/main.js(shell, router, sign-in, sync) util.js api.js(offline queue) ui.js charts.js txform.js txlist.js
+  js/views/<feature>.js     one module per screen
+```
+
+Dependencies: `gopkg.in/yaml.v3`, `golang.org/x/crypto` (bcrypt) — both via GitHub
+mirrors (`replace` in go.mod), same as Omnimo/Kronos.
+
+---
+
+## 4. Double-entry model
+
+- A **Transaction** has ≥ 2 **postings**; each names exactly one `account` or `category`;
+  amounts are signed (`+` debit, `−` credit) and must **sum to zero**.
+- Accounts are the balance-sheet side; categories are the income/expense side. Opening
+  balances are an implicit equity account (`opening_equity` in money.md), so
+  `Σ accounts(projected) + Σ category postings + opening_equity = 0` — checked and written
+  as `ledger.balanced`.
+- UI shapes → postings (`book.BuildTx`):
+
+| Type | Postings |
+|---|---|
+| expense A from X to C | `X: −A`, `C: +A` (split: one `+` per category) |
+| income A into X from C | `X: +A`, `C: −A` |
+| transfer A from X to Y | `X: −A`, `Y: +A` |
+| refund (expense, negative A) | signs flip |
+| journal | free-form postings (hand-typed); edited in the file, not the form |
+
+- Account balance sign is natural: liabilities owed are **negative** (`opening_balance`
+  too). Category “natural” amount: expense → posting; income/both → −posting.
+- Category kinds: `expense`, `income`, `both` (gains positive, losses negative — e.g. Market).
+- **Future-dated** transactions are stored normally; they count in `projected_balance` and
+  in nothing else until their date (`Computed.Effective`). The scheduler recomputes when the
+  day changes. Period totals/reports exclude them.
+- **Reminders** post occurrences with id `r-<reminder>-<YYYYMMDD>` (idempotent), advance
+  `next` with the anchor-day rule, honour `end_date` / `remaining`, mark `done`.
+  Creating/editing one back-fills every occurrence up to today.
+
+---
+
+## 5. Files and sync contract
+
+All under the dataset folder; YAML with a `# header` and `updated:` line; written atomically
+and only when content changed (so Syncthing isn't spammed).
+
+| File | Edited by | Computed fields (rewritten) |
+|---|---|---|
+| `settings.md` | user/app | — |
+| `accounts.md` | user/app | `balance`, `cleared_balance`, `projected_balance` |
+| `categories.md` | user/app | `period`, `total` (default period, parents include children) |
+| `labels.md` | user/app | `count` |
+| `reminders.md` | user/app | `next`, `anchor_day`, `posted`, `remaining`, `done` maintained |
+| `money.md` | arthik only | everything (not watched) |
+| `transactions/transaction_YYYYMM.md` | user/app | — |
+| `.demo-seed` (demo only) | arthik | month the demo was generated |
+
+Load rules: missing file = empty; parse error = `loadErr` → reads keep last good data, every
+write refused with `file line N: …`, nothing written; fixups on load (missing/duplicate ids,
+wrong month file, unknown labels → added to labels.md); invalid transactions → `problems`,
+excluded from totals. Unknown keys preserved (`Extra` inline maps). Amounts accept quoted
+strings or bare numbers. IDs: accounts/categories/labels are slugs of the name
+(`food-groceries` for a child); transactions `t-YYYYMMDD-xxxxxx`, client-created `c-…`.
+
+---
+
+## 6. Front end
+
+- Hash router (`#/home`, `#/tx`, `#/account/<id>`, `#/category/<id>`, `#/reports/<tab>` …).
+  Mobile: bottom bar + ＋ button; ≥ 900 px: sidebar.
+- `html``…`` tagged template escapes every value (data comes from editable files).
+- Offline: service worker caches the shell and the last answer of each `GET /api/*`
+  (network first). Transaction creates/edits/deletes made offline go to a localStorage
+  queue and are replayed in order (`online` event, every 30 s, at start). Creates carry a
+  client id → server returns `duplicate: true` on replay. Other edits need a connection.
+- Charts are hand-drawn SVG at the box's real pixel width (`charts.js`), with tooltips.
+- Theme: nss teal `#3a807a`, square grid background, tokens on `:root`, dark mode auto or forced.
+
+---
+
+## 7. Security
+
+Signed cookie (`HttpOnly`, `SameSite=Lax`, `Secure` behind HTTPS), 30-day sessions; every
+non-GET needs header `X-Arthik` (CSRF) and is refused for read-only users; login limited to
+10 failures / 15 min per IP (`CF-Connecting-IP` aware); CSP `script-src 'self'`.
+
+---
+
+## 8. Adding a feature
+
+1. `internal/feature/<name>/<name>.go` with `func Register(rt *httpx.Router)`; read with
+   `c.Book.View`, change with `c.Book.Mutate(func(d *book.Data, ch *book.Change) error)` —
+   validate first, replace records (don't edit nested slices in place), mark `ch.*`.
+2. Add `<name>.Register(rt)` in `internal/server/server.go`.
+3. Screen: `web/static/js/views/<name>.js` exporting `render(root, ctx)`, route in `main.js`,
+   file listed in `sw.js`.
+4. Tests: `internal/book/book_test.go` (engine) and `internal/server/server_test.go` (API).
+
+---
+
+## 9. Known limits / later
+
+- Only transaction changes queue offline; accounts/categories/settings need a connection.
+- One person per dataset (the demo is a separate folder); INR only; no attachments (by design).
+- Watcher is polling (default 3 s).
+- Planned later (not built): Telegram notices via Omnimo's outbox, Kronos integration,
+  showing `subscription.md` items as upcoming bills.

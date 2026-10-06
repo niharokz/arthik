@@ -1,239 +1,122 @@
-# ARTHIK - Personal Finance Dashboard
+# arthik
 
-**Version 0.9**
+Self-hosted, **double-entry** personal finance — the everyday feel of a phone money
+tracker (accounts, categories, budgets, reminders, reports) with every transaction
+balanced: debited somewhere, credited somewhere else.
 
-A complete Material Design personal finance management system with Go backend and vanilla JavaScript frontend.
-
-**Website:** [arthik.nihars.com](https://arthik.nihars.com)  
-**Live Demo (Read-Only):** [demoarthik.nihars.com](https://demoarthik.nihars.com)  
-**License:** MIT License (Open Source)
-
-## Quick Start
-
-```bash
-cd arthik
-go build -o arthik main.go
-./arthik
-```
-
-Open browser: http://localhost:8080  
-Default password: **admin123**
+- Mobile-first **PWA**: install it on your phone, add transactions **offline**, they sync when you are back.
+- Data is plain **YAML in `.md` files** — readable in Obsidian or any editor, and edits made there are picked up automatically.
+- One static Go binary, one container, no database, no third-party services, no tracking.
+- A built-in, read-only **demo user** with generated data.
 
 ## Features
 
-### Dashboard Tab
-- Large net worth display with assets and liabilities breakdown
-- Net worth trend chart (multi-line: net worth, assets, liabilities, expenses)
-- Budget vs expenses with visual progress bar
-- All accounts as colored pills
-- Investment portfolio pie chart
-- Upcoming bills (30 days, color-coded by urgency)
+| Area | What you get |
+|---|---|
+| Accounts | Bank, cash, wallet, investment, deposit, property, receivable, credit card, loan, payable … Balance (today), cleared balance, projected balance (incl. future-dated). Credit cards: limit, available, statement/due dates, billed/unbilled. Hide, archive, leave out of net worth. Reconcile against a statement. |
+| Transactions | Expense, income, transfer, split across categories, refunds. Calculator amount field (`120+45*2`). Remembered titles fill in category/account/amount. Labels, notes, time, status (uncleared/cleared/reconciled). Past dates fix history; future dates count from their day. Duplicate, bulk status/label/delete. |
+| Categories | Two levels (parent › child) for expense, income, and “both ways” (e.g. *Market* gains and losses). Totals for a week, month, quarter, half-year, year or any custom range; the default period is a setting. Delete with “move transactions to …”. |
+| Budgets | Per category, weekly → yearly, scaled to the period you view, reset every period, with on-pace progress. |
+| Scheduled | Reminders that auto-post: daily, weekly, every 2 weeks, monthly, every 2 months, quarterly, half-yearly, yearly or “N days/weeks/months/years”; end date or number of times; skip, pause. Month-end dates never drift (31 Jan → 28 Feb → 31 Mar). Past start dates back-fill. |
+| Reports | Cash flow, spending and income by category with drill-down, category trend, net worth over time, balance sheet at any date, account flow, labels, calendar. Every chart has a table. |
+| Search & data | Full-text search plus filters (dates, type, accounts, categories, labels, status, amount, posted/future); totals of the filtered list; CSV export of exactly what you filtered; CSV import with a dry-run preview. |
+| Settings | Default period, week start, month start day (salary cycles), year start month (e.g. April for the Indian FY), look-ahead days, light/dark/auto, hide amounts. |
 
-### Ledger Tab
-- Add/edit/delete transactions
-- Automatic account balance updates
-- Auto-sort by date and time
-- Pagination (30 per page)
-- Backdated transaction support
-- Cross-year transaction management
+## Quick start (Docker)
 
-### Account Tab
-- Four account types: ASSET, LIABILITIES, INCOME, EXPENSE
-- Net worth inclusion toggle
-- Budget field for expense accounts
-- Due date field for liabilities
-- Automatic balance calculation
-
-### Settings Tab
-- Dark/light mode toggle
-- Theme color selection (6 colors)
-- Hide/show amounts toggle
-- Change password
-
-## Project Structure
-
-```
-arthik/
-├── main.go              # Go backend server
-├── go.mod               # Go module file
-├── frontend/
-│   ├── index.html       # Material Design UI
-│   ├── app.js          # Frontend logic
-│   └── style.css       # Material Design CSS
-├── data/
-│   ├── account.csv     # Account master data
-│   ├── tran_2025.csv   # Current year transactions
-│   └── record.csv      # Historical daily records
-└── logs/               # Server and batch logs
+```sh
+git clone https://gitlab.com/niharokz/arthik.git && cd arthik
+cp .env.example .env        # set FINANCE_PATH, PUID/PGID, ARTHIK_USER, ARTHIK_PASSWORD, ARTHIK_SECRET
+docker compose up -d --build
 ```
 
-## Data Files
+Open `http://127.0.0.1:8085` (or put your reverse proxy in front: `/` is the public about
+page, `/app` is the app). The demo user and password are shown on the sign-in screen.
 
-All data is stored in human-readable CSV format for easy manual editing.
+To store a bcrypt hash instead of a plain password:
 
-**account.csv**
-```csv
-Account,Type,Amount,IINW,Budget,DueDate
-Salary,INCOME,-1000.00,No,0.00,
-ICICIBank,ASSET,950.00,Yes,0.00,
-Food,EXPENSE,50.00,No,500.00,
+```sh
+docker compose run --rm -it arthik hash-password
+# paste the result into .env in single quotes: ARTHIK_PASSWORD='$2a$12$…'
 ```
 
-**tran_2025.csv** (auto-creates tran_2026.csv etc)
-```csv
-TranDate,TranTime,From,To,Description,Amount
-29-10-2025,17:00,ICICIBank,Food,Dinner,50.00
-28-10-2025,13:00,Salary,ICICIBank,SalaryCredit,1000.00
-```
+## Configuration (`.env`)
 
-**record.csv** (auto-updated daily)
-```csv
-Date,NetWorth,Assets,Liabilities,Expenses
-28-10-2025,950.00,950.00,0.00,0.00
-29-10-2025,900.00,900.00,0.00,50.00
-```
+| Variable | Used by | Meaning |
+|---|---|---|
+| `FINANCE_PATH` | compose | Host folder with the data files (mounted at `/data/finance`). |
+| `PUID`, `PGID` | compose | User the container runs as (must own `FINANCE_PATH`). |
+| `BIND_ADDR`, `PORT` | compose | Where the app is published on the host (default `127.0.0.1:8085`). |
+| `TZ` | app | Time zone that decides “today”. |
+| `ARTHIK_USER`, `ARTHIK_PASSWORD` | app | Your sign-in; the password may be a bcrypt hash. |
+| `ARTHIK_SECRET` | app | Signs session cookies; set it so you stay signed in across restarts. |
+| `ARTHIK_DEMO`, `ARTHIK_DEMO_USER`, `ARTHIK_DEMO_PASSWORD` | app | Read-only demo user (data in `<FINANCE_PATH>/demouser`, regenerated monthly). |
+| `ARTHIK_WATCH_SECONDS` | app | How often to look for edits made by other apps (default 3). |
 
-## Technical Stack
-
-**Backend:** Go 1.22+  
-**Frontend:** Vanilla JavaScript  
-**Charts:** Chart.js 4.4.0  
-**Design:** Material Design principles  
-**Data Storage:** CSV files (no database required)
-
-## Automatic Features
-
-1. **Transaction Processing**
-   - Auto-update account balances
-   - Auto-sort by date and time
-   - Auto-create new year CSV files
-   - Auto-adjust backdated entries
-
-2. **Daily Batch** (runs at midnight)
-   - Update record.csv with daily snapshot
-   - Recalculate all balances
-   - Fix data inconsistencies
-   - Log all operations
-
-## Security
-
-- SHA-256 password hashing
-- Session-based authentication with CSRF protection
-- Rate limiting on login attempts
-- Read-only mode for safe sharing
-- Input validation and sanitization
-- Security headers (XSS, CSRF, Clickjacking protection)
-
-## Command Line Options
-
-```bash
-# Set custom password
-./arthik -p "YourSecurePassword"
-
-# Run in read-only mode
-./arthik -r
-
-# Read-only mode with password display
-./arthik -r -p "DemoPassword123"
-```
-
-## Environment Variables
-
-```bash
-# Set password hash (production)
-export ARTHIK_PASSWORD_HASH="your_sha256_hash"
-./arthik
-```
-
-## API Endpoints
+## Data files
 
 ```
-POST   /api/login           - Authenticate user
-POST   /api/logout          - Logout user
-GET    /api/dashboard       - Get dashboard data
-GET    /api/transactions    - List transactions (paginated)
-POST   /api/transactions    - Create transaction
-PUT    /api/transactions    - Update transaction
-DELETE /api/transactions    - Delete transaction
-GET    /api/accounts        - List accounts
-POST   /api/accounts        - Create account
-PUT    /api/accounts        - Update account
-DELETE /api/accounts        - Delete account
-POST   /api/settings        - Update password
-GET    /api/readonly-info   - Get readonly mode status
-GET    /health              - Health check
+<FINANCE_PATH>/
+  settings.md                     preferences
+  accounts.md                     accounts + computed balance / cleared_balance / projected_balance
+  categories.md                   category tree + budgets + computed total for the default period
+  labels.md                       labels + computed count
+  reminders.md                    scheduled / recurring transactions
+  money.md                        computed overview (net worth, period totals, ledger check) — output only
+  transactions/transaction_YYYYMM.md   one file per month
+  demouser/                       the demo dataset (same layout)
 ```
 
-## Color Coding
+A transaction is a list of postings that must sum to zero (`+` debit, `-` credit):
 
-**Account Types:**
-- Assets: Green
-- Liabilities: Red
-- Income: Blue
-- Expenses: Orange
+```yaml
+transactions:
+  - id: t-20261001-55c7e6
+    date: '2026-10-01'
+    type: expense            # expense | income | transfer | journal
+    title: Groceries
+    status: cleared          # uncleared | cleared | reconciled
+    labels: [home]
+    postings:
+      - account: wallet
+        amount: '-540.00'
+      - category: food-groceries
+        amount: '540.00'
+```
 
-**Bill Urgency:**
-- <3 days: Red (high urgency)
-- <7 days: Yellow (medium urgency)
-- >7 days: Normal
+**Transactions are the only source of truth.** Every balance and total in the other
+files is recomputed after each change and rewritten only when it actually changed.
+You can edit any file by hand; arthik notices within seconds, repairs what it safely
+can (missing ids, a transaction saved in the wrong month file, labels that don't exist
+yet) and rebuilds everything. A file that does not parse is never overwritten — changes
+are paused and the app shows the file and line until it is fixed. Entries that don't
+balance or point at unknown accounts are listed as problems and left out of totals.
+Unknown keys you add to any record are kept.
 
-## Responsive Design
+## Command line
 
-- Desktop: Full multi-column layout
-- Tablet: Adaptive 2-column grid
-- Mobile: Single column with optimized navigation
-- Touch-friendly buttons and forms
+```
+arthik serve            run the web app (default)
+arthik hash-password    print a bcrypt hash for ARTHIK_PASSWORD
+arthik check [--demo]   validate the data files and list problems
+arthik rebuild          re-read everything and rewrite all computed values
+arthik demo-seed        regenerate the demo data now
+arthik health           exit 0 when the server answers (Docker health check)
+arthik version
+```
 
-## Browser Support
+In Docker: `docker exec arthik arthik check`.
 
-- Chrome/Edge (recommended)
-- Firefox
-- Safari
-- Mobile browsers
+## Development
 
-## Requirements
+```sh
+go test ./...
+ARTHIK_DATA=./data ARTHIK_PASSWORD=dev go run ./cmd/arthik serve   # http://localhost:8080
+```
 
-- Go 1.22 or higher
-- Modern web browser
-- Port 8080 available
+Go 1.23+, dependencies: `gopkg.in/yaml.v3`, `golang.org/x/crypto/bcrypt`. The front end
+is plain ES modules and CSS embedded in the binary — no build step, no CDN.
 
-## To Be Added
+## Licence
 
-### 1. AI-Featured Auto-Completion for Transactions
-- Intelligent transaction suggestions based on historical data
-- Auto-complete account names and descriptions
-- Smart amount predictions
-- Learning from user patterns
-- Category recommendations
-
-### 2. Search Feature
-- Full-text search across all transactions
-- Advanced filters (date range, account, amount range)
-- Search by description, account names, or amounts
-- Quick search shortcuts
-- Search result highlighting
-
-### 3. Modularity
-- Plugin system for custom features
-- Modular account types
-- Custom report generators
-- Theme extensions
-- Export/import modules
-- API extensions for third-party integrations
-
-## Contributing
-
-This is an open-source project under MIT License. Contributions are welcome!
-
-## Notes
-
-- Date format: DD-MM-YYYY
-- Time format: HH:MM (24-hour)
-- All amounts: 2 decimal places
-- CSV files can be manually edited
-- Server runs on port 8080
-
----
-
-**arthik v0.9** - Personal Finance Dashboard  
-**License:** MIT | **Website:** arthik.nihars.com | **Demo:** demoarthik.nihars.com
+MIT
