@@ -14,3 +14,16 @@ data/
 *.swp
 .DS_Store
 Thumbs.db
+# server-only compose overrides
+docker-compose.override.yml
+# Android build output, caches and secrets
+android/.env
+android/.cache/
+android/dist/
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/app/src/main/jniLibs/
+*.jks
+*.keystore

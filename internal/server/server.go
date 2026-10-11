@@ -14,8 +14,8 @@ import (
 	"gitlab.com/niharokz/arthik/internal/feature/categories"
 	"gitlab.com/niharokz/arthik/internal/feature/importexport"
 	"gitlab.com/niharokz/arthik/internal/feature/labels"
-	"gitlab.com/niharokz/arthik/internal/feature/reminders"
 	"gitlab.com/niharokz/arthik/internal/feature/reports"
+	"gitlab.com/niharokz/arthik/internal/feature/review"
 	"gitlab.com/niharokz/arthik/internal/feature/settings"
 	"gitlab.com/niharokz/arthik/internal/feature/state"
 	"gitlab.com/niharokz/arthik/internal/feature/transactions"
@@ -23,8 +23,13 @@ import (
 	"gitlab.com/niharokz/arthik/web"
 )
 
+// Options tune the handler.
+type Options struct {
+	Local bool // phone app: no about page, the app opens straight away
+}
+
 // New returns the HTTP handler.
-func New(a *auth.Auth) http.Handler {
+func New(a *auth.Auth, o Options) http.Handler {
 	mux := http.NewServeMux()
 	rt := &httpx.Router{Mux: mux, Resolve: a.Resolve}
 
@@ -38,7 +43,7 @@ func New(a *auth.Auth) http.Handler {
 	categories.Register(rt)
 	labels.Register(rt)
 	transactions.Register(rt)
-	reminders.Register(rt)
+	review.Register(rt)
 	budgets.Register(rt)
 	reports.Register(rt)
 	settings.Register(rt)
@@ -63,7 +68,11 @@ func New(a *auth.Auth) http.Handler {
 			w.Write(b)
 		}
 	}
-	mux.HandleFunc("GET /{$}", page("about.html"))
+	if o.Local {
+		mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/app", http.StatusFound) })
+	} else {
+		mux.HandleFunc("GET /{$}", page("about.html"))
+	}
 	mux.HandleFunc("GET /app", page("app.html"))
 	mux.HandleFunc("GET /app/", page("app.html"))
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {

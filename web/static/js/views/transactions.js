@@ -8,7 +8,7 @@ import { grouped, wireRows, pendingCreates } from "../txlist.js";
 import { openTx } from "../txform.js";
 
 function filters(ctx) {
-  if (!S.view.tx) S.view.tx = { period: "all", date: today(), from: "", to: "", q: "", type: [], account: [], category: [], label: [], status: [], when: "", min: "", max: "", upcoming: false };
+  if (!S.view.tx) S.view.tx = { period: "all", date: today(), from: "", to: "", q: "", type: [], account: [], category: [], label: [], status: [], when: "", min: "", max: "" };
   const f = S.view.tx;
   const p = ctx.params;
   if ([...p.keys()].length) { // a link like #/tx?label=goa-trip resets the filters to it
@@ -35,7 +35,7 @@ export async function render(root, ctx) {
   }
   const query = { from: range?.from, to: range?.to, q: f.q, type: f.type, account: f.account, category: f.category, label: f.label, status: f.status, when: f.when, min: f.min, max: f.max };
   if (!root.querySelector("[data-txlist]")) root.innerHTML = String(loading());
-  const res = await get("/api/transactions" + qs({ ...query, limit: 1000, upcoming: f.upcoming ? "1" : "" }));
+  const res = await get("/api/transactions" + qs({ ...query, limit: 1000 }));
   if (!ctx.alive()) return;
   const pending = f.period === "all" && !activeCount(f) && !f.q ? pendingCreates() : [];
   const items = [...pending, ...res.items];
@@ -56,7 +56,7 @@ export async function render(root, ctx) {
     </div>
     ${chips(f)}
     <div class="grid four" style="margin-bottom:14px">
-      <div class="card stat"><div class="label">Transactions</div><div class="value">${s.count}</div>${s.upcoming ? html`<div class="sub">+ ${s.upcoming} upcoming</div>` : ""}</div>
+      <div class="card stat"><div class="label">Transactions</div><div class="value">${s.count}</div>${s.upcoming ? html`<div class="sub">incl. ${s.upcoming} future-dated</div>` : ""}</div>
       <div class="card stat"><div class="label">Income</div><div class="value pos">${amt(s.income)}</div></div>
       <div class="card stat"><div class="label">Expense</div><div class="value neg">${amt(s.expense)}</div></div>
       ${f.account.length ? html`<div class="card stat"><div class="label">In / out of ${f.account.length === 1 ? accName(f.account[0]) : "accounts"}</div><div class="value" style="font-size:1rem">${amt(s.inflow)} / ${amt(s.outflow)}</div></div>`
@@ -66,7 +66,7 @@ export async function render(root, ctx) {
       <button data-b="status:cleared">Mark cleared</button><button data-b="status:reconciled">Mark reconciled</button><button data-b="status:uncleared">Uncleared</button>
       <button data-b="add_label">Add label</button><button class="danger" data-b="delete">Delete</button></div>` : ""}
     <div class="card" data-txlist>${grouped(items, { account: f.account.length === 1 ? f.account[0] : undefined, empty: f.q || activeCount(f) ? "Nothing matches these filters" : "No transactions yet — tap ＋ to add one" })}
-      ${res.total > res.items.filter((x) => !x.upcoming).length ? html`<p class="muted" style="text-align:center">Showing the newest 1000 of ${res.total}. Narrow the period to see older ones.</p>` : ""}</div>`);
+      ${res.total > res.items.length ? html`<p class="muted" style="text-align:center">Showing the newest 1000 of ${res.total}. Narrow the period to see older ones.</p>` : ""}</div>`);
 
   const rerender = () => render(root, ctx);
   const q = root.querySelector("[data-q]");
@@ -103,7 +103,7 @@ export async function render(root, ctx) {
     });
     root.querySelectorAll("[data-b]").forEach((b) => b.addEventListener("click", () => bulk(b.dataset.b, ctx)));
   } else {
-    wireRows(list, items, (t) => (t._pending ? toast("Waiting to sync — you can edit it once it is synced") : t.upcoming ? ctx.go("#/scheduled") : openTx(t, () => ctx.refresh())));
+    wireRows(list, items, (t) => (t._pending ? toast("Waiting to sync — you can edit it once it is synced") : openTx(t, () => ctx.refresh())));
   }
 }
 
@@ -136,19 +136,18 @@ function filterSheet(f, rerender) {
     </div>
     <label class="f"><span>Dates</span><select name="when">
       <option value="">Posted and future-dated</option><option value="posted" ${f.when === "posted" ? raw("selected") : ""}>Posted only (today and earlier)</option>
-      <option value="scheduled" ${f.when === "scheduled" ? raw("selected") : ""}>Future-dated only</option></select></label>
-    <label class="check"><input type="checkbox" name="upcoming" ${f.upcoming ? raw("checked") : ""}> Also show upcoming reminder occurrences</label>`;
+      <option value="scheduled" ${f.when === "scheduled" ? raw("selected") : ""}>Future-dated only</option></select></label>`;
   sheet("Filters", body, html`<button data-clear>Clear all</button><span class="grow"></span><button class="primary" data-apply>Apply</button>`, (d, close) => {
     d.querySelectorAll("label.chip").forEach((l) => l.addEventListener("change", () => l.classList.toggle("on", l.querySelector("input").checked)));
     d.querySelector("[data-apply]").addEventListener("click", () => {
       for (const k of ["type", "account", "category", "label", "status"]) f[k] = [...d.querySelectorAll(`[data-f="${k}"]:checked`)].map((x) => x.value);
       const v = formData(d);
-      Object.assign(f, { min: v.min.trim(), max: v.max.trim(), when: v.when, upcoming: v.upcoming });
+      Object.assign(f, { min: v.min.trim(), max: v.max.trim(), when: v.when });
       close();
       rerender();
     });
     d.querySelector("[data-clear]").addEventListener("click", () => {
-      Object.assign(f, { type: [], account: [], category: [], label: [], status: [], when: "", min: "", max: "", upcoming: false });
+      Object.assign(f, { type: [], account: [], category: [], label: [], status: [], when: "", min: "", max: "" });
       close();
       rerender();
     });

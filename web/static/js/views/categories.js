@@ -136,7 +136,7 @@ export function categoryForm(c, ctx, defaults = {}) {
 function deleteCategory(c, ctx) {
   const others = S.state.categories.filter((x) => x.id !== c.id && x.parent !== c.id);
   sheet("Delete " + c.name, html`
-    <p>If transactions or reminders use this category, they are moved to the category you choose.</p>
+    <p>If transactions use this category, they are moved to the category you choose.</p>
     <label class="f"><span>Move them to</span><select name="to"><option value="">(nothing uses it)</option>
       ${others.map((x) => html`<option value="${x.id}">${x.parent ? "  › " : ""}${x.icon || ""} ${x.name}</option>`)}</select></label>`,
     html`<span class="grow"></span><button data-close>Cancel</button><button class="danger" data-ok>Delete</button>`, (d, close) => {

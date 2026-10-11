@@ -1,6 +1,7 @@
 // Package demo generates the read-only demo dataset: about six months of realistic,
 // made-up finances (salary, rent, groceries, two credit cards, a car loan, a SIP,
-// market gains/losses, budgets, labels, reminders and a few future-dated items).
+// market gains/losses, budgets, labels, a few future-dated items and an inbox of
+// drafts as if they came from SMS and Kronos).
 //
 // The data is generated relative to today and refreshed once a month (on start-up
 // and by a daily check), so the demo always looks current. It is deterministic for
@@ -13,19 +14,27 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gitlab.com/niharokz/arthik/internal/book"
 	"gitlab.com/niharokz/arthik/internal/dates"
+	"gitlab.com/niharokz/arthik/internal/inbox"
 	"gitlab.com/niharokz/arthik/internal/model"
 	"gitlab.com/niharokz/arthik/internal/money"
 )
 
 const markerFile = ".demo-seed"
 
-// NeedsSeed reports whether dir has no demo data for the current month.
+// seedVersion changes whenever the generated data changes shape, so an upgrade
+// regenerates the demo instead of waiting for the next month.
+const seedVersion = "2"
+
+func marker() string { return dates.Today().Format("2006-01") + " v" + seedVersion }
+
+// NeedsSeed reports whether dir has no demo data for the current month and version.
 func NeedsSeed(dir string) bool {
 	b, err := os.ReadFile(filepath.Join(dir, markerFile))
-	return err != nil || strings.TrimSpace(string(b)) != dates.Today().Format("2006-01")
+	return err != nil || strings.TrimSpace(string(b)) != marker()
 }
 
 // Seed (re)creates the demo dataset in dir. It only ever deletes Arthik's own file
@@ -34,7 +43,7 @@ func Seed(dir string) error {
 	if err := os.MkdirAll(filepath.Join(dir, book.TxDir), 0o755); err != nil {
 		return err
 	}
-	for _, f := range []string{book.SettingsFile, book.AccountsFile, book.CategoriesFile, book.LabelsFile, book.RemindersFile, book.MoneyFile} {
+	for _, f := range []string{book.SettingsFile, book.AccountsFile, book.CategoriesFile, book.LabelsFile, book.MoneyFile, book.DraftsFile, book.RulesFile, "reminders.md"} {
 		_ = os.Remove(filepath.Join(dir, f))
 	}
 	old, _ := filepath.Glob(filepath.Join(dir, book.TxDir, "transaction_*.md"))
@@ -50,23 +59,28 @@ func Seed(dir string) error {
 	rng := rand.New(rand.NewSource(int64(today.Year()*100 + int(today.Month()))))
 
 	err = b.Mutate(func(d *book.Data, ch *book.Change) error {
-		ch.Settings, ch.Accounts, ch.Categories, ch.Labels, ch.Reminders = true, true, true, true, true
+		ch.Settings, ch.Accounts, ch.Categories, ch.Labels, ch.Drafts, ch.Rules = true, true, true, true, true, true
 		d.Settings = model.DefaultSettings()
 		d.Accounts = accounts(start)
 		d.Categories = categories()
 		d.Labels = []model.Label{{ID: "home", Name: "home"}, {ID: "office", Name: "office"}, {ID: "goa-trip", Name: "Goa trip", Color: "#d08a3a"}, {ID: "reimbursable", Name: "reimbursable"}}
-		d.Reminders = reminders(start)
 		d.Reindex()
 		if err := daily(d, ch, rng, start, today); err != nil {
 			return err
 		}
-		d.PostDue(today, ch) // posts every recurring occurrence from start up to today
-		return future(d, ch, today)
+		if err := monthly(d, ch, start, today); err != nil {
+			return err
+		}
+		if err := future(d, ch, today); err != nil {
+			return err
+		}
+		inboxDrafts(d, ch, today)
+		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("demo seed: %w", err)
 	}
-	return os.WriteFile(filepath.Join(dir, markerFile), []byte(today.Format("2006-01")+"\n"), 0o644)
+	return os.WriteFile(filepath.Join(dir, markerFile), []byte(marker()+"\n"), 0o644)
 }
 
 func amt(r int64) money.Amount { return money.FromRupees(r) }
@@ -74,14 +88,14 @@ func amt(r int64) money.Amount { return money.FromRupees(r) }
 func accounts(start dates.Date) []model.Account {
 	od := start.AddDays(-1).String()
 	return []model.Account{
-		{ID: "savings", Name: "Savings Bank", Type: "bank", OpeningBalance: amt(185000), OpeningDate: od, Color: "#3a807a"},
-		{ID: "salary", Name: "Salary Account", Type: "bank", OpeningBalance: amt(42000), OpeningDate: od, Color: "#4f6fa8"},
+		{ID: "savings", Name: "Savings Bank", Type: "bank", OpeningBalance: amt(185000), OpeningDate: od, Color: "#3a807a", SMSDigits: []string{"0353"}},
+		{ID: "salary", Name: "Salary Account", Type: "bank", OpeningBalance: amt(42000), OpeningDate: od, Color: "#4f6fa8", SMSDigits: []string{"1122"}},
 		{ID: "cash", Name: "Cash", Type: "cash", OpeningBalance: amt(6500), OpeningDate: od},
 		{ID: "wallet", Name: "UPI Wallet", Type: "wallet", OpeningBalance: amt(1200), OpeningDate: od},
 		{ID: "mutual-funds", Name: "Mutual Funds", Type: "investment", OpeningBalance: amt(320000), OpeningDate: od, Color: "#7a5ea8"},
 		{ID: "fixed-deposit", Name: "Fixed Deposit", Type: "deposit", OpeningBalance: amt(200000), OpeningDate: od},
-		{ID: "rewards-card", Name: "Rewards Card", Type: "credit_card", OpeningBalance: amt(-18450), OpeningDate: od, CreditLimit: amt(250000), StatementDay: 18, DueDay: 7, Color: "#b4553f"},
-		{ID: "travel-card", Name: "Travel Card", Type: "credit_card", OpeningBalance: amt(-4200), OpeningDate: od, CreditLimit: amt(150000), StatementDay: 2, DueDay: 22},
+		{ID: "rewards-card", Name: "Rewards Card", Type: "credit_card", OpeningBalance: amt(-18450), OpeningDate: od, CreditLimit: amt(250000), StatementDay: 18, DueDay: 7, Color: "#b4553f", SMSDigits: []string{"4275"}},
+		{ID: "travel-card", Name: "Travel Card", Type: "credit_card", OpeningBalance: amt(-4200), OpeningDate: od, CreditLimit: amt(150000), StatementDay: 2, DueDay: 22, SMSDigits: []string{"3334"}},
 		{ID: "car-loan", Name: "Car Loan", Type: "loan", OpeningBalance: amt(-385000), OpeningDate: od},
 	}
 }
@@ -134,21 +148,78 @@ func categories() []model.Category {
 	}
 }
 
-func reminders(start dates.Date) []model.Reminder {
-	at := func(day int) string { return dates.New(start.Year(), start.Month(), day).String() }
-	return []model.Reminder{
-		{ID: "r-salary", Title: "Salary", Type: model.TxIncome, Amount: amt(128500), Account: "salary", Category: "salary-in", Repeat: "monthly", Next: at(1), Status: model.StatusCleared},
-		{ID: "r-rent", Title: "Rent", Type: model.TxExpense, Amount: amt(24000), Account: "savings", Category: "housing-rent", Labels: []string{"home"}, Repeat: "monthly", Next: at(3), Status: model.StatusCleared},
-		{ID: "r-sip", Title: "Index fund SIP", Type: model.TxTransfer, Amount: amt(15000), Account: "salary", ToAccount: "mutual-funds", Repeat: "monthly", Next: at(5), Status: model.StatusCleared},
-		{ID: "r-to-savings", Title: "Move to savings", Type: model.TxTransfer, Amount: amt(75000), Account: "salary", ToAccount: "savings", Repeat: "monthly", Next: at(2), Status: model.StatusCleared},
-		{ID: "r-car-emi", Title: "Car loan EMI", Type: model.TxTransfer, Amount: amt(12500), Account: "savings", ToAccount: "car-loan", Repeat: "monthly", Next: at(10), Status: model.StatusCleared},
-		{ID: "r-car-interest", Title: "Car loan interest", Type: model.TxExpense, Amount: amt(2950), Account: "car-loan", Category: "loan-interest", Repeat: "monthly", Next: at(10)},
-		{ID: "r-internet", Title: "Fibre internet", Type: model.TxExpense, Amount: amt(799), Account: "rewards-card", Category: "housing-internet", Labels: []string{"home"}, Repeat: "monthly", Next: at(12)},
-		{ID: "r-streaming", Title: "Streaming subscription", Type: model.TxExpense, Amount: amt(649), Account: "rewards-card", Category: "entertainment-subscriptions", Repeat: "monthly", Next: at(15)},
-		{ID: "r-mobile", Title: "Mobile recharge", Type: model.TxExpense, Amount: amt(299), Account: "wallet", Category: "bills-mobile", Repeat: "monthly", Next: at(20)},
-		{ID: "r-gym", Title: "Gym membership", Type: model.TxExpense, Amount: amt(4500), Account: "savings", Category: "health-gym", Repeat: "quarterly", Next: at(8)},
-		{ID: "r-fd-interest", Title: "FD interest", Type: model.TxIncome, Amount: amt(3550), Account: "fixed-deposit", Category: "interest", Repeat: "quarterly", Next: dates.New(start.Year(), start.Month(), 28).AddMonths(2, 28).String()},
-		{ID: "r-insurance", Title: "Health insurance premium", Type: model.TxExpense, Amount: amt(18600), Account: "savings", Category: "bills-insurance", Repeat: "yearly", Next: dates.New(start.Year(), start.Month(), 25).AddMonths(7, 25).String()},
+// bill is a recurring transaction posted on day of every "every"-th month.
+type bill struct {
+	day, every, offset int // offset: first month (0 = the start month)
+	e                  book.Entry
+}
+
+func bills() []bill {
+	exp, inc, tr := model.TxExpense, model.TxIncome, model.TxTransfer
+	return []bill{
+		{1, 1, 0, book.Entry{Title: "Salary", Type: inc, Amount: amt(128500), Account: "salary", Category: "salary-in"}},
+		{2, 1, 0, book.Entry{Title: "Move to savings", Type: tr, Amount: amt(75000), Account: "salary", ToAccount: "savings"}},
+		{3, 1, 0, book.Entry{Title: "Rent", Type: exp, Amount: amt(24000), Account: "savings", Category: "housing-rent", Labels: []string{"home"}}},
+		{5, 1, 0, book.Entry{Title: "Index fund SIP", Type: tr, Amount: amt(15000), Account: "salary", ToAccount: "mutual-funds"}},
+		{10, 1, 0, book.Entry{Title: "Car loan EMI", Type: tr, Amount: amt(12500), Account: "savings", ToAccount: "car-loan"}},
+		{10, 1, 0, book.Entry{Title: "Car loan interest", Type: exp, Amount: amt(2950), Account: "car-loan", Category: "loan-interest"}},
+		{12, 1, 0, book.Entry{Title: "Fibre internet", Type: exp, Amount: amt(799), Account: "rewards-card", Category: "housing-internet", Labels: []string{"home"}}},
+		{15, 1, 0, book.Entry{Title: "Streaming subscription", Type: exp, Amount: amt(649), Account: "rewards-card", Category: "entertainment-subscriptions"}},
+		{20, 1, 0, book.Entry{Title: "Mobile recharge", Type: exp, Amount: amt(299), Account: "wallet", Category: "bills-mobile"}},
+		{8, 3, 0, book.Entry{Title: "Gym membership", Type: exp, Amount: amt(4500), Account: "savings", Category: "health-gym"}},
+		{28, 3, 2, book.Entry{Title: "FD interest", Type: inc, Amount: amt(3550), Account: "fixed-deposit", Category: "interest"}},
+	}
+}
+
+// monthly posts the recurring bills from start up to today.
+func monthly(d *book.Data, ch *book.Change, start, today dates.Date) error {
+	for m := 0; ; m++ {
+		first := start.AddMonths(m, 1)
+		if first.After(today) {
+			return nil
+		}
+		for _, b := range bills() {
+			day := dates.New(first.Year(), first.Month(), 1).AddMonths(0, b.day)
+			if m%b.every != b.offset%b.every || m < b.offset || day.After(today) {
+				continue
+			}
+			e := b.e
+			e.Date, e.Status, e.ID = day.String(), model.StatusCleared, d.NewTxID(day.String())
+			t, err := d.BuildTx(e)
+			if err != nil {
+				return fmt.Errorf("%s %s: %w", e.Date, e.Title, err)
+			}
+			t.Labels = d.EnsureLabels(t.Labels, ch)
+			d.SetTx(t, ch)
+		}
+	}
+}
+
+// inboxDrafts fills the review inbox with what the phone and Kronos would send.
+func inboxDrafts(d *book.Data, ch *book.Change, today dates.Date) {
+	d.SetRule(model.Rule{ID: "swiggy", Match: "swiggy", Title: "Swiggy", Category: "food-restaurants", Uses: 6}, ch)
+	d.SetRule(model.Rule{ID: "ramesh-kumar", Match: "ramesh kumar", Title: "Milk (Ramesh)", Category: "food-groceries", Labels: []string{"home"}, Uses: 11}, ch)
+	day := func(n int) string { return today.AddDays(-n).String() }
+	sms := func(id, date, tm, raw string) inbox.Item {
+		return inbox.Item{ID: "sms-demo-" + id, Source: inbox.SourceSMS, Date: date, Time: tm, Raw: raw}
+	}
+	items := []inbox.Item{}
+	add := func(it inbox.Item, kind string, amount int64, digits, merchant string) {
+		it.Kind, it.Amount, it.Digits, it.Merchant = kind, amt(amount), digits, merchant
+		items = append(items, it)
+	}
+	add(sms("1", day(0), "13:42", "Rs.486.00 spent on your Rewards Card ending 4275 at SWIGGY on "+today.Format("02/01/06")+"."), inbox.KindExpense, 486, "4275", "SWIGGY")
+	add(sms("2", day(0), "07:05", "INR 60.00 debited from A/c XX0353 to VPA ramesh kumar. UPI Ref 4121"), inbox.KindExpense, 60, "0353", "RAMESH KUMAR")
+	add(sms("3", day(1), "19:20", "INR 1,249.00 spent on Travel Card X3334 @DECATHLON SPORTS "+today.AddDays(-1).Format("02-01-2006")+" 07:20:11 pm."), inbox.KindExpense, 1249, "3334", "DECATHLON SPORTS")
+	add(sms("4", day(1), "10:02", "Rs 18,450.00 debited from A/c XX0353 towards card payment."), inbox.KindExpense, 18450, "0353", "")
+	add(sms("5", day(1), "10:03", "Payment of Rs 18,450.00 received towards your Rewards Card ending 4275."), inbox.KindTransferIn, 18450, "4275", "")
+	add(sms("6", day(2), "16:47", "INR 2,000.00 spent on card 9911 at GYFTR VIA SMARTBUY on "+today.AddDays(-2).Format("2006-01-02")+"."), inbox.KindExpense, 2000, "9911", "GYFTR VIA SMARTBUY")
+	items = append(items, inbox.Item{ID: "kronos-sub-demo-internet", Source: inbox.SourceKronos, Date: day(0), Kind: inbox.KindExpense, Amount: amt(799),
+		Title: "Fibre internet", Merchant: "Fibre internet", AccountHint: "Rewards Card", CategoryHint: "bills/internet", Notes: "Subscription · monthly", Rule: "subscription"})
+	inbox.Ingest(d, ch, items, inbox.Options{Today: today, Now: time.Now(), MaxAge: 30, KeepDays: 120, PairDays: 2})
+	if x, ok := d.Draft("sms-demo-3"); ok { // what the local AI would have suggested
+		x.Category, x.Via, x.Title, x.AITried = "shopping-clothes", model.ViaAI, "Decathlon", true
+		d.SetDraft(x, ch)
 	}
 }
 

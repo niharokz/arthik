@@ -77,7 +77,7 @@ func update(c *httpx.Ctx) error {
 	return c.OK(map[string]bool{"ok": true})
 }
 
-// remove deletes the label and strips it from every transaction and reminder.
+// remove deletes the label and strips it from every transaction and draft.
 func remove(c *httpx.Ctx) error {
 	id := c.R.PathValue("id")
 	err := c.Book.Mutate(func(d *book.Data, ch *book.Change) error {
@@ -99,13 +99,16 @@ func remove(c *httpx.Ctx) error {
 				d.SetTx(t, ch)
 			}
 		}
-		for i, r := range d.Reminders {
-			if len(r.Labels) > 0 {
-				if n := without(r.Labels, id); len(n) != len(r.Labels) {
-					r.Labels = n
-					d.Reminders[i] = r
-					ch.Reminders = true
-				}
+		for _, x := range d.Drafts {
+			if n := without(x.Labels, id); len(n) != len(x.Labels) {
+				x.Labels = n
+				d.SetDraft(x, ch)
+			}
+		}
+		for _, r := range d.Rules {
+			if n := without(r.Labels, id); len(n) != len(r.Labels) {
+				r.Labels = n
+				d.SetRule(r, ch)
 			}
 		}
 		return nil

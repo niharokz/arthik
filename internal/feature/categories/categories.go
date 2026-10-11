@@ -140,7 +140,7 @@ func update(c *httpx.Ctx) error {
 	}))
 }
 
-// remove deletes a category. If transactions or reminders use it, ?move_to=<id>
+// remove deletes a category. If transactions use it, ?move_to=<id>
 // is required and they are moved there first (Bluecoins "delete and move").
 func remove(c *httpx.Ctx) error {
 	id, moveTo := c.R.PathValue("id"), c.Q("move_to")
@@ -185,18 +185,21 @@ func remove(c *httpx.Ctx) error {
 			}
 			d.SetTx(nt, ch)
 		}
-		for i, r := range d.Reminders {
-			if r.Category == id {
-				if moveTo == "" {
-					return fmt.Errorf("reminder %q uses this category — choose a category to move it to", r.Title)
-				}
-				r.Category = moveTo
-				d.Reminders[i] = r
-				ch.Reminders = true
-			}
-		}
 		if used > 0 && moveTo == "" {
 			return httpx.Errorf(409, "%d transaction(s) use %q — choose a category to move them to", used, cat.Name)
+		}
+		// Inbox drafts and learned rules follow the move (or forget the category).
+		for _, x := range d.Drafts {
+			if x.Category == id {
+				x.Category = moveTo
+				d.SetDraft(x, ch)
+			}
+		}
+		for _, r := range d.Rules {
+			if r.Category == id {
+				r.Category = moveTo
+				d.SetRule(r, ch)
+			}
 		}
 		for i, x := range d.Categories {
 			if x.ID == id {

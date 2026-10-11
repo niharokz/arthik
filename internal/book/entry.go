@@ -13,7 +13,7 @@ import (
 )
 
 // Entry is the simple, Bluecoins-shaped form of a transaction that the UI, the CSV
-// importer and the reminder scheduler work with. BuildTx turns it into balanced
+// importer and the inbox work with. BuildTx turns it into balanced
 // double-entry postings; EntryOf turns postings back into an Entry for editing.
 type Entry struct {
 	ID        string          `json:"id,omitempty"`
@@ -29,7 +29,6 @@ type Entry struct {
 	Labels    []string        `json:"labels,omitempty"`
 	Notes     string          `json:"notes,omitempty"`
 	Status    string          `json:"status,omitempty"`
-	Reminder  string          `json:"reminder,omitempty"`
 	Postings  []model.Posting `json:"postings,omitempty"` // journal type only
 }
 
@@ -61,8 +60,7 @@ func uniqueID(base string, taken func(string) bool) string {
 	return id
 }
 
-// UniqueAccountID / UniqueCategoryID / UniqueLabelID / UniqueReminderID make a
-// fresh id from a name.
+// UniqueAccountID / UniqueCategoryID / UniqueLabelID make a fresh id from a name.
 func (d *Data) UniqueAccountID(name string) string {
 	return uniqueID(Slug(name), func(s string) bool { _, ok := d.idx.acc[s]; return ok })
 }
@@ -75,9 +73,6 @@ func (d *Data) UniqueCategoryID(name, parent string) string {
 }
 func (d *Data) UniqueLabelID(name string) string {
 	return uniqueID(Slug(name), func(s string) bool { _, ok := d.idx.lab[s]; return ok })
-}
-func (d *Data) UniqueReminderID(title string) string {
-	return uniqueID("r-"+Slug(title), func(s string) bool { _, ok := d.idx.rem[s]; return ok })
 }
 
 // NewTxID returns "t-YYYYMMDD-<6 hex>" (random part, retried if taken).
@@ -114,7 +109,7 @@ func (d *Data) BuildTx(e Entry) (model.Transaction, error) {
 	t := model.Transaction{
 		ID: e.ID, Date: strings.TrimSpace(e.Date), Time: strings.TrimSpace(e.Time),
 		Type: e.Type, Title: strings.TrimSpace(e.Title), Status: e.Status,
-		Notes: strings.TrimSpace(e.Notes), Reminder: e.Reminder,
+		Notes: strings.TrimSpace(e.Notes),
 	}
 	for _, l := range e.Labels {
 		if l = strings.TrimSpace(l); l != "" && !contains(t.Labels, l) {
@@ -238,7 +233,7 @@ func (d *Data) ValidateTx(t model.Transaction) error {
 // EntryOf turns a stored transaction back into the UI form.
 func EntryOf(t model.Transaction) Entry {
 	e := Entry{ID: t.ID, Type: t.Type, Date: t.Date, Time: t.Time, Title: t.Title, Labels: t.Labels,
-		Notes: t.Notes, Status: t.Status, Reminder: t.Reminder}
+		Notes: t.Notes, Status: t.Status}
 	if e.Status == "" {
 		e.Status = model.StatusUncleared
 	}

@@ -12,8 +12,10 @@
 //
 // Transactions are the single source of truth; everything computed can be thrown
 // away and rebuilt (`arthik rebuild`). Edits made to the files by other apps
-// (Obsidian, Syncthing) are picked up by the watcher (watch.go); future-dated and
-// recurring transactions are handled by the scheduler (schedule.go).
+// (Obsidian, Syncthing) are picked up by the watcher (watch.go); the scheduler
+// (schedule.go) rebuilds totals when the day changes so future-dated transactions
+// start counting on their date. The review inbox (drafts.md, learned.md) lives in
+// the same dataset so accepting a draft is one atomic change.
 package book
 
 import (
@@ -22,7 +24,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -38,15 +39,15 @@ const (
 	AccountsFile   = "accounts.md"
 	CategoriesFile = "categories.md"
 	LabelsFile     = "labels.md"
-	RemindersFile  = "reminders.md"
 	MoneyFile      = "money.md"
 	TxDir          = "transactions"
+	InboxDir       = "inbox"
+	DraftsFile     = "inbox/drafts.md"  // review list (Arthik writes)
+	RulesFile      = "inbox/learned.md" // merchant → category rules learned on accept
 )
 
 // ErrReadOnly is returned for any change to a read-only (demo) book.
 var ErrReadOnly = errors.New("this is the read-only demo — changes are disabled")
-
-var monthFileRe = regexp.MustCompile(`^transaction_(\d{6})\.md$`)
 
 // Data is the full in-memory dataset.
 type Data struct {
@@ -54,33 +55,43 @@ type Data struct {
 	Accounts   []model.Account
 	Categories []model.Category
 	Labels     []model.Label
-	Reminders  []model.Reminder
+	Drafts     []model.Draft
+	Rules      []model.Rule
 	Txns       []model.Transaction // sorted by date, time, id
 
-	src map[string]string // transaction id → month key of the file it came from
-	idx index
+	tombs map[string]model.Transaction // deleted ids still remembered (sync.go)
+	src   map[string]string            // transaction id → month key of the file it came from
+	idx   index
 }
 
 type index struct {
 	acc  map[string]int
 	cat  map[string]int
 	lab  map[string]int
-	rem  map[string]int
+	dr   map[string]int
+	rule map[string]int
 	tx   map[string]int
 	kids map[string][]string // parent category id → child ids
 }
 
+// Problem levels: a warning needs attention; info just reports what arthik did.
+const (
+	LevelWarn = ""
+	LevelInfo = "info"
+)
+
 // Problem is a data issue that does not stop the app (the record is excluded from totals).
 type Problem struct {
-	File string `json:"file" yaml:"file"`
-	ID   string `json:"id,omitempty" yaml:"id,omitempty"`
-	Msg  string `json:"msg" yaml:"msg"`
+	File  string `json:"file" yaml:"file"`
+	ID    string `json:"id,omitempty" yaml:"id,omitempty"`
+	Msg   string `json:"msg" yaml:"msg"`
+	Level string `json:"level,omitempty" yaml:"level,omitempty"` // "" = warning, "info" = notice
 }
 
 // Change marks which files a mutation touched.
 type Change struct {
-	Settings, Accounts, Categories, Labels, Reminders bool
-	Months                                            map[string]bool
+	Settings, Accounts, Categories, Labels, Drafts, Rules bool
+	Months                                                map[string]bool
 }
 
 // Month marks a transaction month file as changed.
@@ -94,13 +105,14 @@ func (c *Change) Month(key string) {
 }
 
 func (c *Change) any() bool {
-	return c.Settings || c.Accounts || c.Categories || c.Labels || c.Reminders || len(c.Months) > 0
+	return c.Settings || c.Accounts || c.Categories || c.Labels || c.Drafts || c.Rules || len(c.Months) > 0
 }
 
 // Book is one dataset.
 type Book struct {
 	Dir      string
-	ReadOnly bool
+	ReadOnly bool              // demo: no writes at all
+	Replica  bool              // phone: writes only what the user changes (see sync.go)
 	Name     string            // "main" or "demo", for logs
 	Today    func() dates.Date // injectable clock (tests)
 
@@ -112,9 +124,22 @@ type Book struct {
 	sigs     map[string]sig // file signatures after our last load/write (watch.go)
 }
 
-// Open loads the dataset in dir (creating the folder and default files if needed).
+// Options configure how a dataset is opened.
+type Options struct {
+	Name     string // label used in logs
+	ReadOnly bool   // demo dataset
+	Replica  bool   // a secondary device sharing the folder through Syncthing
+}
+
+// Open loads the dataset in dir as the main device (creating the folder if needed).
 func Open(dir, name string, readOnly bool) (*Book, error) {
-	b := &Book{Dir: dir, Name: name, ReadOnly: readOnly, Today: dates.Today}
+	return OpenWith(dir, Options{Name: name, ReadOnly: readOnly})
+}
+
+// OpenWith loads the dataset in dir with the given options.
+func OpenWith(dir string, o Options) (*Book, error) {
+	name, readOnly := o.Name, o.ReadOnly
+	b := &Book{Dir: dir, Name: name, ReadOnly: readOnly, Replica: o.Replica, Today: dates.Today}
 	if !readOnly {
 		if err := os.MkdirAll(filepath.Join(dir, TxDir), 0o755); err != nil {
 			return nil, fmt.Errorf("create data folder: %w", err)
@@ -141,6 +166,13 @@ func (b *Book) View(fn func(d *Data, c *Computed) error) error {
 	defer b.mu.RUnlock()
 	return fn(b.data, b.comp)
 }
+
+// autoWrite reports whether arthik may write files on its own (repairs, computed
+// values, merges, inbox imports) — only the main device does.
+func (b *Book) autoWrite() bool { return !b.ReadOnly && !b.Replica }
+
+// Main reports whether this instance is the main device (may write on its own).
+func (b *Book) Main() bool { return b.autoWrite() }
 
 // Problems returns load problems plus validation problems.
 func (b *Book) Problems() []Problem {
@@ -187,7 +219,7 @@ func (b *Book) Mutate(fn func(d *Data, c *Change) error) error {
 		return fmt.Errorf("save failed: %w", err)
 	}
 	b.data = nd
-	b.recomputeLocked(true)
+	b.recomputeLocked(b.autoWrite())
 	return nil
 }
 
@@ -202,7 +234,7 @@ func (b *Book) Reload() error {
 func (b *Book) Recompute() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.recomputeLocked(!b.ReadOnly)
+	b.recomputeLocked(b.autoWrite())
 }
 
 // ---------------------------------------------------------------------------
@@ -220,8 +252,11 @@ type categoriesDoc struct {
 type labelsDoc struct {
 	Labels []model.Label `yaml:"labels"`
 }
-type remindersDoc struct {
-	Reminders []model.Reminder `yaml:"reminders"`
+type draftsDoc struct {
+	Drafts []model.Draft `yaml:"drafts"`
+}
+type rulesDoc struct {
+	Rules []model.Rule `yaml:"rules"`
 }
 type txDoc struct {
 	Transactions []model.Transaction `yaml:"transactions"`
@@ -236,7 +271,7 @@ func monthPath(dir, key string) string {
 // reloadLocked reads everything from disk. On a parse error it keeps the previous
 // good data (if any) for reads and sets loadErr so writes are refused.
 func (b *Book) reloadLocked() error {
-	d := &Data{Settings: model.DefaultSettings(), src: map[string]string{}}
+	d := &Data{Settings: model.DefaultSettings(), src: map[string]string{}, tombs: map[string]model.Transaction{}}
 	var problems []Problem
 	var errs []string
 
@@ -258,33 +293,45 @@ func (b *Book) reloadLocked() error {
 	var ld labelsDoc
 	read(LabelsFile, &ld)
 	d.Labels = ld.Labels
-	var rd remindersDoc
-	read(RemindersFile, &rd)
-	d.Reminders = rd.Reminders
+	var dd draftsDoc
+	read(DraftsFile, &dd)
+	d.Drafts = dd.Drafts
+	var rd rulesDoc
+	read(RulesFile, &rd)
+	d.Rules = rd.Rules
 
+	// Transactions: main month files plus any Syncthing conflict copies.
 	files, _ := filepath.Glob(filepath.Join(b.Dir, TxDir, "transaction_*.md"))
 	sort.Strings(files)
+	var all []loadedTx
 	for _, f := range files {
 		m := monthFileRe.FindStringSubmatch(filepath.Base(f))
 		if m == nil {
 			continue
 		}
+		conflict := ""
+		if m[2] != "" {
+			conflict = f
+		}
 		var td txDoc
 		if _, err := store.Read(f, &td); err != nil {
+			if conflict != "" { // a broken conflict copy must not block the app
+				problems = append(problems, Problem{File: filepath.Base(f), Msg: "conflict copy could not be read: " + err.Error()})
+				continue
+			}
 			errs = append(errs, err.Error())
 			continue
 		}
 		for _, t := range td.Transactions {
-			d.Txns = append(d.Txns, t)
-			if t.ID != "" {
-				d.src[t.ID] = m[1]
-			}
+			all = append(all, loadedTx{t: t, month: m[1], conflict: conflict})
 		}
 	}
 
 	if len(errs) > 0 {
 		b.loadErr = errors.New(strings.Join(errs, "; "))
 		if b.data == nil { // first load: serve whatever parsed
+			res := resolveTxns(all, Now(), false)
+			d.Txns, d.tombs, d.src = res.live, res.tombs, res.src
 			d.sortTxns()
 			d.reindex()
 			b.data = d
@@ -295,21 +342,38 @@ func (b *Book) reloadLocked() error {
 	}
 	b.loadErr = nil
 
-	// Repair what can be repaired safely (ids, misfiled months, unknown labels).
-	ch := d.fixup(&problems)
+	// Resolve copies by id (newest wins), then repair what can be repaired safely.
+	res := resolveTxns(all, Now(), b.autoWrite())
+	d.Txns, d.tombs, d.src = res.live, res.tombs, res.src
+	problems = append(problems, res.problems...)
+	var ch Change
+	for k := range res.dirty {
+		ch.Month(k)
+	}
+	var merged []string
+	for path, n := range res.conflicts {
+		merged = append(merged, path)
+		problems = append(problems, Problem{File: filepath.Base(path), Level: LevelInfo, Msg: fmt.Sprintf("conflict copy merged (%d transaction(s) taken)", n)})
+	}
+	merged = append(merged, b.defConflicts(d, &ch, &problems)...)
+	fx := d.fixup(&problems)
+	ch.merge(fx)
 	d.sortTxns()
 	d.reindex()
-	if ch.any() && !b.ReadOnly {
+	if ch.any() && b.autoWrite() {
 		if err := b.persistLocked(d, &ch); err != nil {
 			log.Printf("[%s] WARN could not save repairs: %v", b.Name, err)
 		} else {
-			log.Printf("[%s] repaired data files (ids / months / labels)", b.Name)
+			log.Printf("[%s] repaired data files (ids / months / labels / merges)", b.Name)
+			b.removeConflicts(merged)
 		}
+	} else if len(merged) > 0 && b.Replica {
+		problems = append(problems, Problem{File: TxDir, Level: LevelInfo, Msg: fmt.Sprintf("%d conflict copy(s) included in totals — the main device will merge them", len(merged))})
 	}
 	b.data = d
 	b.problems = problems
 	b.sigs = b.scanLocked()
-	b.recomputeLocked(!b.ReadOnly)
+	b.recomputeLocked(b.autoWrite())
 	return nil
 }
 
@@ -333,12 +397,15 @@ func normSettings(s model.Settings) model.Settings {
 	if s.Theme == "" {
 		s.Theme = def.Theme
 	}
+	if len(s.NavOrder) > 0 {
+		s.NavOrder, _ = model.NormNav(s.NavOrder) // e.g. "scheduled" from 1.2.0 → "inbox"
+	}
 	return s
 }
 
-// fixup repairs missing/duplicate ids, transactions saved in the wrong month file
-// and labels used on transactions but missing from labels.md.
-func (d *Data) fixup(problems *[]Problem) Change {
+// fixup repairs missing definition ids and labels used on transactions but missing
+// from labels.md (transaction ids and months are handled by resolveTxns).
+func (d *Data) fixup(_ *[]Problem) Change {
 	var ch Change
 	seen := map[string]bool{}
 	for i := range d.Accounts {
@@ -361,42 +428,11 @@ func (d *Data) fixup(problems *[]Problem) Change {
 		}
 		seen["c:"+c.ID] = true
 	}
-	for i := range d.Reminders {
-		r := &d.Reminders[i]
-		if r.ID == "" {
-			r.ID = uniqueID("r-"+Slug(r.Title), func(s string) bool { return seen["r:"+s] })
-			ch.Reminders = true
-		}
-		seen["r:"+r.ID] = true
-	}
 	labels := map[string]bool{}
 	for _, l := range d.Labels {
 		labels[l.ID] = true
 	}
-	for i := range d.Txns {
-		t := &d.Txns[i]
-		oldSrc := d.src[t.ID]
-		if t.ID == "" || seen["t:"+t.ID] {
-			nid := NewTxID(t.Date, func(s string) bool { return seen["t:"+s] })
-			*problems = append(*problems, Problem{File: TxDir, ID: nid, Msg: fmt.Sprintf("transaction %q had a missing or duplicate id; renamed to %s", t.ID, nid)})
-			if oldSrc == "" {
-				// duplicate: the original kept the src entry; we can only trust the date
-				if dd, err := dates.Parse(t.Date); err == nil {
-					oldSrc = dd.MonthKey()
-				}
-			}
-			t.ID = nid
-			ch.Month(oldSrc)
-		}
-		seen["t:"+t.ID] = true
-		if oldSrc != "" {
-			d.src[t.ID] = oldSrc
-		}
-		if dd, err := dates.Parse(t.Date); err == nil && dd.MonthKey() != d.src[t.ID] {
-			ch.Month(d.src[t.ID])
-			ch.Month(dd.MonthKey())
-			d.src[t.ID] = dd.MonthKey()
-		}
+	for _, t := range d.Txns {
 		for _, l := range t.Labels {
 			if l != "" && !labels[l] {
 				labels[l] = true
@@ -408,6 +444,19 @@ func (d *Data) fixup(problems *[]Problem) Change {
 	return ch
 }
 
+// merge folds another change set into c.
+func (c *Change) merge(o Change) {
+	c.Settings = c.Settings || o.Settings
+	c.Accounts = c.Accounts || o.Accounts
+	c.Categories = c.Categories || o.Categories
+	c.Labels = c.Labels || o.Labels
+	c.Drafts = c.Drafts || o.Drafts
+	c.Rules = c.Rules || o.Rules
+	for k := range o.Months {
+		c.Month(k)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // saving
 
@@ -416,7 +465,8 @@ const (
 	hdrAccounts   = "arthik accounts — edit freely; balance, cleared_balance and projected_balance are computed from the transactions and rewritten by arthik.\nopening_balance is signed: money you owe (credit cards, loans) is negative."
 	hdrCategories = "arthik categories — edit freely; period and total are computed for the default period in settings.md and rewritten by arthik.\nkind: expense | income | both.  parent: id of the parent category (two levels)."
 	hdrLabels     = "arthik labels — count is computed."
-	hdrReminders  = "arthik reminders — scheduled transactions, auto-posted on each due date. next/anchor_day/posted/remaining/done are maintained by arthik."
+	hdrDrafts     = "arthik inbox — transactions waiting for review (from SMS, Kronos …). Managed by arthik; accept or reject them in the app."
+	hdrRules      = "arthik learned rules — what a merchant or name becomes when it shows up in the inbox. Learned when you accept a draft; edit or delete freely."
 	hdrTx         = "arthik transactions — one file per month. Each transaction's postings must sum to zero (+ debit, - credit)."
 )
 
@@ -445,8 +495,13 @@ func (b *Book) persistLocked(d *Data, ch *Change) error {
 			return err
 		}
 	}
-	if ch.Reminders {
-		if err := w(RemindersFile, hdrReminders, remindersDoc{nonNil(d.Reminders)}); err != nil {
+	if ch.Drafts {
+		if err := w(DraftsFile, hdrDrafts, draftsDoc{nonNil(d.Drafts)}); err != nil {
+			return err
+		}
+	}
+	if ch.Rules {
+		if err := w(RulesFile, hdrRules, rulesDoc{nonNil(d.Rules)}); err != nil {
 			return err
 		}
 	}
@@ -458,6 +513,11 @@ func (b *Book) persistLocked(d *Data, ch *Change) error {
 				byMonth[k] = append(byMonth[k], t)
 			}
 		}
+		for _, t := range d.tombs { // deletions stay in their month file
+			if k := d.MonthOf(t); ch.Months[k] {
+				byMonth[k] = append(byMonth[k], t)
+			}
+		}
 		keys := make([]string, 0, len(ch.Months))
 		for k := range ch.Months {
 			keys = append(keys, k)
@@ -466,6 +526,7 @@ func (b *Book) persistLocked(d *Data, ch *Change) error {
 		for _, k := range keys {
 			p := monthPath(b.Dir, k)
 			txs := byMonth[k]
+			sort.SliceStable(txs, func(i, j int) bool { return txLess(txs[i], txs[j]) })
 			if len(txs) == 0 {
 				if _, err := os.Stat(p); err != nil {
 					continue // nothing there and nothing to write
@@ -508,32 +569,39 @@ func (d *Data) clone() *Data {
 		Accounts:   append([]model.Account(nil), d.Accounts...),
 		Categories: append([]model.Category(nil), d.Categories...),
 		Labels:     append([]model.Label(nil), d.Labels...),
-		Reminders:  append([]model.Reminder(nil), d.Reminders...),
+		Drafts:     append([]model.Draft(nil), d.Drafts...),
+		Rules:      append([]model.Rule(nil), d.Rules...),
 		Txns:       append([]model.Transaction(nil), d.Txns...),
 		src:        make(map[string]string, len(d.src)),
+		tombs:      make(map[string]model.Transaction, len(d.tombs)),
 	}
 	for k, v := range d.src {
 		n.src[k] = v
+	}
+	for k, v := range d.tombs {
+		n.tombs[k] = v
 	}
 	n.reindex()
 	return n
 }
 
 func (d *Data) sortTxns() {
-	sort.SliceStable(d.Txns, func(i, j int) bool {
-		a, b := d.Txns[i], d.Txns[j]
-		if a.Date != b.Date {
-			return a.Date < b.Date
-		}
-		if a.Time != b.Time {
-			return a.Time < b.Time
-		}
-		return a.ID < b.ID
-	})
+	sort.SliceStable(d.Txns, func(i, j int) bool { return txLess(d.Txns[i], d.Txns[j]) })
+}
+
+// txLess orders transactions by date, time, id.
+func txLess(a, b model.Transaction) bool {
+	if a.Date != b.Date {
+		return a.Date < b.Date
+	}
+	if a.Time != b.Time {
+		return a.Time < b.Time
+	}
+	return a.ID < b.ID
 }
 
 func (d *Data) reindex() {
-	ix := index{acc: map[string]int{}, cat: map[string]int{}, lab: map[string]int{}, rem: map[string]int{}, tx: map[string]int{}, kids: map[string][]string{}}
+	ix := index{acc: map[string]int{}, cat: map[string]int{}, lab: map[string]int{}, dr: map[string]int{}, rule: map[string]int{}, tx: map[string]int{}, kids: map[string][]string{}}
 	for i, a := range d.Accounts {
 		ix.acc[a.ID] = i
 	}
@@ -548,8 +616,11 @@ func (d *Data) reindex() {
 	for i, l := range d.Labels {
 		ix.lab[l.ID] = i
 	}
-	for i, r := range d.Reminders {
-		ix.rem[r.ID] = i
+	for i, x := range d.Drafts {
+		ix.dr[x.ID] = i
+	}
+	for i, r := range d.Rules {
+		ix.rule[r.Match] = i
 	}
 	for i, t := range d.Txns {
 		ix.tx[t.ID] = i
@@ -587,13 +658,62 @@ func (d *Data) Label(id string) (model.Label, bool) {
 	return d.Labels[i], true
 }
 
-// Reminder returns the reminder with id.
-func (d *Data) Reminder(id string) (model.Reminder, bool) {
-	i, ok := d.idx.rem[id]
+// Draft returns the inbox draft with id.
+func (d *Data) Draft(id string) (model.Draft, bool) {
+	i, ok := d.idx.dr[id]
 	if !ok {
-		return model.Reminder{}, false
+		return model.Draft{}, false
 	}
-	return d.Reminders[i], true
+	return d.Drafts[i], true
+}
+
+// SetDraft inserts or replaces a draft and stamps it as changed now.
+func (d *Data) SetDraft(x model.Draft, ch *Change) {
+	x.Updated = stamp()
+	if x.Created == "" {
+		x.Created = x.Updated
+	}
+	if i, ok := d.idx.dr[x.ID]; ok {
+		d.Drafts[i] = x
+	} else {
+		d.Drafts = append(d.Drafts, x)
+		d.idx.dr[x.ID] = len(d.Drafts) - 1
+	}
+	ch.Drafts = true
+}
+
+// Rule returns the learned rule for a normalised key.
+func (d *Data) Rule(key string) (model.Rule, bool) {
+	i, ok := d.idx.rule[key]
+	if !ok {
+		return model.Rule{}, false
+	}
+	return d.Rules[i], true
+}
+
+// SetRule inserts or replaces the learned rule for r.Match.
+func (d *Data) SetRule(r model.Rule, ch *Change) {
+	r.Updated = stamp()
+	if i, ok := d.idx.rule[r.Match]; ok {
+		d.Rules[i] = r
+	} else {
+		d.Rules = append(d.Rules, r)
+		d.idx.rule[r.Match] = len(d.Rules) - 1
+	}
+	ch.Rules = true
+}
+
+// DeleteRule removes the learned rule with id.
+func (d *Data) DeleteRule(id string, ch *Change) bool {
+	for i, r := range d.Rules {
+		if r.ID == id {
+			d.Rules = append(d.Rules[:i:i], d.Rules[i+1:]...)
+			d.reindex()
+			ch.Rules = true
+			return true
+		}
+	}
+	return false
 }
 
 // Tx returns the transaction with id.
@@ -605,8 +725,14 @@ func (d *Data) Tx(id string) (model.Transaction, bool) {
 	return d.Txns[i], true
 }
 
-// SetTx inserts or replaces a transaction and marks the month files to rewrite.
+// SetTx inserts or replaces a transaction, stamps it as changed now and marks the
+// month files to rewrite.
 func (d *Data) SetTx(t model.Transaction, ch *Change) {
+	t.Updated, t.Deleted = stamp(), ""
+	if old, ok := d.tombs[t.ID]; ok { // re-created after a delete
+		ch.Month(d.MonthOf(old))
+		delete(d.tombs, t.ID)
+	}
 	if i, ok := d.idx.tx[t.ID]; ok {
 		ch.Month(d.MonthOf(d.Txns[i]))
 		d.Txns[i] = t
@@ -626,9 +752,13 @@ func (d *Data) DeleteTx(id string, ch *Change) bool {
 	if !ok {
 		return false
 	}
-	ch.Month(d.MonthOf(d.Txns[i]))
+	old := d.Txns[i]
+	ch.Month(d.MonthOf(old))
 	d.Txns = append(d.Txns[:i:i], d.Txns[i+1:]...)
-	delete(d.src, id)
+	if d.tombs == nil {
+		d.tombs = map[string]model.Transaction{}
+	}
+	d.tombs[id] = model.Transaction{ID: id, Date: old.Date, Deleted: stamp()} // remembered for sync
 	d.reindex()
 	return true
 }

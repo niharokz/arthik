@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- nss palette (same as the web app). -->
+<resources>
+    <color name="teal">#0A3D3A</color> <!-- fallback; the icon uses ic_launcher_background -->
+    <color name="bg">#F6F8F7</color>
+</resources>

@@ -106,10 +106,6 @@ func in(s []string, v string) bool {
 // Match reports whether t passes the filter.
 func (m *Matcher) Match(t model.Transaction) bool { return m.match(t, true) }
 
-// MatchUnstored is Match for a transaction that is not stored (a reminder's next
-// occurrence): it skips the stored-validity check.
-func (m *Matcher) MatchUnstored(t model.Transaction) bool { return m.match(t, false) }
-
 func (m *Matcher) match(t model.Transaction, stored bool) bool {
 	f := m.f
 	if stored && !f.Invalid && !m.c.Valid[t.ID] {

@@ -1,5 +1,5 @@
 // Calendar: a month grid with each day's income and expense (future-dated and
-// reminder items marked), and the selected day's transactions underneath.
+// future-dated items marked), and the selected day's transactions underneath.
 
 import { html, qs, money, amt, short, paise, fmtDay } from "../util.js";
 import { S, today, loading } from "../ui.js";
@@ -14,7 +14,7 @@ export async function render(root, ctx) {
   S.view.calDay = S.view.calDay || today();
   root.innerHTML = String(loading());
   const m = await get("/api/reports/calendar" + qs({ month: S.view.calMonth }));
-  const dayTx = await get("/api/transactions" + qs({ from: S.view.calDay, to: S.view.calDay, upcoming: "1", limit: 200 }));
+  const dayTx = await get("/api/transactions" + qs({ from: S.view.calDay, to: S.view.calDay, limit: 200 }));
   if (!ctx.alive()) return;
   const ws = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"].indexOf(S.state.settings.week_start || "monday");
   const first = new Date(m.from + "T00:00:00");
@@ -42,7 +42,7 @@ export async function render(root, ctx) {
       <div class="card">
         <div class="cal">${[...Array(7)].map((_, i) => html`<div class="dow">${DOW[(i + ws) % 7]}</div>`)}${cells}</div>
         <div class="row between" style="margin-top:12px;font-size:.9rem"><span>Income <b class="pos">${money(inc / 100)}</b></span><span>Expense <b class="neg">${money(exp / 100)}</b></span>
-          <span class="muted"><span class="up" style="color:var(--warn)">●</span> scheduled</span></div>
+          <span class="muted"><span class="up" style="color:var(--warn)">●</span> future-dated</span></div>
       </div>
       <div class="card"><header><h2>${fmtDay(S.view.calDay)}</h2></header><div data-list>${grouped(dayTx.items, { empty: "Nothing on this day" })}</div></div>
     </div>`);
@@ -52,7 +52,7 @@ export async function render(root, ctx) {
     render(root, ctx);
   }));
   root.querySelectorAll("[data-day]").forEach((b) => b.addEventListener("click", () => { S.view.calDay = b.dataset.day; render(root, ctx); }));
-  wireRows(root.querySelector("[data-list]"), dayTx.items, (t) => (t.upcoming ? ctx.go("#/scheduled") : openTx(t, () => ctx.refresh())));
+  wireRows(root.querySelector("[data-list]"), dayTx.items, (t) => openTx(t, () => ctx.refresh()));
 }
 
 export { amt };

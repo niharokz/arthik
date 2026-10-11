@@ -49,7 +49,7 @@ async function detail(root, ctx, id) {
   root.innerHTML = String(loading());
   const [hist, tx] = await Promise.all([
     get(`/api/accounts/${encodeURIComponent(id)}/history`),
-    get("/api/transactions" + qs({ account: id, limit: 400, upcoming: "1" })),
+    get("/api/transactions" + qs({ account: id, limit: 400 })),
   ]);
   if (!ctx.alive()) return;
   const liab = a.class === "liability";
@@ -75,10 +75,13 @@ async function detail(root, ctx, id) {
     <div class="card"><header><h2>Transactions</h2><a href="#/tx?account=${encodeURIComponent(id)}">Filter & export</a></header>
       <div data-list>${grouped(tx.items, { account: id })}</div></div>`);
   wireTips(root);
-  wireRows(root.querySelector("[data-list]"), tx.items, (t) => (t.upcoming ? ctx.go("#/scheduled") : openTx(t, () => ctx.refresh())));
+  wireRows(root.querySelector("[data-list]"), tx.items, (t) => openTx(t, () => ctx.refresh()));
   ctx.actionsEl.querySelector("[data-edit]")?.addEventListener("click", () => accountForm(a, ctx));
-  ctx.actionsEl.querySelector("[data-rec]")?.addEventListener("click", () => reconcile(a, tx.items.filter((t) => !t.upcoming && !t.scheduled), ctx));
+  ctx.actionsEl.querySelector("[data-rec]")?.addEventListener("click", () => reconcile(a, tx.items.filter((t) => !t.scheduled), ctx));
 }
+
+// "4275, 0353" → ["4275", "0353"]
+const digits = (s) => (s || "").split(/[\s,]+/).filter(Boolean);
 
 function accountForm(a, ctx) {
   const st = S.state;
@@ -101,7 +104,10 @@ function accountForm(a, ctx) {
       <label class="f"><span>Credit limit</span><input name="credit_limit" inputmode="decimal" value="${a.credit_limit || ""}"></label>
       <label class="f"><span>Statement day / due day</span><span class="row"><input name="statement_day" inputmode="numeric" placeholder="e.g. 18" value="${a.statement_day || ""}"><input name="due_day" inputmode="numeric" placeholder="e.g. 7" value="${a.due_day || ""}"></span></label>
     </div>` : ""}
-    <label class="f"><span>Colour</span><input type="color" name="color" value="${a.color || "#3a807a"}" style="height:40px;padding:4px"></label>
+    <div class="fields two">
+      <label class="f"><span>SMS digits (e.g. 4275, 0353)</span><input name="sms_digits" inputmode="numeric" placeholder="last 4 digits banks print" value="${(a.sms_digits || []).join(", ")}"></label>
+      <label class="f"><span>Colour</span><input type="color" name="color" value="${a.color || "#3a807a"}" style="height:40px;padding:4px"></label>
+    </div>
     <label class="f"><span>Notes</span><textarea name="notes">${a.notes || ""}</textarea></label>
     <label class="check"><input type="checkbox" name="hidden" ${a.hidden ? raw("checked") : ""}> Hide from the overview</label>
     <label class="check"><input type="checkbox" name="exclude_net_worth" ${a.exclude_net_worth ? raw("checked") : ""}> Leave out of net worth</label>
@@ -113,7 +119,7 @@ function accountForm(a, ctx) {
         const v = formData(d);
         const o = calc(v.opening) || 0;
         Object.assign(a, { name: v.name, icon: v.icon, opening_date: v.opening_date, notes: v.notes, color: v.color,
-          credit_limit: v.credit_limit, statement_day: v.statement_day, due_day: v.due_day });
+          credit_limit: v.credit_limit, statement_day: v.statement_day, due_day: v.due_day, sms_digits: digits(v.sms_digits) });
         type = e.target.value;
         a.opening_balance = fromPaise(liabOf(type) ? -Math.abs(o) : Math.abs(o));
         d.querySelector(".sheet-b").innerHTML = String(body());
@@ -130,6 +136,7 @@ function accountForm(a, ctx) {
           credit_limit: v.credit_limit ? fromPaise(calc(v.credit_limit) || 0) : "0",
           statement_day: parseInt(v.statement_day || "0", 10) || 0, due_day: parseInt(v.due_day || "0", 10) || 0,
           hidden: v.hidden, archived: !!v.archived, exclude_net_worth: v.exclude_net_worth, order: a.order || 0,
+          sms_digits: digits(v.sms_digits),
         };
         try {
           if (isNew) { const r = await post("/api/accounts", body); close(); toast("Account added"); await ctx.refresh(); ctx.go("#/account/" + encodeURIComponent(r.id)); }

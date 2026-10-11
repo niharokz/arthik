@@ -44,10 +44,15 @@ type Account struct {
 
 // Auth holds the users and the signing key.
 type Auth struct {
-	accounts map[string]*Account
-	secret   []byte
-	limiter  *limiter
+	accounts   map[string]*Account
+	secret     []byte
+	limiter    *limiter
+	localToken string // set in local mode: the phone app opens sessions with it
 }
+
+// EnableLocal turns on local mode: no passwords; the phone app opens a session for a
+// user through /local/enter with this token (only the app knows it).
+func (a *Auth) EnableLocal(token string) { a.localToken = token }
 
 // New builds an Auth. An empty secret gets a random one (sessions end on restart).
 func New(secret string, accounts ...*Account) *Auth {
@@ -157,11 +162,35 @@ func (a *Auth) Register(mux *http.ServeMux) {
 		if u := a.Resolve(r); u != nil {
 			out = map[string]any{"signed_in": true, "user": u.Name, "read_only": u.ReadOnly}
 		}
-		if du, dp, ok := a.DemoHint(); ok {
+		if a.localToken != "" {
+			out["local"] = true // the phone app handles sign-in (no password screen)
+		} else if du, dp, ok := a.DemoHint(); ok {
 			out["demo"] = map[string]string{"user": du, "password": dp}
 		}
 		httpx.JSON(w, http.StatusOK, out)
 	})
+	mux.HandleFunc("GET /local/enter", a.localEnter)
+}
+
+// localEnter opens a session for ?user= when ?token= matches, then shows the app.
+func (a *Auth) localEnter(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	if a.localToken == "" || subtle.ConstantTimeCompare([]byte(q.Get("token")), []byte(a.localToken)) != 1 {
+		httpx.Error(w, http.StatusForbidden, "open arthik from the phone app")
+		return
+	}
+	name := strings.ToLower(q.Get("user"))
+	if a.accounts[name] == nil {
+		httpx.Error(w, http.StatusNotFound, "no such user: "+name)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: CookieName, Value: a.token(name, time.Now().Add(SessionTTL)), Path: "/",
+		MaxAge: int(SessionTTL.Seconds()), HttpOnly: true, SameSite: http.SameSiteStrictMode,
+	})
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	http.Redirect(w, r, "/app#/home", http.StatusSeeOther)
 }
 
 func (a *Auth) login(w http.ResponseWriter, r *http.Request) {
@@ -272,7 +301,10 @@ func (a *Auth) String() string {
 			mode = "read-only"
 		}
 		kind := "plain password"
-		if IsHash(ac.Password) {
+		switch {
+		case ac.Password == "":
+			kind = "no password"
+		case IsHash(ac.Password):
 			kind = "bcrypt hash"
 		}
 		s = append(s, fmt.Sprintf("%s (%s, %s)", ac.User.Name, mode, kind))

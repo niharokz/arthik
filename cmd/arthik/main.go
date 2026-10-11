@@ -15,6 +15,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -24,17 +25,19 @@ import (
 	"time"
 	_ "time/tzdata" // zone data compiled in, so TZ works on minimal images
 
+	"gitlab.com/niharokz/arthik/internal/ai"
 	"gitlab.com/niharokz/arthik/internal/auth"
 	"gitlab.com/niharokz/arthik/internal/book"
 	"gitlab.com/niharokz/arthik/internal/config"
 	"gitlab.com/niharokz/arthik/internal/demo"
 	"gitlab.com/niharokz/arthik/internal/feature/state"
 	"gitlab.com/niharokz/arthik/internal/httpx"
+	"gitlab.com/niharokz/arthik/internal/inbox"
 	"gitlab.com/niharokz/arthik/internal/server"
 )
 
 // version is set at build time: -ldflags "-X main.version=1.0.0".
-var version = "1.0.0"
+var version = "1.2.2"
 
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime)
@@ -57,6 +60,8 @@ func main() {
 		err = demoSeed()
 	case "health":
 		err = health()
+	case "parse-sms":
+		err = parseSMS(os.Args[2:])
 	case "version", "--version", "-v":
 		fmt.Println("arthik", version)
 	case "help", "--help", "-h":
@@ -79,6 +84,7 @@ usage: arthik <command>
   rebuild          re-read all files and rewrite every computed value
   demo-seed        regenerate the demo dataset
   health           check that the running server answers
+  parse-sms TEXT   show how an SMS would be read (uses <data>/inbox/sms_rules.md too)
   version          print the version
 `
 
@@ -91,14 +97,42 @@ func serve() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	own, err := book.Open(cfg.DataDir, "main", false)
-	if err != nil {
-		return err
+	if cfg.ExitOnEOF { // phone app: stop when the app process goes away
+		go func() {
+			_, _ = io.Copy(io.Discard, os.Stdin)
+			log.Printf("parent app closed — exiting")
+			stop()
+		}()
 	}
-	go own.Watch(ctx, cfg.WatchEvery)
-	go own.RunScheduler(ctx, 30*time.Second)
 
-	accounts := []*auth.Account{{User: httpx.User{Name: cfg.User, Book: own}, Password: cfg.Password}}
+	// The owner's dataset (absent in local mode until a folder is chosen).
+	var accounts []*auth.Account
+	var own *book.Book
+	if cfg.DataDir != "" {
+		name := "main"
+		if cfg.Local() {
+			name = "phone"
+		}
+		own, err = book.OpenWith(cfg.DataDir, book.Options{Name: name, Replica: !cfg.Primary})
+		if err != nil {
+			return err
+		}
+		go own.Watch(ctx, cfg.WatchEvery)
+		go own.RunScheduler(ctx, 30*time.Second)
+		ir := &inbox.Runner{Book: own, Cfg: cfg.Inbox}
+		if cfg.Inbox.AIEnabled() {
+			ir.AI = ai.New(cfg.Inbox.AIURL, cfg.Inbox.AIModel, cfg.Inbox.AITimeout)
+			log.Printf("inbox AI: %s at %s", cfg.Inbox.AIModel, cfg.Inbox.AIURL)
+		}
+		go ir.Run(ctx, cfg.WatchEvery)
+		pw := cfg.Password
+		if cfg.Local() {
+			pw = "" // no password sign-in on the phone
+		}
+		accounts = append(accounts, &auth.Account{User: httpx.User{Name: cfg.User, Book: own}, Password: pw})
+	}
+
+	// The read-only demo dataset.
 	if cfg.DemoEnabled {
 		if demo.NeedsSeed(cfg.DemoDir()) {
 			if err := demo.Seed(cfg.DemoDir()); err != nil {
@@ -112,21 +146,32 @@ func serve() error {
 		}
 		go db.RunScheduler(ctx, 30*time.Second)
 		go refreshDemo(ctx, cfg.DemoDir(), db)
-		accounts = append(accounts, &auth.Account{User: httpx.User{Name: cfg.DemoUser, ReadOnly: true, Book: db}, Password: cfg.DemoPassword, ShowHint: true})
+		pw, hint := cfg.DemoPassword, true
+		if cfg.Local() {
+			pw, hint = "", false
+		}
+		accounts = append(accounts, &auth.Account{User: httpx.User{Name: cfg.DemoUser, ReadOnly: true, Book: db}, Password: pw, ShowHint: hint})
+	}
+	if len(accounts) == 0 {
+		return fmt.Errorf("nothing to serve: set ARTHIK_DATA or enable the demo")
 	}
 	a := auth.New(cfg.Secret, accounts...)
-	if cfg.Secret == "" {
+	if cfg.Local() {
+		a.EnableLocal(cfg.LocalToken)
+	} else if cfg.Secret == "" {
 		log.Printf("WARN ARTHIK_SECRET is empty — sign-ins will not survive a restart")
 	}
-	if le := own.LoadError(); le != nil {
-		log.Printf("WARN %v", le)
+	if own != nil {
+		if le := own.LoadError(); le != nil {
+			log.Printf("WARN %v", le)
+		}
 	}
 
-	srv := &http.Server{Addr: cfg.Listen, Handler: server.New(a),
+	srv := &http.Server{Addr: cfg.Listen, Handler: server.New(a, server.Options{Local: cfg.Local()}),
 		ReadTimeout: server.ReadTimeout, WriteTimeout: server.WriteTimeout, IdleTimeout: server.IdleTimeout}
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
-	log.Printf("arthik %s listening on %s — data %s — users: %s", version, cfg.Listen, cfg.DataDir, a)
+	log.Printf("arthik %s (%s mode, primary=%v) listening on %s — data %q — users: %s", version, cfg.Mode, cfg.Primary, cfg.Listen, cfg.DataDir, a)
 
 	select {
 	case err := <-errc:
@@ -204,8 +249,8 @@ func check(demoSet bool) error {
 	}
 	problems := b.Problems()
 	_ = b.View(func(d *book.Data, c *book.Computed) error {
-		fmt.Printf("%s: %d accounts, %d categories, %d labels, %d reminders, %d transactions\n",
-			dir, len(d.Accounts), len(d.Categories), len(d.Labels), len(d.Reminders), len(d.Txns))
+		fmt.Printf("%s: %d accounts, %d categories, %d labels, %d drafts, %d transactions\n",
+			dir, len(d.Accounts), len(d.Categories), len(d.Labels), len(d.Drafts), len(d.Txns))
 		fmt.Printf("net worth %s (assets %s, liabilities %s)\n", c.NetWorth.Format(), c.Assets.Format(), c.Liabilities.Format())
 		return nil
 	})
@@ -257,6 +302,36 @@ func health() error {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("health check returned %s", resp.Status)
+	}
+	return nil
+}
+
+// parseSMS shows what the inbox would read from a message (for writing SMS rules).
+func parseSMS(args []string) error {
+	text := strings.Join(args, " ")
+	if text == "" {
+		b, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return err
+		}
+		text = string(b)
+	}
+	dir, _ := dataDir(false)
+	p, err := inbox.LoadParser(dir)
+	if err != nil {
+		return err
+	}
+	r, ok := p.Parse(text)
+	if !ok {
+		fmt.Println("not a transaction (ignored, or no rule matched)")
+		return nil
+	}
+	fmt.Printf("rule:      %s\nkind:      %s\namount:    %s\ndigits:    %s\nmerchant:  %s\ndate:      %s %s\n", r.Rule, r.Kind, r.Amount, r.Digits, r.Merchant, r.Date, r.Time)
+	if r.Balance != 0 {
+		fmt.Printf("balance:   %s\n", r.Balance)
+	}
+	if r.Available != 0 {
+		fmt.Printf("available: %s\n", r.Available)
 	}
 	return nil
 }

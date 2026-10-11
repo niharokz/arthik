@@ -131,7 +131,7 @@ function lineSVG(W, points, { height = 200, name = "Balance" } = {}) {
   if (lo < 0) g += `<line class="zero" x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}"/>`;
   const d = vals.map((v, i) => `${i ? "L" : "M"}${x(i)},${y(v)}`).join(" ");
   g += `<path class="area" d="${d} L${x(n - 1)},${y(Math.max(lo, 0))} L${x(0)},${y(Math.max(lo, 0))} Z"/>`;
-  g += `<path class="line" d="${d}"/>`;
+  g += `<path class="line" pathLength="1" d="${d}"/>`;
   const step = Math.ceil(n / Math.max(2, Math.floor((W - L) / 56)));
   const gw = (W - L - R) / Math.max(1, n - 1);
   points.forEach((p, i) => {

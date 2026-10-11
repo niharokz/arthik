@@ -25,7 +25,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    networks: [homelab]
+    networks: [homelab] # Caddy reaches arthik:8080 on this network
 
 networks:
   homelab:

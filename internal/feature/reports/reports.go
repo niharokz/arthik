@@ -433,11 +433,11 @@ type dayRow struct {
 	Income   money.Amount `json:"income"`
 	Expense  money.Amount `json:"expense"`
 	Count    int          `json:"count"`
-	Upcoming int          `json:"upcoming"` // scheduled/reminder items on that day
+	Upcoming int          `json:"upcoming"` // future-dated items on that day
 }
 
 // calendar: per-day totals for ?month=YYYY-MM (default this month), including
-// future-dated transactions and reminder occurrences.
+// future-dated transactions.
 func calendar(c *httpx.Ctx) error {
 	var out map[string]any
 	err := c.Book.View(func(d *book.Data, comp *book.Computed) error {
@@ -471,19 +471,6 @@ func calendar(c *httpx.Ctx) error {
 					row.Income += i
 					row.Expense += e
 				}
-			}
-		}
-		for _, e := range d.Upcoming(dates.Max(first, comp.Today.AddDays(1)), last) {
-			if _, posted := d.Tx(e.ID); posted {
-				continue
-			}
-			row := get(e.Date)
-			row.Upcoming++
-			row.Count++
-			if e.Type == model.TxExpense {
-				row.Expense += e.Amount
-			} else if e.Type == model.TxIncome {
-				row.Income += e.Amount
 			}
 		}
 		list := []dayRow{}

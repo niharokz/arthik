@@ -1,6 +1,6 @@
 // Package transactions is the Transactions feature: list/search with filters and
-// totals, add (past, today or future dated; optionally repeating), edit, delete,
-// bulk actions, and title autocomplete ("items" in Bluecoins).
+// totals, add (past, today or future dated), edit, delete, bulk actions, and
+// remembered-transaction autofill.
 //
 // Creating with a client-supplied id is idempotent, which is what makes the PWA's
 // offline queue safe to replay.
@@ -12,12 +12,10 @@ import (
 	"strings"
 
 	"gitlab.com/niharokz/arthik/internal/book"
-	"gitlab.com/niharokz/arthik/internal/dates"
 	"gitlab.com/niharokz/arthik/internal/httpx"
 	"gitlab.com/niharokz/arthik/internal/model"
 	"gitlab.com/niharokz/arthik/internal/money"
 	"gitlab.com/niharokz/arthik/internal/query"
-	"gitlab.com/niharokz/arthik/internal/recur"
 	"gitlab.com/niharokz/arthik/internal/view"
 )
 
@@ -40,7 +38,7 @@ type Sums struct {
 	Inflow   money.Amount `json:"inflow"`  // into the filtered accounts (account filter only)
 	Outflow  money.Amount `json:"outflow"` // out of the filtered accounts
 	Count    int          `json:"count"`
-	Upcoming int          `json:"upcoming"` // future-dated or reminder items (not in the totals)
+	Upcoming int          `json:"upcoming"` // future-dated items (not in the totals yet)
 }
 
 func list(c *httpx.Ctx) error {
@@ -81,21 +79,6 @@ func list(c *httpx.Ctx) error {
 		}
 		s.Net = s.Income - s.Expense
 		items := []view.Tx{}
-		// Reminder occurrences not posted yet, when asked for (scheduled view / calendar).
-		if c.Q("upcoming") == "1" {
-			to := f.To
-			if to.IsZero() {
-				to = comp.Today.AddDays(d.Settings.UpcomingDays)
-			}
-			from := dates.Max(f.From, comp.Today.AddDays(1))
-			for _, e := range d.Upcoming(from, to) {
-				if t, err := d.BuildTx(e); err == nil && m.MatchUnstored(t) {
-					items = append(items, view.UpcomingOf(e, d))
-					s.Upcoming++
-				}
-			}
-			sort.SliceStable(items, func(i, j int) bool { return items[i].Date > items[j].Date })
-		}
 		for i := offset; i < len(all) && i < offset+limit; i++ {
 			items = append(items, view.TxOf(all[i], d, comp))
 		}
@@ -125,40 +108,24 @@ func get(c *httpx.Ctx) error {
 	return c.OK(out)
 }
 
-// createInput is an Entry plus optional repeat settings.
-type createInput struct {
-	book.Entry
-	Repeat  string `json:"repeat"`
-	EndDate string `json:"end_date"`
-	Count   int    `json:"count"`
-}
-
 func create(c *httpx.Ctx) error {
-	var in createInput
+	var in book.Entry
 	if err := c.Decode(&in); err != nil {
 		return err
 	}
 	if in.ID != "" && !book.ValidID(in.ID) {
 		return fmt.Errorf("invalid id %q", in.ID)
 	}
-	rule, err := recur.Parse(in.Repeat)
-	if err != nil {
-		return err
-	}
 	var id string
 	dup := false
-	err = c.Book.Mutate(func(d *book.Data, ch *book.Change) error {
+	err := c.Book.Mutate(func(d *book.Data, ch *book.Change) error {
 		if in.ID != "" {
-			if _, ok := d.Tx(in.ID); ok { // offline replay of something already saved
+			if _, ok := d.Tx(in.ID); ok || d.Tombstoned(in.ID) { // offline replay of something already saved (or deleted since)
 				id, dup = in.ID, true
 				return nil
 			}
-			if _, ok := d.Reminder("r-" + in.ID); ok {
-				id, dup = "r-"+in.ID, true
-				return nil
-			}
 		}
-		e := in.Entry
+		e := in
 		if e.ID == "" {
 			e.ID = d.NewTxID(e.Date)
 		}
@@ -166,35 +133,9 @@ func create(c *httpx.Ctx) error {
 		if err != nil {
 			return err
 		}
-		if !rule.Repeats() {
-			t.Labels = d.EnsureLabels(t.Labels, ch)
-			d.SetTx(t, ch)
-			id = t.ID
-			return nil
-		}
-		// Repeating: store as a reminder; occurrences up to today post immediately.
-		if !book.ReminderTypeOK(e.Type) || len(e.Splits) > 0 {
-			return fmt.Errorf("repeating transactions must be a simple expense, income or transfer (no splits)")
-		}
-		if in.EndDate != "" {
-			if _, err := dates.Parse(in.EndDate); err != nil {
-				return err
-			}
-		}
-		if in.Count < 0 {
-			return fmt.Errorf("count cannot be negative")
-		}
-		rid := "r-" + in.ID
-		if in.ID == "" {
-			rid = d.UniqueReminderID(e.Title)
-		}
-		r := model.Reminder{ID: rid, Title: t.Title, Type: e.Type, Amount: e.Amount, Account: e.Account,
-			ToAccount: e.ToAccount, Category: e.Category, Labels: d.EnsureLabels(t.Labels, ch), Notes: t.Notes,
-			Status: t.Status, Repeat: in.Repeat, Next: t.Date, EndDate: in.EndDate, Remaining: in.Count}
-		d.Reminders = append(d.Reminders, r)
-		ch.Reminders = true
-		d.PostDue(c.Book.Today(), ch)
-		id = rid
+		t.Labels = d.EnsureLabels(t.Labels, ch)
+		d.SetTx(t, ch)
+		id = t.ID
 		return nil
 	})
 	if err != nil {
@@ -214,9 +155,6 @@ func update(c *httpx.Ctx) error {
 		old, ok := d.Tx(id)
 		if !ok {
 			return httpx.NotFound("transaction")
-		}
-		if e.Reminder == "" {
-			e.Reminder = old.Reminder
 		}
 		t, err := d.BuildTx(e)
 		if err != nil {
@@ -311,7 +249,8 @@ func bulk(c *httpx.Ctx) error {
 	return c.OK(map[string]int{"updated": n})
 }
 
-// Suggestion is a remembered title with its last details.
+// Suggestion is a remembered transaction: the details of the latest one with this
+// title. Picking it in the add form fills in everything (only the date stays today).
 type Suggestion struct {
 	Title     string       `json:"title"`
 	Type      string       `json:"type"`
@@ -319,52 +258,66 @@ type Suggestion struct {
 	Account   string       `json:"account,omitempty"`
 	ToAccount string       `json:"to_account,omitempty"`
 	Category  string       `json:"category,omitempty"`
+	Splits    []book.Split `json:"splits,omitempty"`
 	Labels    []string     `json:"labels,omitempty"`
+	Notes     string       `json:"notes,omitempty"`
 	Uses      int          `json:"uses"`
+	Last      string       `json:"last"` // date of the latest use
 }
 
-// suggest returns up to 12 past titles matching ?q= (most used first), each with the
-// details of its latest use, so picking one pre-fills the form.
+// suggest returns remembered transactions whose title contains every word of ?q=
+// (all of them when q is empty). Ranking: title starts with q, same ?type=, most
+// used, most recent. ?limit= caps the list (default 8).
 func suggest(c *httpx.Ctx) error {
-	q := strings.ToLower(c.Q("q"))
+	q := strings.ToLower(strings.TrimSpace(c.Q("q")))
+	words := strings.Fields(q)
 	typ := c.Q("type")
+	limit := c.QInt("limit", 8)
+	if limit < 1 || limit > 50 {
+		limit = 8
+	}
 	var out []Suggestion
 	err := c.Book.View(func(d *book.Data, comp *book.Computed) error {
 		byTitle := map[string]*Suggestion{}
 		for _, t := range d.Txns { // oldest → newest, so the latest use wins
-			if !comp.Valid[t.ID] || (typ != "" && t.Type != typ) {
+			if !comp.Valid[t.ID] || t.Type == model.TxJournal || strings.TrimSpace(t.Title) == "" {
 				continue
 			}
-			key := strings.ToLower(t.Title)
-			if q != "" && !strings.Contains(key, q) {
+			key := strings.ToLower(strings.TrimSpace(t.Title))
+			if !containsAll(key, words) {
 				continue
 			}
 			e := book.EntryOf(t)
-			s := byTitle[key]
-			if s == nil {
-				s = &Suggestion{}
-				byTitle[key] = s
+			uses := 1
+			if old := byTitle[key]; old != nil {
+				uses = old.Uses + 1
 			}
-			uses := s.Uses + 1
-			*s = Suggestion{Title: t.Title, Type: e.Type, Amount: e.Amount, Account: e.Account, ToAccount: e.ToAccount,
-				Category: e.Category, Labels: e.Labels, Uses: uses}
+			byTitle[key] = &Suggestion{Title: t.Title, Type: e.Type, Amount: e.Amount, Account: e.Account,
+				ToAccount: e.ToAccount, Category: e.Category, Splits: e.Splits, Labels: e.Labels,
+				Notes: e.Notes, Uses: uses, Last: t.Date}
 		}
 		for _, s := range byTitle {
 			out = append(out, *s)
 		}
 		sort.Slice(out, func(i, j int) bool {
-			pi := strings.HasPrefix(strings.ToLower(out[i].Title), q)
-			pj := strings.HasPrefix(strings.ToLower(out[j].Title), q)
-			if pi != pj {
-				return pi
+			a, b := out[i], out[j]
+			pa, pb := q != "" && strings.HasPrefix(strings.ToLower(a.Title), q), q != "" && strings.HasPrefix(strings.ToLower(b.Title), q)
+			if pa != pb {
+				return pa
 			}
-			if out[i].Uses != out[j].Uses {
-				return out[i].Uses > out[j].Uses
+			if ta, tb := a.Type == typ, b.Type == typ; ta != tb {
+				return ta
 			}
-			return out[i].Title < out[j].Title
+			if a.Uses != b.Uses {
+				return a.Uses > b.Uses
+			}
+			if a.Last != b.Last {
+				return a.Last > b.Last
+			}
+			return a.Title < b.Title
 		})
-		if len(out) > 12 {
-			out = out[:12]
+		if len(out) > limit {
+			out = out[:limit]
 		}
 		return nil
 	})
@@ -375,4 +328,14 @@ func suggest(c *httpx.Ctx) error {
 		out = []Suggestion{}
 	}
 	return c.OK(out)
+}
+
+// containsAll reports whether s contains every word.
+func containsAll(s string, words []string) bool {
+	for _, w := range words {
+		if !strings.Contains(s, w) {
+			return false
+		}
+	}
+	return true
 }

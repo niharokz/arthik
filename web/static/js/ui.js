@@ -3,6 +3,7 @@
 
 import { html, raw, esc, todayStr } from "./util.js";
 import { get } from "./api.js";
+import { syncBars, haptic } from "./native.js";
 
 /** App-wide state, loaded from GET /api/state. */
 export const S = {
@@ -17,6 +18,7 @@ export async function loadState() {
   document.documentElement.dataset.theme = st.theme && st.theme !== "auto" ? st.theme : "";
   if (st.theme === "auto") delete document.documentElement.dataset.theme;
   document.body.classList.toggle("hide-amounts", !!st.hide_amounts);
+  requestAnimationFrame(syncBars); // phone app: match status bar to the theme
   return S.state;
 }
 
@@ -61,11 +63,13 @@ export function accOptions(selected, { includeArchived = false } = {}) {
 // ---- toast ----
 let toastT;
 export function toast(msg, err = false) {
+  if (err) haptic("error");
   let el = document.querySelector(".toast");
   if (!el) { el = document.createElement("div"); el.className = "toast"; el.setAttribute("role", "status"); document.body.append(el); }
   el.textContent = msg;
   el.classList.toggle("err", err);
   el.hidden = false;
+  el.classList.remove("in"); void el.offsetWidth; el.classList.add("in"); // replay slide-in
   clearTimeout(toastT);
   toastT = setTimeout(() => (el.hidden = true), err ? 5000 : 2600);
 }
@@ -86,7 +90,17 @@ export function sheet(title, body, actions = "", onMount) {
     ${actions ? html`<div class="sheet-f">${actions}</div>` : ""}
   </div>`);
   document.body.append(d);
-  const close = () => { d.close(); d.remove(); };
+  let closing = false;
+  const close = () => { // slide out, then remove
+    if (closing) return;
+    closing = true;
+    d.classList.add("closing");
+    const done = () => { if (d.open) d.close(); d.remove(); };
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return done();
+    d.addEventListener("animationend", done, { once: true });
+    setTimeout(done, 400); // safety net if no animation runs
+  };
+  d._close = close; // used by the Android back button
   d.addEventListener("click", (e) => {
     if (e.target === d || e.target.closest("[data-close]")) close();
   });
@@ -170,8 +184,16 @@ export function wirePeriod(root, p, reply, rerender) {
   t?.addEventListener("change", upd);
 }
 
-/** Small loading placeholder. */
-export const loading = () => html`<div class="empty">Loading…</div>`;
+/** Shimmering placeholder cards while a view loads. */
+export const loading = () => html`<div class="skeleton" aria-label="Loading"><div class="sk sk-row"></div><div class="sk sk-card"></div><div class="sk sk-card"></div><div class="sk sk-card short"></div></div>`;
+
+/** Closes the top-most open sheet; returns false when none is open. */
+export function closeTopSheet() {
+  const open = [...document.querySelectorAll("dialog.sheet[open]")].pop();
+  if (!open) return false;
+  open._close ? open._close() : open.close();
+  return true;
+}
 export const errorBox = (e) => html`<div class="card"><p class="neg">${e.message || e}</p></div>`;
 
 export { esc };

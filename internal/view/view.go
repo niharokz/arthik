@@ -16,7 +16,6 @@ type Tx struct {
 	Postings  []model.Posting `json:"postings"`
 	Scheduled bool            `json:"scheduled,omitempty"` // date is in the future
 	Invalid   string          `json:"invalid,omitempty"`   // validation error (excluded from totals)
-	Upcoming  bool            `json:"upcoming,omitempty"`  // a not-yet-posted reminder occurrence
 }
 
 // TxOf builds a Tx.
@@ -32,17 +31,6 @@ func TxOf(t model.Transaction, d *book.Data, c *book.Computed) Tx {
 		if err := d.ValidateTx(t); err != nil {
 			v.Invalid = err.Error()
 		}
-	}
-	return v
-}
-
-// UpcomingOf wraps a reminder occurrence.
-func UpcomingOf(e book.Entry, d *book.Data) Tx {
-	v := Tx{Entry: e, Upcoming: true, Scheduled: true}
-	if t, err := d.BuildTx(e); err == nil {
-		v.Postings = t.Postings
-	} else {
-		v.Postings = []model.Posting{}
 	}
 	return v
 }

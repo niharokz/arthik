@@ -30,6 +30,7 @@ type input struct {
 	Hidden          bool         `json:"hidden"`
 	Archived        bool         `json:"archived"`
 	ExcludeNetWorth bool         `json:"exclude_net_worth"`
+	SMSDigits       []string     `json:"sms_digits"`
 }
 
 func (in input) apply(a *model.Account) error {
@@ -55,6 +56,11 @@ func (in input) apply(a *model.Account) error {
 	a.CreditLimit, a.StatementDay, a.DueDay = in.CreditLimit, in.StatementDay, in.DueDay
 	a.Color, a.Icon, a.Notes, a.Order = strings.TrimSpace(in.Color), strings.TrimSpace(in.Icon), strings.TrimSpace(in.Notes), in.Order
 	a.Hidden, a.Archived, a.ExcludeNetWorth = in.Hidden, in.Archived, in.ExcludeNetWorth
+	digits, err := book.CleanDigits(in.SMSDigits)
+	if err != nil {
+		return err
+	}
+	a.SMSDigits = digits
 	if a.Type != "credit_card" {
 		a.CreditLimit, a.StatementDay, a.DueDay = 0, 0, 0
 	}
@@ -87,6 +93,9 @@ func create(c *httpx.Ctx) error {
 			}
 		}
 		a.ID = d.UniqueAccountID(a.Name)
+		if err := d.DigitsFree(a.SMSDigits, a.ID); err != nil {
+			return err
+		}
 		id = a.ID
 		d.Accounts = append(d.Accounts, a)
 		ch.Accounts = true
@@ -117,6 +126,9 @@ func update(c *httpx.Ctx) error {
 			if err := in.apply(&a); err != nil {
 				return err
 			}
+			if err := d.DigitsFree(a.SMSDigits, a.ID); err != nil {
+				return err
+			}
 			d.Accounts[i] = a
 			ch.Accounts = true
 			return nil
@@ -135,11 +147,6 @@ func remove(c *httpx.Ctx) error {
 					used++
 					break
 				}
-			}
-		}
-		for _, r := range d.Reminders {
-			if r.Account == id || r.ToAccount == id {
-				return fmt.Errorf("reminder %q uses this account — change or delete it first", r.Title)
 			}
 		}
 		if used > 0 {

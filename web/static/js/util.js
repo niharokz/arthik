@@ -134,3 +134,36 @@ export const qs = (o) => {
   const s = p.toString();
   return s ? "?" + s : "";
 };
+
+// ---- motion ----
+
+/** True when the user asked the system for less motion. */
+export const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** Counts ₹ amounts up from zero (used when a screen first appears). */
+export function countUp(root, sel = ".stat .value .amt") {
+  if (reducedMotion() || document.body.classList.contains("hide-amounts")) return;
+  root.querySelectorAll(sel).forEach((el) => {
+    const final = el.textContent;
+    const target = paise(final);
+    if (!target) return;
+    const plus = final.trim().startsWith("+") ? "+" : "";
+    const t0 = performance.now(), dur = 650;
+    const step = (now) => {
+      if (!el.isConnected) return;
+      const p = Math.min(1, (now - t0) / dur);
+      const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+      el.textContent = p < 1 ? plus + money(fromPaise(Math.round(target * eased))) : final;
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+/** Restarts a CSS animation class on an element. */
+export function replay(el, cls) {
+  if (!el || reducedMotion()) return;
+  el.classList.remove(cls);
+  void el.offsetWidth; // reflow so the animation starts again
+  el.classList.add(cls);
+}

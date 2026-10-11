@@ -15,10 +15,21 @@ import (
 	"time"
 )
 
+// Modes: "server" is the web app on nimory; "local" is the engine inside the phone app.
+const (
+	ModeServer = "server"
+	ModeLocal  = "local"
+)
+
 // Config is the runtime configuration.
 type Config struct {
+	Mode         string        // ARTHIK_MODE: server (default) | local
+	LocalToken   string        // ARTHIK_LOCAL_TOKEN: secret the phone app uses to open a session (local mode)
+	Primary      bool          // ARTHIK_PRIMARY: main device writes computed files, merges, imports the inbox (default true)
+	ExitOnEOF    bool          // ARTHIK_EXIT_ON_STDIN_EOF: stop when the parent app closes our stdin
+	DemoDirEnv   string        // ARTHIK_DEMO_DIR: demo folder (default <data>/demouser)
 	Listen       string        // ARTHIK_LISTEN, default :8080
-	DataDir      string        // ARTHIK_DATA, default /data/finance (owner's dataset)
+	DataDir      string        // ARTHIK_DATA, default /data/finance (owner's dataset; may be empty in local mode)
 	User         string        // ARTHIK_USER, default "admin"
 	Password     string        // ARTHIK_PASSWORD (plain text or bcrypt hash) — required
 	DemoEnabled  bool          // ARTHIK_DEMO, default true
@@ -26,10 +37,33 @@ type Config struct {
 	DemoPassword string        // ARTHIK_DEMO_PASSWORD, default "demo" (shown on the login screen)
 	Secret       string        // ARTHIK_SECRET — signs sessions; random per start when empty
 	WatchEvery   time.Duration // ARTHIK_WATCH_SECONDS, default 3
+
+	Inbox Inbox
 }
 
-// DemoDir is where the demo dataset lives: <data>/demouser.
-func (c Config) DemoDir() string { return filepath.Join(c.DataDir, "demouser") }
+// Inbox configures the review inbox (SMS and Kronos drafts) and the optional AI.
+type Inbox struct {
+	MaxAgeDays int           // ARTHIK_INBOX_MAX_AGE_DAYS: ignore source items older than this (default 30)
+	KeepDays   int           // ARTHIK_INBOX_KEEP_DAYS: forget reviewed drafts after this (default 120)
+	PairDays   int           // ARTHIK_INBOX_PAIR_DAYS: two SMS this close become one transfer (default 2)
+	AIURL      string        // ARTHIK_AI_URL: Ollama base URL, e.g. http://ollama:11434 (empty = no AI)
+	AIModel    string        // ARTHIK_AI_MODEL: model name, e.g. qwen2.5:7b-instruct-q4_K_M
+	AITimeout  time.Duration // ARTHIK_AI_TIMEOUT_SECONDS: per request (default 120)
+}
+
+// AIEnabled reports whether drafts may be categorised by the local AI.
+func (i Inbox) AIEnabled() bool { return i.AIURL != "" && i.AIModel != "" }
+
+// DemoDir is where the demo dataset lives: ARTHIK_DEMO_DIR or <data>/demouser.
+func (c Config) DemoDir() string {
+	if c.DemoDirEnv != "" {
+		return c.DemoDirEnv
+	}
+	return filepath.Join(c.DataDir, "demouser")
+}
+
+// Local reports whether arthik runs inside the phone app.
+func (c Config) Local() bool { return c.Mode == ModeLocal }
 
 // LoadDotEnv sets variables from a KEY=VALUE file without overriding the real
 // environment. A missing file is not an error.
@@ -63,6 +97,15 @@ func LoadDotEnv(path string) error {
 	return sc.Err()
 }
 
+// envInt reads a positive integer (def when missing or invalid).
+func envInt(k string, def int) int {
+	var n int
+	if _, err := fmt.Sscan(os.Getenv(k), &n); err == nil && n > 0 {
+		return n
+	}
+	return def
+}
+
 func env(k, def string) string {
 	if v := strings.TrimSpace(os.Getenv(k)); v != "" {
 		return v
@@ -73,6 +116,11 @@ func env(k, def string) string {
 // Load builds the Config from the environment.
 func Load() (Config, error) {
 	c := Config{
+		Mode:         strings.ToLower(env("ARTHIK_MODE", ModeServer)),
+		LocalToken:   os.Getenv("ARTHIK_LOCAL_TOKEN"),
+		Primary:      !strings.EqualFold(env("ARTHIK_PRIMARY", "true"), "false"),
+		ExitOnEOF:    env("ARTHIK_EXIT_ON_STDIN_EOF", "") == "1",
+		DemoDirEnv:   os.Getenv("ARTHIK_DEMO_DIR"),
 		Listen:       env("ARTHIK_LISTEN", ":8080"),
 		DataDir:      env("ARTHIK_DATA", "/data/finance"),
 		User:         env("ARTHIK_USER", "admin"),
@@ -83,11 +131,38 @@ func Load() (Config, error) {
 		Secret:       os.Getenv("ARTHIK_SECRET"),
 		WatchEvery:   3 * time.Second,
 	}
-	if s := os.Getenv("ARTHIK_WATCH_SECONDS"); s != "" {
-		var n int
-		if _, err := fmt.Sscan(s, &n); err == nil && n > 0 {
-			c.WatchEvery = time.Duration(n) * time.Second
+	if n := envInt("ARTHIK_WATCH_SECONDS", 3); n > 0 {
+		c.WatchEvery = time.Duration(n) * time.Second
+	}
+	c.Inbox = Inbox{
+		MaxAgeDays: envInt("ARTHIK_INBOX_MAX_AGE_DAYS", 30),
+		KeepDays:   envInt("ARTHIK_INBOX_KEEP_DAYS", 120),
+		PairDays:   envInt("ARTHIK_INBOX_PAIR_DAYS", 2),
+		AIURL:      strings.TrimRight(env("ARTHIK_AI_URL", ""), "/"),
+		AIModel:    env("ARTHIK_AI_MODEL", ""),
+		AITimeout:  time.Duration(envInt("ARTHIK_AI_TIMEOUT_SECONDS", 120)) * time.Second,
+	}
+	if c.Inbox.KeepDays <= c.Inbox.MaxAgeDays {
+		return c, fmt.Errorf("ARTHIK_INBOX_KEEP_DAYS (%d) must be larger than ARTHIK_INBOX_MAX_AGE_DAYS (%d), or old items would be imported again", c.Inbox.KeepDays, c.Inbox.MaxAgeDays)
+	}
+	switch c.Mode {
+	case ModeLocal:
+		if len(c.LocalToken) < 16 {
+			return c, fmt.Errorf("ARTHIK_LOCAL_TOKEN must be at least 16 characters in local mode")
 		}
+		if os.Getenv("ARTHIK_DATA") == "" {
+			c.DataDir = "" // demo only until a folder is chosen
+		}
+		if c.DataDir == "" && c.DemoDirEnv == "" {
+			return c, fmt.Errorf("local mode needs ARTHIK_DATA or ARTHIK_DEMO_DIR")
+		}
+		if os.Getenv("ARTHIK_USER") == "" {
+			c.User = "me"
+		}
+		return c, nil
+	case ModeServer:
+	default:
+		return c, fmt.Errorf("ARTHIK_MODE must be server or local, not %q", c.Mode)
 	}
 	if c.Password == "" {
 		return c, fmt.Errorf("ARTHIK_PASSWORD is not set (put it in .env — plain text or a hash from `arthik hash-password`)")

@@ -139,44 +139,6 @@ func TestFutureDatedCountsFromItsDate(t *testing.T) {
 	}
 }
 
-func TestReminderBackfillAnchorAndIdempotency(t *testing.T) {
-	b := newBook(t)
-	err := b.Mutate(func(d *Data, ch *Change) error {
-		d.Reminders = append(d.Reminders, model.Reminder{ID: "r-rent", Title: "Rent", Type: model.TxExpense, Amount: money.FromRupees(1000),
-			Account: "bank", Category: "food", Repeat: "monthly", Next: "2026-07-31"})
-		ch.Reminders = true
-		d.PostDue(dates.MustParse(today), ch)
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var next string
-	var n int
-	_ = b.View(func(d *Data, c *Computed) error {
-		r, _ := d.Reminder("r-rent")
-		next = r.Next
-		for _, tx := range d.Txns {
-			if tx.Reminder == "r-rent" {
-				n++
-			}
-		}
-		return nil
-	})
-	if n != 3 || next != "2026-10-31" { // Jul 31, Aug 31, Sep 30 posted; next keeps the 31st
-		t.Fatalf("posted %d, next %s", n, next)
-	}
-	b.tick()
-	b.tick()
-	_ = b.View(func(d *Data, c *Computed) error {
-		n = len(d.Txns)
-		return nil
-	})
-	if n != 3 {
-		t.Fatalf("re-run posted duplicates: %d", n)
-	}
-}
-
 func TestBrokenFileIsNeverOverwritten(t *testing.T) {
 	b := newBook(t)
 	add(t, b, Entry{Type: model.TxExpense, Date: today, Title: "Tea", Amount: money.FromRupees(20), Account: "bank", Category: "food"})

@@ -1,6 +1,6 @@
 // Package state serves GET /api/state: everything the app needs at start-up in one
-// call (settings, accounts with balances, categories, labels, reminders, the
-// overview numbers and any data problems). The PWA caches this for offline use.
+// call (settings, accounts with balances, categories, labels, the inbox count,
+// the overview numbers and any data problems). The PWA caches this for offline use.
 package state
 
 import (
@@ -9,7 +9,6 @@ import (
 	"gitlab.com/niharokz/arthik/internal/model"
 	"gitlab.com/niharokz/arthik/internal/money"
 	"gitlab.com/niharokz/arthik/internal/period"
-	"gitlab.com/niharokz/arthik/internal/recur"
 	"gitlab.com/niharokz/arthik/internal/view"
 )
 
@@ -69,10 +68,15 @@ func Register(rt *httpx.Router) {
 			out["accounts"] = accs
 			out["categories"] = cats
 			out["labels"] = nonNil(d.Labels)
-			out["reminders"] = nonNil(d.Reminders)
+			pending := 0
+			for _, x := range d.Drafts {
+				if x.Status == model.DraftPending {
+					pending++
+				}
+			}
+			out["inbox"] = map[string]int{"pending": pending}
 			out["account_types"] = model.AccountTypes
 			out["period_kinds"] = period.Kinds
-			out["repeat_rules"] = recur.Names
 			out["summary"] = summary{
 				NetWorth: comp.NetWorth, Assets: comp.Assets, Liabilities: comp.Liabilities,
 				Period: comp.Period, Income: comp.Income, Expense: comp.Expense, Net: comp.Income - comp.Expense,

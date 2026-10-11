@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The mark from icon.svg (512 grid): a hand holding a ₹ coin, scaled to stay
+     inside the 66 dp circle every launcher mask keeps. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.14"
+        android:scaleY="0.14"
+        android:translateX="18.16"
+        android:translateY="17.32">
+        <!-- coin -->
+        <path android:fillColor="#FFFFFFFF" android:pathData="M226,170a74,74 0,1 0,148 0a74,74 0,1 0,-148 0" />
+        <path android:fillColor="#00000000" android:strokeColor="#FF3A807A" android:strokeWidth="16"
+            android:strokeLineCap="round" android:strokeLineJoin="round"
+            android:pathData="M268,132H334M268,158H334M286,132c38,0 38,52 0,52h-14l50,48" />
+        <!-- sleeve -->
+        <path android:fillColor="#FFFFFFFF" android:strokeColor="#FFFFFFFF" android:strokeWidth="12" android:strokeLineJoin="round"
+            android:pathData="M70,318L140,300L164,392L94,410Z" />
+        <!-- palm and fingers -->
+        <path android:fillColor="#FFFFFFFF" android:strokeColor="#FFFFFFFF" android:strokeWidth="10" android:strokeLineJoin="round"
+            android:pathData="M156,304C200,290 236,280 262,282C290,284 318,300 346,318L404,304C432,297 446,334 420,344L300,382C262,394 226,394 196,384L176,378Z" />
+        <!-- thumb crease -->
+        <path android:fillColor="#00000000" android:strokeColor="#FF3A807A" android:strokeWidth="12" android:strokeLineCap="round"
+            android:pathData="M286,342C306,356 330,356 352,344" />
+    </group>
+</vector>

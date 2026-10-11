@@ -7,15 +7,15 @@
 //  - Writes are never cached here: the page queues offline transaction changes
 //    itself (js/api.js) and replays them when back online.
 
-const VERSION = "arthik-v1";
+const VERSION = "arthik-v5";
 const SHELL = `${VERSION}-shell`;
 const API = `${VERSION}-api`;
 const FILES = [
   "/app", "/css/app.css", "/manifest.webmanifest", "/icon.svg", "/icon-192.png", "/icon-512.png",
-  "/js/main.js", "/js/util.js", "/js/api.js", "/js/ui.js", "/js/charts.js", "/js/txform.js", "/js/txlist.js",
+  "/js/main.js", "/js/util.js", "/js/api.js", "/js/native.js", "/js/appmode.js", "/js/ui.js", "/js/charts.js", "/js/txform.js", "/js/txlist.js",
   "/js/views/dashboard.js", "/js/views/transactions.js", "/js/views/accounts.js", "/js/views/categories.js",
-  "/js/views/budgets.js", "/js/views/scheduled.js", "/js/views/reports.js", "/js/views/calendar.js",
-  "/js/views/labels.js", "/js/views/settings.js",
+  "/js/views/budgets.js", "/js/views/inbox.js", "/js/views/reports.js", "/js/views/calendar.js",
+  "/js/views/labels.js", "/js/views/settings.js", "/js/views/phone.js", "/js/views/menu.js",
 ];
 
 self.addEventListener("install", (e) => {

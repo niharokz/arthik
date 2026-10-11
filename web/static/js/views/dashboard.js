@@ -1,5 +1,6 @@
-// Overview: net worth, the period's income/expense, budgets, upcoming bills,
-// credit cards, accounts, recent transactions and a 6-month cash-flow chart.
+// Overview: net worth, the period's income/expense, budgets, drafts waiting in the
+// inbox, future-dated transactions, credit cards, accounts, recent transactions and
+// a 6-month cash-flow chart.
 
 import { html, money, amt, paise, qs, fmtShort, relDay, parseDate, ymd } from "../util.js";
 import { S, periodState, periodQuery, periodBar, wirePeriod, catName, catIcon, today, loading, ro } from "../ui.js";
@@ -7,6 +8,7 @@ import { get } from "../api.js";
 import { incomeExpense, ranked, wireTips } from "../charts.js";
 import { grouped, wireRows, pendingCreates } from "../txlist.js";
 import { openTx } from "../txform.js";
+import { draftRow } from "./inbox.js";
 
 export async function render(root, ctx) {
   const st = S.state;
@@ -14,13 +16,17 @@ export async function render(root, ctx) {
   root.innerHTML = String(loading());
   const sixAgo = parseDate(today());
   sixAgo.setMonth(sixAgo.getMonth() - 5, 1);
-  const [tot, bud, up, recent, flow] = await Promise.all([
+  const ahead = parseDate(today());
+  ahead.setDate(ahead.getDate() + st.settings.upcoming_days);
+  const [tot, bud, up, recent, flow, box] = await Promise.all([
     get("/api/categories/totals" + qs(periodQuery(p))),
     get("/api/budgets" + qs(periodQuery(p))),
-    get("/api/upcoming" + qs({ days: st.settings.upcoming_days })),
+    get("/api/transactions" + qs({ when: "scheduled", to: ymd(ahead), limit: 50 })),
     get("/api/transactions" + qs({ limit: 8, when: "posted" })),
     get("/api/reports/cashflow" + qs({ from: ymd(sixAgo), to: today() })),
+    get("/api/inbox").catch(() => ({ items: [], pending: 0 })),
   ]);
+  const soon = up.items.sort((a, b) => (a.date < b.date ? -1 : 1));
   if (!ctx.alive()) return;
   const s = st.summary;
   const cards = st.accounts.filter((a) => a.card && !a.archived);
@@ -56,12 +62,14 @@ export async function render(root, ctx) {
         <section class="card"><header><h2>Cash flow · 6 months</h2><a href="#/reports">Reports</a></header>${incomeExpense(flow.rows)}</section>
       </div>
       <div class="stack">
-        <section class="card"><header><h2>Upcoming</h2><a href="#/scheduled">Scheduled</a></header>
-          ${up.length ? html`<ul class="list">${up.slice(0, 6).map((t) => html`<li><a class="item" href="#/scheduled">
+        <section class="card"><header><h2>📥 Inbox${box.pending ? html` <span class="badge warn">${box.pending}</span>` : ""}</h2><a href="#/inbox">Review</a></header>
+          ${box.items.length ? html`<ul class="list" data-inbox>${box.items.slice(0, 4).map((x) => draftRow(x, false))}</ul>`
+          : html`<div class="empty">Nothing to review — SMS and Kronos drafts land here</div>`}</section>
+        ${soon.length ? html`<section class="card"><header><h2>Upcoming</h2><a href="#/tx">All</a></header>
+          <ul class="list" data-soon>${soon.slice(0, 6).map((t, i) => html`<li><a class="item" href="#" data-i="${i}">
             <span class="ic">${t.type === "transfer" ? "⇄" : catIcon(t.category)}</span>
             <span class="main-t"><span class="t">${t.title}</span><span class="s">${fmtShort(t.date)} · ${relDay(t.date, today())}</span></span>
-            <span class="end"><span class="amt ${t.type === "income" ? "pos" : t.type === "expense" ? "neg" : ""}">${money(t.amount)}</span></span></a></li>`)}</ul>`
-          : html`<div class="empty">Nothing due in the next ${st.settings.upcoming_days} days</div>`}</section>
+            <span class="end"><span class="amt ${t.type === "income" ? "pos" : t.type === "expense" ? "neg" : ""}">${money(t.amount)}</span></span></a></li>`)}</ul></section>` : ""}
         ${cards.length ? html`<section class="card"><header><h2>Credit cards</h2></header>
           ${cards.map((a) => html`<a class="item" href="#/account/${encodeURIComponent(a.id)}"><span class="ic">${a.icon}</span>
             <span class="main-t"><span class="t">${a.name}</span><span class="s">${a.card.due_date ? `Due ${fmtShort(a.card.due_date)} · ` : ""}${a.credit_limit ? `${a.card.utilised}% used` : ""}</span></span>
@@ -78,4 +86,6 @@ export async function render(root, ctx) {
   wireTips(root);
   root.querySelectorAll("[data-cats] [data-key]").forEach((el) => el.addEventListener("click", () => ctx.go("#/category/" + encodeURIComponent(el.dataset.key))));
   wireRows(root.querySelector("[data-recent]"), recentItems, (t) => (t._pending ? null : openTx(t, () => ctx.refresh())));
+  root.querySelectorAll("[data-soon] [data-i]").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); openTx(soon[+a.dataset.i], () => ctx.refresh()); }));
+  root.querySelectorAll("[data-inbox] [data-draft]").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); ctx.go("#/inbox"); }));
 }
