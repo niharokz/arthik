@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Arthik</string>
+    <string name="widget_description">This month\'s spending against your budgets and the drafts waiting in the inbox</string>
+    <string name="widget_budget_description">This month\'s spending against your budgets</string>
+    <string name="widget_networth_description">Net worth, this month\'s change and a 12-month trend</string>
+    <string name="widget_inbox_description">Drafts from bank SMS and subscriptions waiting for review</string>
 </resources>

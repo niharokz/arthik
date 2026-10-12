@@ -98,4 +98,58 @@ class Prefs(ctx: Context) {
     var smsNextRun: Long
         get() = sp.getLong("sms_next_run", 0)
         set(v) = sp.edit().putLong("sms_next_run", v).apply()
+
+    // ---- morning inbox notification ----
+
+    /** Notify about drafts waiting in the inbox once a day. */
+    var notifyEnabled: Boolean
+        get() = sp.getBoolean("notify_enabled", false)
+        set(v) = sp.edit().putBoolean("notify_enabled", v).apply()
+
+    /** Time of the daily notice (default 07:00). */
+    var notifyHour: Int
+        get() = sp.getInt("notify_hour", 7)
+        set(v) = sp.edit().putInt("notify_hour", v).apply()
+    var notifyMinute: Int
+        get() = sp.getInt("notify_minute", 0)
+        set(v) = sp.edit().putInt("notify_minute", v).apply()
+
+    var notifyNextRun: Long
+        get() = sp.getLong("notify_next_run", 0)
+        set(v) = sp.edit().putLong("notify_next_run", v).apply()
+    var notifyLastResult: String
+        get() = sp.getString("notify_last_result", "") ?: ""
+        set(v) = sp.edit().putString("notify_last_result", v).apply()
+
+    // ---- look ----
+
+    /** Use the phone's wallpaper colours (Material You, Android 12+) instead of Arthik teal. */
+    var materialYou: Boolean
+        get() = sp.getBoolean("material_you", false)
+        set(v) = sp.edit().putBoolean("material_you", v).apply()
+
+    // ---- widgets ----
+
+    /** Widget background: "auto" (follows light/dark) or "#rrggbb". */
+    var widgetBg: String
+        get() = sp.getString("widget_bg", "auto") ?: "auto"
+        set(v) = sp.edit().putString("widget_bg", v).apply()
+
+    /** Widget background opacity, 0 (see-through) to 100. */
+    var widgetOpacity: Int
+        get() = sp.getInt("widget_opacity", 100)
+        set(v) = sp.edit().putInt("widget_opacity", v).apply()
+
+    /** Widget text: "auto", "light" or "dark". */
+    var widgetText: String
+        get() = sp.getString("widget_text", "auto") ?: "auto"
+        set(v) = sp.edit().putString("widget_text", v).apply()
+
+    /** Last summary from the engine (JSON) and when it was read, so the widget draws at once. */
+    var summaryJson: String
+        get() = sp.getString("summary_json", "") ?: ""
+        set(v) = sp.edit().putString("summary_json", v).apply()
+    var summaryAt: Long
+        get() = sp.getLong("summary_at", 0)
+        set(v) = sp.edit().putLong("summary_at", v).apply()
 }

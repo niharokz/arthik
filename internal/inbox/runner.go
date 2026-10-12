@@ -196,6 +196,9 @@ func needsAI(x model.Draft) bool {
 // sample of how you named and categorised past transactions.
 func request(d *book.Data, x model.Draft) ai.Request {
 	req := ai.Request{Kind: x.Type, Amount: x.Amount.String(), Merchant: x.Merchant, Text: x.Raw}
+	if x.CategoryHint != "" { // e.g. Kronos: the subscription's own category name
+		req.Text = strings.TrimSpace(req.Text + "\nThe bill's own category: " + x.CategoryHint)
+	}
 	if req.Merchant == "" {
 		req.Merchant = x.Title
 	}

@@ -148,6 +148,7 @@ arthik check [--demo]   validate the data files and list problems
 arthik rebuild          re-read everything and rewrite all computed values
 arthik demo-seed        regenerate the demo data now
 arthik health           exit 0 when the server answers (Docker health check)
+arthik summary          this month's spending vs budget and the inbox, as JSON (read-only)
 arthik parse-sms TEXT   show how the inbox would read an SMS
 arthik version
 ```

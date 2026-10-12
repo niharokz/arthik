@@ -1,6 +1,7 @@
 package com.nihars.arthik
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import java.io.File
 import java.io.IOException
@@ -90,8 +91,9 @@ class Engine(private val ctx: Context) {
     /** URL of a page on the engine. */
     fun url(path: String) = "http://127.0.0.1:$port$path"
 
-    /** URL that opens a session for a user ("me" or "demouser"). */
-    fun enterUrl(user: String) = url("/local/enter?token=$token&user=$user")
+    /** URL that opens a session for a user ("me" or "demouser"), optionally on a screen ("inbox"). */
+    fun enterUrl(user: String, to: String? = null) =
+        url("/local/enter?token=$token&user=$user" + if (to.isNullOrEmpty()) "" else "&to=" + Uri.encode(to, "/"))
 
     // Copies engine output into the log file.
     private fun pump(p: Process) {

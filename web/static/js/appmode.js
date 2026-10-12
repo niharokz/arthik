@@ -4,11 +4,13 @@
 
 import { html } from "./util.js";
 import { sheet, toast } from "./ui.js";
-import { isApp, call, config, json, onNative, haptic } from "./native.js";
+import { isApp, call, config, json, onNative, haptic, applyAccent, syncBars } from "./native.js";
 
 /** Decides what to show before the app is entered. */
 export function appGate(root) {
   if (!isApp) return notInApp(root);
+  applyAccent();
+  requestAnimationFrame(syncBars);
   const c = config();
   if (c.engine_error) return engineError(root, c);
   if (!c.mode) return welcome(root, c);

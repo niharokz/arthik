@@ -29,6 +29,7 @@ function box(draw) {
 export const incomeExpense = (rows, o) => box((w) => incomeExpenseSVG(w, rows, o));
 export const line = (points, o) => (points.length ? box((w) => lineSVG(w, points, o)) : html`<div class="empty">No data</div>`);
 export const columns = (rows, o) => box((w) => columnsSVG(w, rows, o));
+export const spark = (points, o) => box((w) => sparkSVG(w, points, o));
 
 function drawAll(root) {
   root.querySelectorAll(".chartbox[data-cid]").forEach((el) => {
@@ -141,6 +142,32 @@ function lineSVG(W, points, { height = 200, name = "Balance" } = {}) {
   });
   if (n <= 24) g += `<circle class="dot" r="4" cx="${x(n - 1)}" cy="${y(vals[n - 1])}"/>`;
   return html`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${name} over time">${raw(g)}</svg>`;
+}
+
+/**
+ * Axis-free trend line for a headline number: points = [{label, value}]. The
+ * y-range hugs the data so small changes stay visible; hover shows each point.
+ */
+function sparkSVG(W, points, { height = 72, name = "Net worth" } = {}) {
+  const H = height, P = 6, n = points.length;
+  if (n < 2) return html`<div class="spark-none faint">Not enough history yet</div>`;
+  const vals = points.map((p) => paise(p.value));
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (hi === lo) { hi += 100; lo -= 100; }
+  const pad = (hi - lo) * 0.15;
+  lo -= pad; hi += pad;
+  const x = (i) => P + ((W - 2 * P) * i) / (n - 1);
+  const y = (v) => P + (H - 2 * P) * (1 - (v - lo) / (hi - lo));
+  const d = vals.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const trend = vals[n - 1] >= vals[0] ? "up" : "down";
+  let g = `<path class="area ${trend}" d="${d} L${x(n - 1)},${H} L${x(0)},${H} Z"/><path class="line ${trend}" pathLength="1" d="${d}"/>`;
+  const gw = (W - 2 * P) / (n - 1);
+  points.forEach((p, i) => {
+    g += `<g data-cross="${i}" style="opacity:0"><line class="cross" x1="${x(i)}" x2="${x(i)}" y1="0" y2="${H}"/><circle class="dot" r="4" cx="${x(i)}" cy="${y(vals[i])}"/></g>`;
+    g += `<rect class="hit" data-i="${i}" x="${x(i) - gw / 2}" y="0" width="${gw}" height="${H}" data-tip="${esc(`<b>${esc(p.label)}</b><br>${esc(name)} ${esc(money(p.value))}`)}"/>`;
+  });
+  g += `<circle class="dot end ${trend}" r="3.5" cx="${x(n - 1)}" cy="${y(vals[n - 1])}"/>`;
+  return html`<svg class="chart spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="${name} trend">${raw(g)}</svg>`;
 }
 
 /** Single-series columns: rows = [{label, value}]. */

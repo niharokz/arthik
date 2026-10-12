@@ -2,4 +2,10 @@
 <resources>
     <color name="teal">#5FB3AA</color>
     <color name="bg">#0F1413</color>
+    <color name="widget_text">#E8EFED</color>
+    <color name="widget_muted">#A3B1AE</color>
+    <color name="widget_accent">#5FB3AA</color>
+    <color name="widget_over">#F0805F</color>
+    <color name="widget_warn">#E0A640</color>
+    <color name="widget_ok">#4CC792</color>
 </resources>

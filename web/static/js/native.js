@@ -39,6 +39,20 @@ export function nextEvent(type) {
 /** Light vibration feedback (confirm | error | tick). */
 export const haptic = (kind = "tick") => call("haptic", kind);
 
+/** Uses the phone's Material You accent when switched on in Settings → Phone. */
+export function applyAccent() {
+  if (!N) return;
+  const a = json("accent");
+  const root = document.documentElement;
+  if (a.on && a.light && a.dark) {
+    root.style.setProperty("--accent-l", a.light);
+    root.style.setProperty("--accent-d", a.dark);
+    root.dataset.accent = "you";
+  } else {
+    delete root.dataset.accent;
+  }
+}
+
 /** Colours the Android status and navigation bars to match the page. */
 export function syncBars() {
   if (!N) return;

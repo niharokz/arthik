@@ -54,3 +54,17 @@ func TestShiftAndLabels(t *testing.T) {
 		t.Errorf("buckets = %+v", b)
 	}
 }
+
+func TestDailyBuckets(t *testing.T) {
+	o := DefaultOpts()
+	b := Buckets(Daily, dates.MustParse("2026-09-29"), dates.MustParse("2026-10-02"), o)
+	if len(b) != 4 || b[0].Label != "29 Sep 2026" || b[3].From.String() != "2026-10-02" || b[3].From != b[3].To {
+		t.Errorf("daily buckets = %+v", b)
+	}
+	if Daily.Valid() || !Daily.Bucket() {
+		t.Error("daily must be a bucket kind but not a selectable period")
+	}
+	if r := Resolve("daily", "", "", "", 0, Monthly, dates.MustParse("2026-10-12"), o); r.Kind != Monthly {
+		t.Errorf("a daily period must fall back to the default, got %s", r.Kind)
+	}
+}

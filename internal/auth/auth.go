@@ -19,6 +19,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -172,7 +173,11 @@ func (a *Auth) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /local/enter", a.localEnter)
 }
 
-// localEnter opens a session for ?user= when ?token= matches, then shows the app.
+// enterRoute limits ?to= to an app screen name such as "inbox" or "account/hdfc".
+var enterRoute = regexp.MustCompile(`^[a-z]+(/[A-Za-z0-9_.-]+)?$`)
+
+// localEnter opens a session for ?user= when ?token= matches, then shows the app
+// (on the screen named by ?to=, e.g. from the phone's widget or notification).
 func (a *Auth) localEnter(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	if a.localToken == "" || subtle.ConstantTimeCompare([]byte(q.Get("token")), []byte(a.localToken)) != 1 {
@@ -190,7 +195,11 @@ func (a *Auth) localEnter(w http.ResponseWriter, r *http.Request) {
 	})
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "no-referrer")
-	http.Redirect(w, r, "/app#/home", http.StatusSeeOther)
+	to := "home"
+	if t := q.Get("to"); enterRoute.MatchString(t) {
+		to = t
+	}
+	http.Redirect(w, r, "/app#/"+to, http.StatusSeeOther)
 }
 
 func (a *Auth) login(w http.ResponseWriter, r *http.Request) {

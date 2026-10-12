@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -142,6 +143,12 @@ func TestAPI(t *testing.T) {
 		mustOK("GET", "/api/reports/"+p, "")
 	}
 	mustOK("GET", "/api/period?period=quarterly", "")
+	if nw := mustOK("GET", "/api/reports/networth?bucket=daily&from=2026-10-01&to=2026-10-07", ""); len(nw["rows"].([]any)) != 7 {
+		t.Errorf("daily net worth rows = %v", nw["rows"])
+	}
+	if s := mustOK("GET", "/api/summary", ""); s["budget"].(map[string]any)["budget"] != "3000.00" {
+		t.Errorf("summary = %v", s)
+	}
 	// pages
 	for _, p := range []string{"/", "/app", "/sw.js", "/manifest.webmanifest", "/js/main.js"} {
 		res, err := http.Get(o.srv.URL + p)
@@ -198,6 +205,12 @@ func TestLocalMode(t *testing.T) {
 	}
 	if res := get("/local/enter?token=" + token + "&user=me"); res.StatusCode != 303 || res.Header.Get("Location") != "/app#/home" {
 		t.Fatalf("enter = %d %s", res.StatusCode, res.Header.Get("Location"))
+	}
+	if res := get("/local/enter?token=" + token + "&user=me&to=inbox"); res.Header.Get("Location") != "/app#/inbox" {
+		t.Errorf("enter to inbox = %s", res.Header.Get("Location"))
+	}
+	if res := get("/local/enter?token=" + token + "&user=me&to=" + url.QueryEscape("x\"><script>")); res.Header.Get("Location") != "/app#/home" {
+		t.Errorf("a bad screen name must fall back to home, got %s", res.Header.Get("Location"))
 	}
 	if code, out := c.do("GET", "/api/state", ""); code != 200 || out["read_only"] != false {
 		t.Fatalf("state as me = %d %v", code, out)
@@ -324,7 +337,7 @@ func TestInboxAPI(t *testing.T) {
 	if code, _ := o.do("POST", "/api/inbox/nope/reject", `{}`); code != 404 {
 		t.Errorf("missing draft = %d", code)
 	}
-	if code, out := o.do("GET", "/api/inbox/rules", ""); code != 200 || out["_raw"] == nil {
+	if code, out := o.do("GET", "/api/inbox/rules?q=x&limit=10", ""); code != 200 || out["items"] == nil || out["limit"].(float64) != 10 {
 		t.Errorf("rules = %d %v", code, out)
 	}
 	// state carries the pending count for the menu badge

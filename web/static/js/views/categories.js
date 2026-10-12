@@ -3,7 +3,7 @@
 // add/edit/delete-with-move.
 
 import { html, raw, qs, money, amt, paise, fromPaise, calc } from "../util.js";
-import { S, sheet, toast, confirmSheet, formData, ro, loading, periodState, periodQuery, periodBar, wirePeriod, PERIODS, kids, cat } from "../ui.js";
+import { S, sheet, toast, confirmSheet, formData, ro, loading, periodState, periodQuery, periodBar, wirePeriod, PERIODS, kids, cat, colorField, wireColorFields } from "../ui.js";
 import { get, post, put, del } from "../api.js";
 import { columns, wireTips } from "../charts.js";
 import { grouped, wireRows } from "../txlist.js";
@@ -95,10 +95,8 @@ export function categoryForm(c, ctx, defaults = {}) {
         ${parentsFor(kind).map((x) => html`<option value="${x.id}" ${x.id === c.parent ? raw("selected") : ""}>${x.icon || ""} ${x.name}</option>`)}</select></label>
     </div>
     ${kind === "both" ? html`<p class="muted" style="margin-top:-6px;font-size:.85rem">“Both ways” is for money that can go in or out, e.g. <b>Market</b> gains and losses: record a gain as Income and a loss as Expense with this category.</p>` : ""}
-    <div class="fields two">
-      <label class="f"><span>Icon (emoji)</span><input name="icon" value="${c.icon || ""}" maxlength="4"></label>
-      <label class="f"><span>Colour</span><input type="color" name="color" value="${c.color || "#3a807a"}" style="height:40px;padding:4px"></label>
-    </div>
+    <label class="f"><span>Icon (emoji)</span><input name="icon" value="${c.icon || ""}" maxlength="4"></label>
+    ${colorField("color", c.color)}
     <div class="fields two">
       <label class="f"><span>Budget (optional)</span><input name="budget" inputmode="decimal" value="${paise(c.budget) ? c.budget : ""}" placeholder="none"></label>
       <label class="f"><span>Budget period</span><select name="budget_period">${PERIODS.filter(([k]) => k !== "custom").map(([k, l]) => html`<option value="${k}" ${(c.budget_period || "monthly") === k ? raw("selected") : ""}>${l}</option>`)}</select></label>
@@ -115,6 +113,7 @@ export function categoryForm(c, ctx, defaults = {}) {
         d.querySelector('[name="kind"]').addEventListener("change", onKind);
       };
       d.querySelector('[name="kind"]').addEventListener("change", onKind);
+      wireColorFields(d);
       d.querySelector("[data-save]").addEventListener("click", async () => {
         const v = formData(d);
         const budget = v.budget.trim() ? calc(v.budget) : 0;

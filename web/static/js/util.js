@@ -141,7 +141,7 @@ export const qs = (o) => {
 export const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** Counts ₹ amounts up from zero (used when a screen first appears). */
-export function countUp(root, sel = ".stat .value .amt") {
+export function countUp(root, sel = ".stat .value .amt, .hero-value .amt, .stat-chip .amt") {
   if (reducedMotion() || document.body.classList.contains("hide-amounts")) return;
   root.querySelectorAll(sel).forEach((el) => {
     const final = el.textContent;

@@ -16,8 +16,10 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <!-- Run the copy at the chosen minute (optional; without it Android picks a time within ~15 min). -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <!-- Set the nightly run again after a restart. -->
+    <!-- Set the nightly run and the morning notice again after a restart. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Morning inbox notice (switched on in Settings → Phone; Android 13+ asks first). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".ArthikApp"
@@ -43,7 +45,8 @@
         </activity>
 
         <receiver android:name=".SmsAlarm" android:exported="false" />
-        <receiver android:name=".SmsReschedule" android:exported="true">
+        <receiver android:name=".NotifyAlarm" android:exported="false" />
+        <receiver android:name=".Reschedule" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
@@ -51,6 +54,32 @@
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
                 <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
+        </receiver>
+
+        <!-- Home-screen widgets: overview (4×2), budget, net worth and inbox (2×2). -->
+        <receiver android:name=".ArthikWidget" android:exported="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info" />
+        </receiver>
+        <receiver android:name=".BudgetWidget" android:exported="true" android:label="Arthik budget">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_budget_info" />
+        </receiver>
+        <receiver android:name=".NetWorthWidget" android:exported="true" android:label="Arthik net worth">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_networth_info" />
+        </receiver>
+        <receiver android:name=".InboxWidget" android:exported="true" android:label="Arthik inbox">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_inbox_info" />
         </receiver>
     </application>
 </manifest>

@@ -197,12 +197,7 @@ func (b *Book) recomputeLocked(write bool) {
 	// Default-period category totals and income/expense.
 	c.Period = period.Of(period.Kind(d.Settings.DefaultPeriod), c.Today, d.Opts())
 	own := d.CategoryTotals(c, c.Period.From, c.Period.To, nil)
-	for id, v := range own {
-		cat, _ := d.Category(id)
-		inc, exp := IncomeExpense(cat.Kind, toPosting(cat.Kind, v))
-		c.Income += inc
-		c.Expense += exp
-	}
+	c.Income, c.Expense = d.incomeExpense(own)
 	c.CatTotals = d.RollUp(own)
 	b.comp = c
 
@@ -230,6 +225,21 @@ func (b *Book) recomputeLocked(write bool) {
 		log.Printf("[%s] WARN could not write %s: %v", b.Name, MoneyFile, err)
 	}
 	b.sigs = b.scanLocked()
+}
+
+// IncomeExpenseIn returns money in and money out between from and to (inclusive).
+func (d *Data) IncomeExpenseIn(c *Computed, from, to dates.Date) (inc, exp money.Amount) {
+	return d.incomeExpense(d.CategoryTotals(c, from, to, nil))
+}
+
+func (d *Data) incomeExpense(own map[string]money.Amount) (inc, exp money.Amount) {
+	for id, v := range own {
+		cat, _ := d.Category(id)
+		i, e := IncomeExpense(cat.Kind, toPosting(cat.Kind, v))
+		inc += i
+		exp += e
+	}
+	return inc, exp
 }
 
 // toPosting reverses Natural (natural value → raw posting amount).

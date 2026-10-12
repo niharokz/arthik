@@ -44,7 +44,7 @@ only if you want installed PWAs to drop their offline cache.
 ## 3. Code map
 
 ```
-cmd/arthik/main.go          CLI: serve | hash-password | check [--demo] | rebuild | demo-seed | health | parse-sms | version
+cmd/arthik/main.go          CLI: serve | hash-password | check [--demo] | rebuild | demo-seed | health | summary | parse-sms | version
 internal/config/            .env loader + Config (container-side values only)
 internal/money/             Amount = int64 paise; Parse/String/Format(₹ Indian grouping)/MulDiv; YAML+JSON as "123.45"
 internal/dates/             Date (calendar day), AddMonths with anchor day
@@ -75,9 +75,12 @@ internal/feature/<name>/    one package per feature, each with Register(rt):
   labels       POST/PUT/DELETE /api/labels
   transactions GET/POST /api/transactions, GET/PUT/DELETE /{id}, POST /bulk, GET /api/suggest
   review       GET /api/inbox?status=pending|done|all, POST /api/inbox/{id}/{accept,match,reject,restore,unpair},
-               GET /api/inbox/rules, DELETE /api/inbox/rules/{id}
+               GET /api/inbox/rules?q=&offset=&limit= (paged, most used first), DELETE /api/inbox/rules/{id};
+               drafts carry confidence high|medium|low + checks (view.go)
   budgets      GET /api/budgets
   reports      GET /api/reports/{cashflow,categories,trend,networth,balance-sheet,labels,accounts,calendar}
+               (?bucket=daily|weekly|monthly|… ; daily only for reports)
+  summary      GET /api/summary (+ `arthik summary`): month spend vs budget, inbox, net worth + 12-month trend (phone widgets/notice)
   settings     PUT /api/settings
   importexport GET /api/export.csv, POST /api/import (?dry_run=1&create_missing=1)
 internal/e2e/               two-device Syncthing simulation tests (main + phone)

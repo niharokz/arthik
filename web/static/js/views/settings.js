@@ -2,7 +2,7 @@
 // start, look-ahead, theme, hide amounts, inbox fallback categories and learned
 // rules, CSV import/export, data health, sign out.
 
-import { html, raw } from "../util.js";
+import { html, raw, qs, debounce, reducedMotion } from "../util.js";
 import { S, toast, formData, ro, sheet, PERIODS, catOptions, catName } from "../ui.js";
 import { get, put, del, postText } from "../api.js";
 import { logout, navOrder, NAV_ITEMS, BOTTOM_COUNT } from "../main.js";
@@ -75,27 +75,60 @@ export async function render(root, ctx) {
   rulesCard(root.querySelector("[data-rules]"));
 }
 
-// What merchants become in the inbox, learned when you accept drafts.
-async function rulesCard(el) {
-  let rules = [];
-  try { rules = await get("/api/inbox/rules"); } catch (e) { el.innerHTML = String(html`<header><h2>🧠 Learned rules</h2></header><p class="neg">${e.message}</p>`); return; }
+// What merchants become in the inbox, learned when you accept drafts. There can be
+// thousands, so they come a page at a time, most used first, with a search box.
+const RULES_PAGE = 25;
+function rulesCard(el) {
+  let q = "", offset = 0, page = null, busy = false;
+  const head = (n) => html`<header><h2>🧠 Learned rules</h2>${n != null ? html`<small class="faint">${n.toLocaleString("en-IN")}</small>` : ""}</header>`;
+  const load = async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      page = await get("/api/inbox/rules" + qs({ q, offset, limit: RULES_PAGE }));
+      draw();
+    } catch (e) {
+      el.innerHTML = String(html`${head()}<p class="neg">${e.message}</p>`);
+    } finally { busy = false; }
+  };
   const draw = () => {
-    el.innerHTML = String(html`<header><h2>🧠 Learned rules</h2><small class="faint">${rules.length}</small></header>
-      <p class="muted" style="margin-top:0;font-size:.85rem">When an inbox draft's merchant matches, its title and category fill in by themselves. Accept a draft with a different category to change a rule.</p>
-      ${rules.length ? html`<ul class="list">${rules.map((r) => html`<li class="row" style="padding:6px 0;gap:8px">
+    const { items, total } = page;
+    const from = total ? offset + 1 : 0, to = offset + items.length;
+    el.querySelector("[data-rules-body]").innerHTML = String(html`
+      ${items.length ? html`<ul class="list rules">${items.map((r) => html`<li class="row rule">
         <span class="grow"><code>${r.match}</code> → <b>${r.title || "—"}</b> · ${catName(r.category, true)}${r.uses > 1 ? html` <small class="faint">${r.uses}×</small>` : ""}</span>
         ${ro() ? "" : html`<button class="icon ghost" data-forget="${r.id}" aria-label="Forget rule">✕</button>`}</li>`)}</ul>`
-      : html`<p class="faint" style="margin:0">Nothing learned yet.</p>`}`);
-    el.querySelectorAll("[data-forget]").forEach((b) => b.addEventListener("click", async () => {
-      try {
-        await del("/api/inbox/rules/" + encodeURIComponent(b.dataset.forget));
-        rules = rules.filter((r) => r.id !== b.dataset.forget);
-        draw();
-        toast("Rule forgotten");
-      } catch (e) { toast(e.message, true); }
-    }));
+      : html`<p class="faint" style="margin:0">${q ? "No rule matches." : "Nothing learned yet."}</p>`}
+      ${total > RULES_PAGE ? html`<div class="pager">
+        <button class="ghost" data-page="-1" ${offset === 0 ? raw("disabled") : ""} aria-label="Previous page">‹ Prev</button>
+        <span class="faint">${from.toLocaleString("en-IN")}–${to.toLocaleString("en-IN")} of ${total.toLocaleString("en-IN")}</span>
+        <button class="ghost" data-page="1" ${to >= total ? raw("disabled") : ""} aria-label="Next page">Next ›</button></div>` : ""}`);
+    el.querySelector("header small")?.remove();
+    if (!q) el.querySelector("header").insertAdjacentHTML("beforeend", String(html`<small class="faint">${total.toLocaleString("en-IN")}</small>`));
   };
-  draw();
+  el.innerHTML = String(html`${head()}
+    <p class="muted" style="margin-top:0;font-size:.85rem">When an inbox draft's merchant matches, its title and category fill in by themselves. Accept a draft with a different category to change a rule.</p>
+    <input type="search" data-rules-q placeholder="Search merchant, title or category" aria-label="Search rules" style="margin-bottom:8px">
+    <div data-rules-body><p class="muted" style="margin:0">Loading…</p></div>`);
+  el.querySelector("[data-rules-q]").addEventListener("input", debounce((e) => { q = e.target.value.trim(); offset = 0; load(); }, 250));
+  el.addEventListener("click", async (e) => {
+    const pg = e.target.closest("[data-page]");
+    if (pg) {
+      offset = Math.max(0, offset + Number(pg.dataset.page) * RULES_PAGE);
+      await load();
+      el.scrollIntoView({ block: "nearest", behavior: reducedMotion() ? "auto" : "smooth" });
+      return;
+    }
+    const b = e.target.closest("[data-forget]");
+    if (!b) return;
+    try {
+      await del("/api/inbox/rules/" + encodeURIComponent(b.dataset.forget));
+      if (page.items.length === 1 && offset > 0) offset -= RULES_PAGE; // the page emptied: step back
+      await load();
+      toast("Rule forgotten");
+    } catch (err) { toast(err.message, true); }
+  });
+  load();
 }
 
 function importSheet(ctx) {

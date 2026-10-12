@@ -4,7 +4,7 @@
 // replaced by the app gate (appmode.js) and the back button is handled here.
 
 import { html, raw, countUp, replay } from "./util.js";
-import { S, loadState, toast, ro, closeTopSheet } from "./ui.js";
+import { S, loadState, toast, ro, closeTopSheet, watchSegments } from "./ui.js";
 import { isApp, call } from "./native.js";
 import { appGate } from "./appmode.js";
 import { get, post, flush, onQueue, queue } from "./api.js";
@@ -155,7 +155,7 @@ async function route() {
   } catch (e) {
     if (current === token) view.innerHTML = String(html`<div class="card"><p class="neg">${e.message}</p></div>`);
   }
-  if (changed) window.scrollTo({ top: 0 });
+  if (changed) { window.scrollTo({ top: 0 }); document.body.classList.remove("fab-away"); }
 }
 
 /** Rebuilds the menus (after the menu order changed) and the current view. */
@@ -269,5 +269,15 @@ if (isApp) { // the app serves itself from the phone: no offline cache needed
   navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
 }
 
+// Scroll cues: the top bar gets its edge once the page moves; the + button tucks
+// away while scrolling down and comes back on the way up.
+let lastY = 0;
+addEventListener("scroll", () => {
+  const y = scrollY;
+  document.body.classList.toggle("scrolled", y > 4);
+  if (Math.abs(y - lastY) > 12) { document.body.classList.toggle("fab-away", y > lastY && y > 240); lastY = y; }
+}, { passive: true });
+
+watchSegments();
 boot();
 export { raw };

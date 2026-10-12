@@ -3,6 +3,8 @@ package com.nihars.arthik
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.PendingIntent
+import android.content.Context
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -16,9 +18,12 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
+import android.graphics.drawable.ColorDrawable
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
 import android.view.WindowInsetsController
+import android.view.animation.DecelerateInterpolator
 import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.ValueCallback
@@ -28,9 +33,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.ProgressBar
-import android.widget.TextView
 import android.widget.Toast
 import org.json.JSONObject
 
@@ -38,7 +41,8 @@ import org.json.JSONObject
  * The only screen: a full-screen WebView showing the same UI as arthik.nihars.com,
  * served by the engine running on this phone. This class starts the engine, decides
  * which page to open (welcome, lock or the app) and handles everything Android-side:
- * folder picker, file access, fingerprint, back button, downloads and status bar.
+ * folder picker, file access, fingerprint, back button, downloads, system bars
+ * (edge to edge on Android 11+) and opening a screen from the widget or notification.
  */
 class MainActivity : Activity() {
     val arthik: ArthikApp get() = application as ArthikApp
@@ -52,6 +56,9 @@ class MainActivity : Activity() {
     private var awayForResult = false // an external screen (picker, settings) is open
     private var stoppedAt = 0L
     private var clearHistoryNext = false
+    private var entered = false // the app (not the lock/welcome gate) is showing
+    private var pendingRoute: String? = null // screen to open once entered ("inbox")
+    private var insetsJs = "" // safe-area CSS for the current system bars
 
     companion object {
         private const val REQ_FOLDER = 1
@@ -59,6 +66,20 @@ class MainActivity : Activity() {
         private const val REQ_FILE = 3
         private const val REQ_SMS = 4
         private const val REQ_CONFIRM = 5
+        private const val REQ_NOTIFY = 6
+        private const val EXTRA_ROUTE = "route"
+        private const val SPLASH_DP = 160 // the icon circle of Android 12's splash screen
+        private val ROUTE = Regex("[a-z]+(/[A-Za-z0-9_.-]+)?")
+
+        /** Opens the app on a screen ("inbox"), e.g. from the widget or a notification. */
+        fun openIntent(ctx: Context, route: String, code: Int): PendingIntent = PendingIntent.getActivity(
+            ctx, code,
+            Intent(ctx, MainActivity::class.java).setAction("open:$route").putExtra(EXTRA_ROUTE, route)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        private fun routeOf(i: Intent?): String? = i?.getStringExtra(EXTRA_ROUTE)?.takeIf { ROUTE.matches(it) }
     }
 
     // ---- lifecycle -------------------------------------------------------------
@@ -66,17 +87,22 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) WebView.setWebContentsDebuggingEnabled(true)
+        window.setBackgroundDrawable(ColorDrawable(bgColor())) // drop the launch logo once drawn
         web = buildWebView()
         splash = buildSplash()
-        setContentView(FrameLayout(this).apply {
+        val root = FrameLayout(this).apply {
             addView(web, ViewGroup.LayoutParams(-1, -1))
             addView(splash, ViewGroup.LayoutParams(-1, -1))
-        })
+        }
+        setContentView(root)
+        edgeToEdge(root)
+        pendingRoute = routeOf(intent)
         // A new screen (app reopened, or the process was restarted by Android or the
         // nightly SMS job): stay unlocked only within the lock delay of leaving.
         arthik.unlocked = arthik.stillUnlocked() || (arthik.unlocked && prefs.leftAt == 0L)
         engine.onCrash = { tail -> ui { showError("The engine stopped unexpectedly.", tail) } }
-        SmsSync.schedule(this) // keeps the nightly SMS run set after updates
+        SmsSync.schedule(this) // keeps the nightly SMS run and the morning notice set after updates
+        InboxNotify.schedule(this)
         if (engine.running) openStart() else restartEngine()
     }
 
@@ -85,7 +111,16 @@ class MainActivity : Activity() {
         if (!awayForResult) {
             stoppedAt = SystemClock.elapsedRealtime()
             prefs.leftAt = if (arthik.unlocked) System.currentTimeMillis() else 0
+            Widget.refreshAsync(applicationContext, null) // you may have changed the numbers
         }
+    }
+
+    // Widget or notification tapped while the app is already open.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val r = routeOf(intent) ?: return
+        if (entered) web.evaluateJavascript("location.hash = '#/$r'", null) else pendingRoute = r
     }
 
     override fun onStart() {
@@ -134,6 +169,7 @@ class MainActivity : Activity() {
 
             override fun onPageFinished(view: WebView, url: String) {
                 if (clearHistoryNext && !url.contains("/local/enter")) { view.clearHistory(); clearHistoryNext = false }
+                if (insetsJs.isNotEmpty()) view.evaluateJavascript(insetsJs, null)
                 if (url.startsWith("http")) revealWeb()
             }
 
@@ -156,21 +192,29 @@ class MainActivity : Activity() {
         setDownloadListener { url, _, disposition, mime, _ -> download(url, disposition, mime) }
     }
 
-    // Logo + spinner shown while the engine starts.
-    private fun buildSplash(): View = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        gravity = Gravity.CENTER
+    // The launch logo (same size and place as Android's own splash screen, so the hand-over
+    // is seamless) with a thin progress bar that only appears if starting takes a while.
+    private fun buildSplash(): View = FrameLayout(this).apply {
         setBackgroundColor(bgColor())
-        addView(ImageView(context).apply { setImageDrawable(packageManager.getApplicationIcon(packageName)) }, LinearLayout.LayoutParams(dp(88), dp(88)))
-        addView(ProgressBar(context).apply { isIndeterminate = true }, LinearLayout.LayoutParams(dp(36), dp(36)).apply { topMargin = dp(24) })
-        addView(TextView(context).apply { text = "Starting Arthik…"; setTextColor(Color.GRAY); gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(12) })
+        addView(ImageView(context).apply {
+            setImageResource(R.drawable.splash_logo)
+            contentDescription = "Arthik"
+        }, FrameLayout.LayoutParams(dp(SPLASH_DP), dp(SPLASH_DP), Gravity.CENTER))
+        addView(ProgressBar(context, null, android.R.attr.progressBarStyleHorizontal).apply {
+            isIndeterminate = true
+            alpha = 0f
+            animate().alpha(1f).setStartDelay(700).setDuration(300).start()
+        }, FrameLayout.LayoutParams(dp(120), dp(4), Gravity.CENTER).apply { topMargin = dp(SPLASH_DP / 2 + 36) })
     }
 
-    // Fades the page in and the splash out (once).
+    // Fades the page in (rising slightly) while the logo grows and fades away (once).
     private fun revealWeb() {
         if (splash.visibility != View.VISIBLE) return
-        web.animate().alpha(1f).setDuration(220).start()
-        splash.animate().alpha(0f).setDuration(220).withEndAction { splash.visibility = View.GONE }.start()
+        val ease = DecelerateInterpolator(2f)
+        web.translationY = dp(14).toFloat()
+        web.animate().alpha(1f).translationY(0f).setDuration(320).setInterpolator(ease).start()
+        splash.animate().alpha(0f).scaleX(1.06f).scaleY(1.06f).setDuration(260).setInterpolator(ease)
+            .withEndAction { splash.visibility = View.GONE; splash.scaleX = 1f; splash.scaleY = 1f }.start()
     }
 
     private fun showSplash() {
@@ -209,15 +253,17 @@ class MainActivity : Activity() {
         CookieManager.getInstance().removeAllCookies(null)
         val needsGate = prefs.mode.isEmpty() || (prefs.lockOn && !arthik.unlocked) ||
             (prefs.mode == "folder" && engine.folder.isEmpty())
-        if (needsGate) web.loadUrl(engine.url("/app")) else enter()
+        if (needsGate) { entered = false; web.loadUrl(engine.url("/app")) } else enter()
     }
 
-    /** Opens a session for the current mode. */
+    /** Opens a session for the current mode (on the screen a widget/notification asked for). */
     fun enter() {
         if (prefs.lockOn && !arthik.unlocked) return
         val user = if (prefs.mode == "folder" && engine.folder.isNotEmpty()) "me" else "demouser"
         clearHistoryNext = true
-        web.loadUrl(engine.enterUrl(user))
+        entered = true
+        web.loadUrl(engine.enterUrl(user, pendingRoute))
+        pendingRoute = null
     }
 
     fun useDemo() {
@@ -242,6 +288,7 @@ class MainActivity : Activity() {
     fun lockNow() {
         if (!prefs.lockOn) return
         arthik.unlocked = false
+        entered = false
         CookieManager.getInstance().removeAllCookies(null)
         web.loadUrl(engine.url("/app"))
     }
@@ -267,6 +314,21 @@ class MainActivity : Activity() {
     }
 
     fun smsDone(result: String) = event("sms", JSONObject().put("result", result))
+
+    /** Asks to show notifications (Android 13+), or opens their system settings when blocked. */
+    fun requestNotify() {
+        if (InboxNotify.permitted(this)) return event("notify_permission", JSONObject().put("granted", true))
+        away()
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIFY)
+        } else {
+            openExternal(Uri.parse("package:$packageName"), Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+            awayForResult = false
+            event("notify_permission", JSONObject().put("granted", false).put("settings", true))
+        }
+    }
+
+    fun notifyDone(result: String) = event("notify", JSONObject().put("result", result))
 
     fun openAppSettings() {
         away()
@@ -345,6 +407,11 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         awayForResult = false
         if (requestCode == REQ_ACCESS) accessResult()
+        if (requestCode == REQ_NOTIFY) {
+            val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+            if (granted) { prefs.notifyEnabled = true; InboxNotify.schedule(this) }
+            event("notify_permission", JSONObject().put("granted", granted))
+        }
         if (requestCode == REQ_SMS) {
             val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
             // Denied without a dialog: Android 13+ blocks SMS for sideloaded apps until
@@ -386,22 +453,48 @@ class MainActivity : Activity() {
         web.performHapticFeedback(c)
     }
 
-    /** Matches the system bars to the page colour. */
+    /** Matches the system bars to the page: transparent bars edge to edge (Android 11+), else coloured. */
     @Suppress("DEPRECATION")
     fun setBars(color: String, dark: Boolean) {
         val c = try { Color.parseColor(color) } catch (_: IllegalArgumentException) { return }
-        window.statusBarColor = c
-        window.navigationBarColor = c
         if (Build.VERSION.SDK_INT >= 30) {
             val flags = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
             window.insetsController?.setSystemBarsAppearance(if (dark) 0 else flags, flags)
-        } else {
-            var f = window.decorView.systemUiVisibility
-            f = if (dark) f and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv() else f or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-            if (Build.VERSION.SDK_INT >= 27) {
-                f = if (dark) f and View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv() else f or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-            }
-            window.decorView.systemUiVisibility = f
+            return
+        }
+        window.statusBarColor = c
+        window.navigationBarColor = c
+        var f = window.decorView.systemUiVisibility
+        f = if (dark) f and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv() else f or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        if (Build.VERSION.SDK_INT >= 27) {
+            f = if (dark) f and View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv() else f or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+        }
+        window.decorView.systemUiVisibility = f
+    }
+
+    /**
+     * Android 11+: draw behind the status and navigation bars. The page gets their
+     * heights as --sat/--sab (CSS px) to pad its header and bottom bar; the keyboard
+     * shrinks the page instead.
+     */
+    @Suppress("DEPRECATION")
+    private fun edgeToEdge(root: View) {
+        if (Build.VERSION.SDK_INT < 30) return
+        window.setDecorFitsSystemWindows(false)
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
+        window.isNavigationBarContrastEnforced = false
+        root.setOnApplyWindowInsetsListener { v, insets ->
+            val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+            val ime = insets.getInsets(WindowInsets.Type.ime())
+            v.setPadding(bars.left, 0, bars.right, ime.bottom)
+            val d = resources.displayMetrics.density
+            val top = bars.top / d
+            val bottom = if (ime.bottom > 0) 0f else bars.bottom / d
+            insetsJs = "document.documentElement.style.setProperty('--sat','${top}px');" +
+                "document.documentElement.style.setProperty('--sab','${bottom}px')"
+            web.evaluateJavascript(insetsJs, null)
+            WindowInsets.CONSUMED
         }
     }
 

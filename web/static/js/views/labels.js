@@ -2,7 +2,7 @@
 // add / rename / recolour / delete (removed from every transaction).
 
 import { html, raw } from "../util.js";
-import { S, sheet, toast, confirmSheet, formData, ro } from "../ui.js";
+import { S, sheet, toast, confirmSheet, formData, ro, colorField, wireColorFields } from "../ui.js";
 import { post, put, del } from "../api.js";
 
 export async function render(root, ctx) {
@@ -23,9 +23,10 @@ function form(l, ctx) {
   l = l || {};
   sheet(isNew ? "Add label" : "Edit label", html`
     <label class="f"><span>Name</span><input name="name" value="${l.name || ""}" autofocus></label>
-    <label class="f"><span>Colour</span><input type="color" name="color" value="${l.color || "#3a807a"}" style="height:40px;padding:4px"></label>`,
+    ${colorField("color", l.color)}`,
     html`${isNew ? "" : html`<button class="danger" data-del>Delete</button>`}<span class="grow"></span><button data-close>Cancel</button><button class="primary" data-save>Save</button>`,
     (d, close) => {
+      wireColorFields(d);
       d.querySelector("[data-save]").addEventListener("click", async () => {
         const v = formData(d);
         try {

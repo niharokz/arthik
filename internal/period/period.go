@@ -16,6 +16,7 @@ import (
 type Kind string
 
 const (
+	Daily      Kind = "daily" // only for report buckets (e.g. net worth per day)
 	Weekly     Kind = "weekly"
 	Monthly    Kind = "monthly"
 	Quarterly  Kind = "quarterly"
@@ -36,6 +37,9 @@ func (k Kind) Valid() bool {
 	}
 	return false
 }
+
+// Bucket reports whether k can split a report into buckets (Valid kinds plus Daily).
+func (k Kind) Bucket() bool { return k == Daily || k.Valid() }
 
 // Opts are the user settings that shape periods.
 type Opts struct {
@@ -91,6 +95,9 @@ func (k Kind) months() int {
 // Of returns the period of kind k containing ref. Custom is not valid here (use Between).
 func Of(k Kind, ref dates.Date, o Opts) Range {
 	o = o.norm()
+	if k == Daily {
+		return labelled(Range{Kind: k, From: ref, To: ref}, o)
+	}
 	if k == Weekly {
 		back := (int(ref.Weekday()) - int(o.WeekStart) + 7) % 7
 		from := ref.AddDays(-back)
@@ -131,6 +138,9 @@ func (r Range) Shift(n int, o Opts) Range {
 		d := r.Days() * n
 		return Between(r.From.AddDays(d), r.To.AddDays(d))
 	}
+	if r.Kind == Daily {
+		return Of(Daily, r.From.AddDays(n), o)
+	}
 	if r.Kind == Weekly {
 		return Of(Weekly, r.From.AddDays(7*n), o)
 	}
@@ -141,7 +151,7 @@ func (r Range) Shift(n int, o Opts) Range {
 // used by trend reports.
 func Buckets(k Kind, from, to dates.Date, o Opts) []Range {
 	var out []Range
-	if k == Custom || !k.Valid() {
+	if k == Custom || !k.Bucket() {
 		k = Monthly
 	}
 	cur := Of(k, from, o)
@@ -158,6 +168,8 @@ func labelled(r Range, o Opts) Range {
 	f, t := r.From, r.To
 	sameYear := f.Year() == t.Year()
 	switch {
+	case r.Kind == Daily:
+		r.Label = f.Format("02 Jan 2006")
 	case r.Kind == Monthly && f.Day() == 1:
 		r.Label = f.Format("Jan 2006")
 	case r.Kind == Yearly && f.Day() == 1 && f.Month() == time.January:

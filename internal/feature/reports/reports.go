@@ -47,7 +47,7 @@ func span(c *httpx.Ctx, d *book.Data, comp *book.Computed) period.Range {
 
 func bucketKind(c *httpx.Ctx) period.Kind {
 	k := period.Kind(c.Q("bucket"))
-	if !k.Valid() || k == period.Custom {
+	if !k.Bucket() || k == period.Custom {
 		return period.Monthly
 	}
 	return k
@@ -211,7 +211,8 @@ func trend(c *httpx.Ctx) error {
 	return c.OK(out)
 }
 
-type nwRow struct {
+// NWRow is net worth at the end of one bucket.
+type NWRow struct {
 	Label       string       `json:"label"`
 	To          dates.Date   `json:"to"`
 	Assets      money.Amount `json:"assets"`
@@ -242,30 +243,36 @@ func balancesAt(d *book.Data, comp *book.Computed, at dates.Date) map[string]mon
 	return bal
 }
 
+// NetWorth returns assets, liabilities and net worth at the end of each bucket of
+// kind k between from and to (never later than today). Also used by the summary.
+func NetWorth(d *book.Data, comp *book.Computed, k period.Kind, from, to dates.Date) []NWRow {
+	rows := []NWRow{}
+	for _, b := range period.Buckets(k, from, to, d.Opts()) {
+		at := dates.Min(b.To, comp.Today)
+		bal := balancesAt(d, comp, at)
+		row := NWRow{Label: b.Label, To: at}
+		for _, a := range d.Accounts {
+			if a.ExcludeNetWorth {
+				continue
+			}
+			if a.Class() == model.ClassLiability {
+				row.Liabilities += bal[a.ID]
+			} else {
+				row.Assets += bal[a.ID]
+			}
+		}
+		row.NetWorth = row.Assets + row.Liabilities
+		rows = append(rows, row)
+	}
+	return rows
+}
+
 // networth: assets, liabilities and net worth at the end of each bucket.
 func networth(c *httpx.Ctx) error {
 	var out map[string]any
 	err := c.Book.View(func(d *book.Data, comp *book.Computed) error {
 		r := span(c, d, comp)
-		var rows []nwRow
-		for _, b := range period.Buckets(bucketKind(c), r.From, r.To, d.Opts()) {
-			at := dates.Min(b.To, comp.Today)
-			bal := balancesAt(d, comp, at)
-			row := nwRow{Label: b.Label, To: at}
-			for _, a := range d.Accounts {
-				if a.ExcludeNetWorth {
-					continue
-				}
-				if a.Class() == model.ClassLiability {
-					row.Liabilities += bal[a.ID]
-				} else {
-					row.Assets += bal[a.ID]
-				}
-			}
-			row.NetWorth = row.Assets + row.Liabilities
-			rows = append(rows, row)
-		}
-		out = map[string]any{"range": r, "rows": nonNil(rows)}
+		out = map[string]any{"range": r, "rows": NetWorth(d, comp, bucketKind(c), r.From, r.To)}
 		return nil
 	})
 	if err != nil {

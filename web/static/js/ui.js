@@ -3,7 +3,7 @@
 
 import { html, raw, esc, todayStr } from "./util.js";
 import { get } from "./api.js";
-import { syncBars, haptic } from "./native.js";
+import { syncBars, haptic, applyAccent } from "./native.js";
 
 /** App-wide state, loaded from GET /api/state. */
 export const S = {
@@ -18,6 +18,7 @@ export async function loadState() {
   document.documentElement.dataset.theme = st.theme && st.theme !== "auto" ? st.theme : "";
   if (st.theme === "auto") delete document.documentElement.dataset.theme;
   document.body.classList.toggle("hide-amounts", !!st.hide_amounts);
+  applyAccent();
   requestAnimationFrame(syncBars); // phone app: match status bar to the theme
   return S.state;
 }
@@ -106,10 +107,36 @@ export function sheet(title, body, actions = "", onMount) {
   });
   d.addEventListener("cancel", (e) => { e.preventDefault(); close(); });
   d.showModal();
+  dragToClose(d, close);
   onMount && onMount(d, close);
   const first = d.querySelector("[autofocus]");
   if (first && matchMedia("(min-width: 700px)").matches) first.focus();
   return { el: d, close };
+}
+
+// Phones: pull a sheet down by its header to close it; a short pull springs back.
+function dragToClose(d, close) {
+  const head = d.querySelector(".sheet-h");
+  let y0 = null, dy = 0;
+  head.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("button") || matchMedia("(min-width: 700px)").matches) return;
+    y0 = e.clientY; dy = 0;
+    head.setPointerCapture(e.pointerId);
+    d.style.transition = "none";
+  });
+  head.addEventListener("pointermove", (e) => {
+    if (y0 === null) return;
+    dy = Math.max(0, e.clientY - y0);
+    d.style.transform = `translateY(${dy}px)`;
+  });
+  const end = () => {
+    if (y0 === null) return;
+    y0 = null;
+    d.style.transition = "transform .22s cubic-bezier(.2, .8, .2, 1)";
+    if (dy > Math.min(120, d.offsetHeight / 3)) { haptic("tick"); close(); } else d.style.transform = "";
+  };
+  head.addEventListener("pointerup", end);
+  head.addEventListener("pointercancel", end);
 }
 
 /** Promise-based confirm in a sheet. */
@@ -123,6 +150,73 @@ export function confirmSheet(title, text, okLabel = "Delete", danger = true) {
         d.addEventListener("close", () => { if (!done) resolve(false); });
       });
     return s;
+  });
+}
+
+// ---- colour picker ----
+
+/** Ready-made colours that read well in light and dark mode. */
+export const SWATCHES = ["#3a807a", "#0e7c86", "#2f6fb0", "#5b5fc7", "#8a5cc2", "#b4469b",
+  "#c2462b", "#d9822b", "#b77700", "#6f8f2f", "#13895f", "#64748b"];
+
+/** "#abc", "abc", "#AABBCC" → "#aabbcc"; "" when it isn't a colour. */
+export function hexColor(v) {
+  let h = String(v || "").trim().replace(/^#/, "").toLowerCase();
+  if (/^[0-9a-f]{3}$/.test(h)) h = [...h].map((c) => c + c).join("");
+  return /^[0-9a-f]{6}$/.test(h) ? "#" + h : "";
+}
+
+/** A colour field: swatches to tap, a hex code to type and the system picker. */
+export function colorField(name, value, label = "Colour") {
+  const v = hexColor(value) || SWATCHES[0];
+  return html`<div class="f color-f" data-color>
+    <span class="flabel">${label}</span>
+    <div class="sw-row" role="radiogroup" aria-label="${label}">${SWATCHES.map((c) =>
+      html`<button type="button" class="sw ${c === v ? "on" : ""}" style="--c:${c}" data-sw="${c}" role="radio" aria-checked="${c === v}" aria-label="${c}"></button>`)}</div>
+    <div class="hex-row">
+      <span class="hex-prev" style="--c:${v}"></span>
+      <span class="hash">#</span><input class="hex" value="${v.slice(1)}" maxlength="7" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Hex code">
+      <label class="native" title="More colours"><input type="color" value="${v}" aria-label="More colours">🎨</label>
+      <input type="hidden" name="${name}" value="${v}">
+    </div>
+  </div>`;
+}
+
+/** Wires every colour field inside root (also ones re-rendered later); each change fires a "color" event. */
+export function wireColorFields(root) {
+  if (root._colors) return;
+  root._colors = true;
+  const set = (f, hex, from) => {
+    f.querySelector("input[type=hidden]").value = hex;
+    f.querySelector(".hex-prev").style.setProperty("--c", hex);
+    if (from !== "hex") f.querySelector(".hex").value = hex.slice(1);
+    if (from !== "native") f.querySelector("input[type=color]").value = hex;
+    f.querySelector(".hex").classList.remove("bad");
+    f.querySelectorAll("[data-sw]").forEach((b) => { const on = b.dataset.sw === hex; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); });
+    f.dispatchEvent(new CustomEvent("color", { bubbles: true, detail: hex })); // for live previews
+  };
+  root.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sw]");
+    if (b) { set(b.closest("[data-color]"), b.dataset.sw); haptic("tick"); }
+  });
+  root.addEventListener("input", (e) => {
+    const f = e.target.closest("[data-color]");
+    if (!f) return;
+    if (e.target.classList.contains("hex")) {
+      const hex = hexColor(e.target.value);
+      if (hex) set(f, hex, "hex"); else e.target.classList.add("bad");
+    } else if (e.target.type === "color") set(f, e.target.value, "native");
+  });
+  root.addEventListener("focusout", (e) => { // tidy "abc" into "aabbcc" when leaving the box
+    if (!e.target.classList?.contains("hex")) return;
+    const f = e.target.closest("[data-color]");
+    e.target.value = f.querySelector("input[type=hidden]").value.slice(1);
+    e.target.classList.remove("bad");
+  });
+  root.addEventListener("paste", (e) => { // pasting "#a1b2c3" into the hex box
+    if (!e.target.classList?.contains("hex")) return;
+    const hex = hexColor(e.clipboardData?.getData("text"));
+    if (hex) { e.preventDefault(); set(e.target.closest("[data-color]"), hex); }
   });
 }
 
@@ -182,6 +276,38 @@ export function wirePeriod(root, p, reply, rerender) {
   const upd = () => { if (f.value && t.value) { p.from = f.value; p.to = t.value; rerender(); } };
   f?.addEventListener("change", upd);
   t?.addEventListener("change", upd);
+}
+
+// ---- segmented controls: a thumb that glides to the chosen option ----
+
+function placeThumb(seg, target, animate) {
+  const on = target || seg.querySelector(":scope > button.on");
+  let t = seg.querySelector(":scope > .thumb");
+  if (!on || !on.offsetWidth) { t?.remove(); return; }
+  if (!t) { t = document.createElement("i"); t.className = "thumb"; seg.prepend(t); animate = false; }
+  const pos = `${on.offsetLeft},${on.offsetTop},${on.offsetWidth},${on.offsetHeight}`;
+  if (t.dataset.pos === pos) return; // already there (or gliding there): leave it alone
+  t.dataset.pos = pos;
+  t.classList.toggle("anim", !!animate && !matchMedia("(prefers-reduced-motion: reduce)").matches);
+  t.style.setProperty("--tx", on.offsetLeft + "px");
+  t.style.setProperty("--ty", on.offsetTop + "px");
+  t.style.setProperty("--tw", on.offsetWidth + "px");
+  t.style.setProperty("--th", on.offsetHeight + "px");
+}
+
+/** Keeps every segmented control's thumb under its chosen option (call once). */
+export function watchSegments() {
+  let queued = false;
+  const all = () => { queued = false; document.querySelectorAll(".seg").forEach((s) => placeThumb(s, null, false)); };
+  const soon = () => { if (!queued) { queued = true; requestAnimationFrame(all); } };
+  new MutationObserver(soon).observe(document.body, { childList: true, subtree: true });
+  addEventListener("resize", soon);
+  // glide to the tapped option at once, before the view re-renders
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest(".seg > button");
+    if (b && !b.disabled) placeThumb(b.parentElement, b, true);
+  });
+  all();
 }
 
 /** Shimmering placeholder cards while a view loads. */

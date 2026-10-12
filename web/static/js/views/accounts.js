@@ -3,7 +3,7 @@
 // add/edit/archive/delete, and reconciliation against a statement.
 
 import { html, raw, qs, money, amt, paise, fromPaise, calc, fmtShort, fmtDate } from "../util.js";
-import { S, sheet, toast, confirmSheet, formData, ro, today, loading } from "../ui.js";
+import { S, sheet, toast, confirmSheet, formData, ro, today, loading, colorField, wireColorFields } from "../ui.js";
 import { get, post, put, del } from "../api.js";
 import { line, wireTips } from "../charts.js";
 import { grouped, wireRows, effect } from "../txlist.js";
@@ -104,10 +104,8 @@ function accountForm(a, ctx) {
       <label class="f"><span>Credit limit</span><input name="credit_limit" inputmode="decimal" value="${a.credit_limit || ""}"></label>
       <label class="f"><span>Statement day / due day</span><span class="row"><input name="statement_day" inputmode="numeric" placeholder="e.g. 18" value="${a.statement_day || ""}"><input name="due_day" inputmode="numeric" placeholder="e.g. 7" value="${a.due_day || ""}"></span></label>
     </div>` : ""}
-    <div class="fields two">
-      <label class="f"><span>SMS digits (e.g. 4275, 0353)</span><input name="sms_digits" inputmode="numeric" placeholder="last 4 digits banks print" value="${(a.sms_digits || []).join(", ")}"></label>
-      <label class="f"><span>Colour</span><input type="color" name="color" value="${a.color || "#3a807a"}" style="height:40px;padding:4px"></label>
-    </div>
+    <label class="f"><span>SMS digits (e.g. 4275, 0353)</span><input name="sms_digits" inputmode="numeric" placeholder="last 4 digits banks print" value="${(a.sms_digits || []).join(", ")}"></label>
+    ${colorField("color", a.color)}
     <label class="f"><span>Notes</span><textarea name="notes">${a.notes || ""}</textarea></label>
     <label class="check"><input type="checkbox" name="hidden" ${a.hidden ? raw("checked") : ""}> Hide from the overview</label>
     <label class="check"><input type="checkbox" name="exclude_net_worth" ${a.exclude_net_worth ? raw("checked") : ""}> Leave out of net worth</label>
@@ -126,6 +124,7 @@ function accountForm(a, ctx) {
         d.querySelector('[name="type"]').addEventListener("change", onType);
       };
       d.querySelector('[name="type"]').addEventListener("change", onType);
+      wireColorFields(d);
       d.querySelector("[data-save]").addEventListener("click", async () => {
         const v = formData(d);
         const o = calc(v.opening || "0");

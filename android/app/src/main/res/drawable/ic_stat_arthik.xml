@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Notification icon (white, Android tints it): the ₹ coin from the app icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <group
+        android:scaleX="0.12"
+        android:scaleY="0.12"
+        android:translateX="-24"
+        android:translateY="-8.4">
+        <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="14"
+            android:pathData="M226,170a74,74 0,1 0,148 0a74,74 0,1 0,-148 0" />
+        <path android:fillColor="#00000000" android:strokeColor="#FFFFFFFF" android:strokeWidth="16"
+            android:strokeLineCap="round" android:strokeLineJoin="round"
+            android:pathData="M268,132H334M268,158H334M286,132c38,0 38,52 0,52h-14l50,48" />
+    </group>
+</vector>

@@ -37,7 +37,43 @@ class Bridge(private val a: MainActivity) {
         put("device", "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE}")
         put("engine_error", app.engineError)
         put("sms", smsJson())
+        put("notify", notifyJson())
+        put("accent", accentJson())
+        put("widget", Widget.placed(a))
+        put("widget_look", widgetLookJson())
     }.toString()
+
+    private fun notifyJson() = JSONObject().apply {
+        put("enabled", prefs.notifyEnabled)
+        put("permission", InboxNotify.permitted(a))
+        put("hour", prefs.notifyHour)
+        put("minute", prefs.notifyMinute)
+        put("next_run", if (prefs.notifyEnabled) prefs.notifyNextRun else 0)
+        put("last_result", prefs.notifyLastResult)
+        put("exact", DailyAlarm.exactAllowed(a))
+    }
+
+    // The phone's wallpaper colours (Material You) for the page, Android 12+.
+    private fun accentJson() = JSONObject().apply {
+        val available = Build.VERSION.SDK_INT >= 31
+        put("available", available)
+        put("on", available && prefs.materialYou)
+        if (available) {
+            put("light", hex(a.getColor(android.R.color.system_accent1_600)))
+            put("dark", hex(a.getColor(android.R.color.system_accent1_200)))
+        }
+    }
+
+    private fun widgetLookJson() = JSONObject().apply {
+        put("bg", prefs.widgetBg)
+        put("opacity", prefs.widgetOpacity)
+        put("text", prefs.widgetText)
+        put("presets", JSONObject().apply {
+            WidgetLook.PRESETS.forEach { (id, p) -> put(id, JSONObject().put("bg", p.first).put("opacity", p.second).put("text", p.third)) }
+        })
+    }
+
+    private fun hex(c: Int) = String.format("#%06X", c and 0xFFFFFF)
 
     private fun smsJson() = JSONObject().apply {
         put("permission", SmsSync.permitted(a))
@@ -179,6 +215,71 @@ class Bridge(private val a: MainActivity) {
             a.ui { a.smsDone(r) }
         }
     }
+
+    // ---- morning inbox notification ----
+
+    /** Switches the daily notice on/off; false when notifications must be allowed first ("notify_permission" event follows). */
+    @JavascriptInterface
+    fun setNotify(on: Boolean): Boolean {
+        if (on && !InboxNotify.permitted(a)) {
+            a.ui { a.requestNotify() }
+            return false
+        }
+        prefs.notifyEnabled = on
+        InboxNotify.schedule(a)
+        return true
+    }
+
+    /** Time of the daily notice. */
+    @JavascriptInterface
+    fun setNotifyTime(hour: Int, minute: Int) {
+        prefs.notifyHour = hour.coerceIn(0, 23)
+        prefs.notifyMinute = minute.coerceIn(0, 59)
+        InboxNotify.schedule(a)
+    }
+
+    /** Shows the notice now, even with an empty inbox (result: "notify" event). */
+    @JavascriptInterface
+    fun notifyNow() {
+        app.bg.execute {
+            val r = InboxNotify.run(a, test = true)
+            a.ui { a.notifyDone(r) }
+        }
+    }
+
+    /** Notice settings and last result as JSON. */
+    @JavascriptInterface
+    fun notifyInfo(): String = notifyJson().toString()
+
+    // ---- look ----
+
+    /** Uses the phone's wallpaper colours; false before Android 12. */
+    @JavascriptInterface
+    fun setMaterialYou(on: Boolean): Boolean {
+        if (on && Build.VERSION.SDK_INT < 31) return false
+        prefs.materialYou = on
+        return true
+    }
+
+    /** Accent colours as JSON ({available, on, light, dark}). */
+    @JavascriptInterface
+    fun accent(): String = accentJson().toString()
+
+    /** Saves the widget look and redraws the widgets; false when a value is invalid. */
+    @JavascriptInterface
+    fun setWidgetLook(bg: String, opacity: Int, text: String): Boolean {
+        if (bg != "auto" && WidgetLook.rgb(bg) == null) return false
+        if (text !in listOf("auto", "light", "dark")) return false
+        prefs.widgetBg = bg.lowercase()
+        prefs.widgetOpacity = opacity.coerceIn(0, 100)
+        prefs.widgetText = text
+        Widget.draw(a.applicationContext, Summary.cached(a))
+        return true
+    }
+
+    /** Redraws the home-screen widget with fresh numbers. */
+    @JavascriptInterface
+    fun refreshWidget() = Widget.refreshAsync(a.applicationContext, null)
 
     /** Opens this app's system settings (for "Allow restricted settings" and permissions). */
     @JavascriptInterface

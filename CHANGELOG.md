@@ -1,5 +1,50 @@
 # Changelog
 
+## 1.3.1 — 2026-10-12
+
+- **Android widgets:** three new 2×2 widgets next to the 4×2 overview — **Budget**
+  (spent, budget, what's left, bar), **Net worth** (now, this month's change, a
+  12-month trend line) and **Inbox** (drafts waiting, money out, the newest one).
+  Each opens its screen when tapped.
+- **Widget look** (Settings → Phone → Widgets): Auto, Light, Dark, AMOLED, Glass,
+  Clear or any colour, with opacity 0–100% and light/dark/auto text, previewed live.
+- The summary (`/api/summary`, `arthik summary`) now carries net worth, its change
+  this month and the last 12 month-ends.
+- **Web:** quieter background grid and softer cards; segmented buttons slide a thumb
+  to the chosen option; the top bar gets its edge only once you scroll; the + button
+  tucks away while scrolling down; amounts count to their new value when the period
+  changes; cards lift on hover; the loading skeleton only shows on slow screens;
+  springier switches.
+
+## 1.3.0 — 2026-10-12
+
+- **Overview:** net worth is now the headline card with a trend line you can switch
+  between Day (30 days), Week (12 weeks), Month (12 months) and Year (5 years), and
+  the change for today / this week / month / year. Income, expense and savings sit
+  below as a slim row. Reports gained a daily bucket (`/api/reports/networth?bucket=daily`).
+- **Inbox cards:** each draft shows how sure Arthik is — *Ready* (learned rule or past
+  transaction, nothing off), *Worth a look* (Kronos or AI category, or a warning),
+  *Check first* (fallback category, unknown account, possible duplicate) — and how
+  the category was chosen. The original SMS folds open under the card. *Accept N
+  ready* accepts every "Ready" draft at once. Cards slide away when accepted or rejected.
+- **Colours:** accounts, categories and labels get 12 ready colours, a hex box
+  (`#e91e63`, `e91e63` or `e1e`) and the system picker.
+- **Learned rules** load 25 at a time, most used first, with search
+  (`/api/inbox/rules?q=&offset=&limit=` now returns `{items, total, offset, limit}`).
+- New `GET /api/summary` and `arthik summary` (read-only JSON): this month's spending
+  against budgets and the inbox at a glance.
+- **Android:** home-screen widget (month spend vs budget + inbox, tap → Inbox);
+  morning inbox notification at a time you choose (replaces Kronos's Telegram notice
+  if you like); edge-to-edge screens with bar icons following light/dark; optional
+  Material You colours; launch screen matching Android's splash; smoother start-up,
+  a sliding pill in the bottom bar and pull-down-to-close sheets. Widget and
+  notification taps open the right screen (`/local/enter?to=inbox`).
+
+## 1.2.3 — 2026-10-12
+
+- Inbox AI: drafts that carry their own category name (e.g. Kronos's `utility`) pass it
+  to the model, so a bill is no longer guessed as food when no category matches by name.
+
 ## 1.2.2 — 2026-10-11
 
 - Android: switching to another app no longer locks Arthik at once. The lock delay now

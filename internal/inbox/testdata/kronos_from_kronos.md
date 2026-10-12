@@ -1,5 +1,6 @@
-updated: 2026-10-11 08:25:21
+updated: 2026-10-12 08:52:09
 
+last_run: '2026-10-14'
 drafts:
   - id: sub-jio-fibrenet-2026-10-14
     source: subscription

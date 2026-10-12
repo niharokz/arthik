@@ -2,5 +2,14 @@
 <!-- nss palette (same as the web app). -->
 <resources>
     <color name="teal">#0A3D3A</color> <!-- fallback; the icon uses ic_launcher_background -->
+    <color name="teal_icon">#3A807A</color> <!-- splash icon circle -->
     <color name="bg">#F6F8F7</color>
+
+    <!-- home-screen widget -->
+    <color name="widget_text">#13201E</color>
+    <color name="widget_muted">#5A6866</color>
+    <color name="widget_accent">#3A807A</color>
+    <color name="widget_over">#C2462B</color>
+    <color name="widget_warn">#B77700</color>
+    <color name="widget_ok">#13895F</color>
 </resources>

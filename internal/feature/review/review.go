@@ -4,6 +4,9 @@
 package review
 
 import (
+	"sort"
+	"strings"
+
 	"gitlab.com/niharokz/arthik/internal/book"
 	"gitlab.com/niharokz/arthik/internal/httpx"
 	"gitlab.com/niharokz/arthik/internal/inbox"
@@ -91,16 +94,61 @@ func decide(fn func(d *book.Data, ch *book.Change, id string) error) httpx.Handl
 	}
 }
 
+// rules: ?q= (merchant, title or category) &offset= &limit= (default 50, max 200),
+// most used first. Replies {items, total, offset, limit}.
 func rules(c *httpx.Ctx) error {
-	out := []model.Rule{}
+	var out RulePage
 	err := c.Book.View(func(d *book.Data, _ *book.Computed) error {
-		out = append(out, d.Rules...)
+		out = PageRules(d, c.Q("q"), c.QInt("offset", 0), c.QInt("limit", 50))
 		return nil
 	})
 	if err != nil {
 		return err
 	}
 	return c.OK(out)
+}
+
+// RulePage is one page of learned rules.
+type RulePage struct {
+	Items  []model.Rule `json:"items"`
+	Total  int          `json:"total"` // rules matching q
+	Offset int          `json:"offset"`
+	Limit  int          `json:"limit"`
+}
+
+// PageRules filters the learned rules by q and returns one page of them.
+func PageRules(d *book.Data, q string, offset, limit int) RulePage {
+	limit = min(max(limit, 1), 200)
+	q = strings.ToLower(strings.TrimSpace(q))
+	var hits []model.Rule
+	for _, r := range d.Rules {
+		if q == "" || ruleHas(d, r, q) {
+			hits = append(hits, r)
+		}
+	}
+	sort.SliceStable(hits, func(i, j int) bool {
+		a, b := hits[i], hits[j]
+		if a.Uses != b.Uses {
+			return a.Uses > b.Uses
+		}
+		if a.Updated != b.Updated {
+			return a.Updated > b.Updated
+		}
+		return a.Match < b.Match
+	})
+	offset = min(max(offset, 0), len(hits))
+	end := min(offset+limit, len(hits))
+	return RulePage{Items: append([]model.Rule{}, hits[offset:end]...), Total: len(hits), Offset: offset, Limit: limit}
+}
+
+func ruleHas(d *book.Data, r model.Rule, q string) bool {
+	cat, _ := d.Category(r.Category)
+	for _, s := range []string{r.Match, r.Title, cat.Name} {
+		if strings.Contains(strings.ToLower(s), q) {
+			return true
+		}
+	}
+	return false
 }
 
 func deleteRule(c *httpx.Ctx) error {

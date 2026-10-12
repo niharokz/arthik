@@ -3,6 +3,7 @@ package inbox
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"gitlab.com/niharokz/arthik/internal/book"
 	"gitlab.com/niharokz/arthik/internal/dates"
@@ -16,7 +17,17 @@ type View struct {
 	Same     *Same    `json:"same,omitempty"`     // a transaction that looks like this one
 	Warnings []string `json:"warnings,omitempty"` // things worth a look before accepting
 	PairRaw  string   `json:"pair_raw,omitempty"` // the other SMS of a paired transfer
+
+	Confidence string   `json:"confidence,omitempty"` // high | medium | low (pending drafts only)
+	Checks     []string `json:"checks,omitempty"`     // what keeps it from "high"
 }
+
+// Confidence levels: how safe it is to accept a draft without opening it.
+const (
+	High   = "high"
+	Medium = "medium"
+	Low    = "low"
+)
 
 // Same is a likely duplicate already in your books.
 type Same struct {
@@ -45,6 +56,7 @@ func Views(d *book.Data, c *book.Computed, statuses ...string) []View {
 		if x.Status == model.DraftPending {
 			v.Same = same(d, c, x)
 			v.Warnings = warnings(d, c, x)
+			v.Confidence, v.Checks = confidence(x, v.Same != nil, len(v.Warnings) > 0)
 		}
 		out = append(out, v)
 	}
@@ -70,6 +82,55 @@ func Pending(d *book.Data) int {
 		}
 	}
 	return n
+}
+
+// confidence rates a pending draft: high when a rule or your history filled it in
+// and nothing looks off, medium for Kronos/AI categories or warnings, low when the
+// category is only the fallback, the account is unknown or it may be a duplicate.
+func confidence(x model.Draft, dup, warned bool) (string, []string) {
+	level := High
+	var checks []string
+	lower := func(to, why string) {
+		if to == Low || level == High {
+			level = to
+		}
+		checks = append(checks, why)
+	}
+	if x.Type != model.TxTransfer && !x.Edited {
+		switch x.Via {
+		case model.ViaLearned, model.ViaPast:
+		case model.ViaSource:
+			lower(Medium, "Category taken from "+sourceName(x.Source))
+		case model.ViaAI:
+			lower(Medium, "Category suggested by the AI")
+		default:
+			if x.Category == "" {
+				lower(Low, "No category yet")
+			} else {
+				lower(Low, "Category is only the fallback")
+			}
+		}
+	}
+	if x.Account == "" || (x.Type == model.TxTransfer && x.ToAccount == "") {
+		lower(Low, "Account not known")
+	}
+	if dup {
+		lower(Low, "May already be recorded")
+	}
+	if warned {
+		lower(Medium, "See the warnings")
+	}
+	return level, checks
+}
+
+func sourceName(s string) string {
+	if s == SourceSMS {
+		return "the SMS"
+	}
+	if s == "" {
+		return "the source"
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 // same finds a transaction on the same account for the same amount within a day.

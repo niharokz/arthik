@@ -7,12 +7,14 @@
 //	arthik rebuild          re-read everything and rewrite all computed values
 //	arthik demo-seed        regenerate the demo dataset now
 //	arthik health           exit 0 if the running server answers (Docker healthcheck)
+//	arthik summary          month spend vs budget and the inbox, as JSON (phone widget)
 //	arthik version
 package main
 
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -31,13 +33,14 @@ import (
 	"gitlab.com/niharokz/arthik/internal/config"
 	"gitlab.com/niharokz/arthik/internal/demo"
 	"gitlab.com/niharokz/arthik/internal/feature/state"
+	"gitlab.com/niharokz/arthik/internal/feature/summary"
 	"gitlab.com/niharokz/arthik/internal/httpx"
 	"gitlab.com/niharokz/arthik/internal/inbox"
 	"gitlab.com/niharokz/arthik/internal/server"
 )
 
 // version is set at build time: -ldflags "-X main.version=1.0.0".
-var version = "1.2.2"
+var version = "1.3.1"
 
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime)
@@ -60,6 +63,8 @@ func main() {
 		err = demoSeed()
 	case "health":
 		err = health()
+	case "summary":
+		err = printSummary()
 	case "parse-sms":
 		err = parseSMS(os.Args[2:])
 	case "version", "--version", "-v":
@@ -84,6 +89,7 @@ usage: arthik <command>
   rebuild          re-read all files and rewrite every computed value
   demo-seed        regenerate the demo dataset
   health           check that the running server answers
+  summary          this month's spending and the inbox as JSON (read-only)
   parse-sms TEXT   show how an SMS would be read (uses <data>/inbox/sms_rules.md too)
   version          print the version
 `
@@ -307,6 +313,24 @@ func health() error {
 }
 
 // parseSMS shows what the inbox would read from a message (for writing SMS rules).
+// printSummary prints the widget/notification summary without changing any file.
+func printSummary() error {
+	dir, _ := dataDir(false)
+	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
+		return fmt.Errorf("no finance folder at %s", dir)
+	}
+	b, err := book.Open(dir, "summary", true)
+	if err != nil {
+		return err
+	}
+	if le := b.LoadError(); le != nil {
+		return le
+	}
+	var s summary.Summary
+	_ = b.View(func(d *book.Data, c *book.Computed) error { s = summary.Build(d, c, 3); return nil })
+	return json.NewEncoder(os.Stdout).Encode(s)
+}
+
 func parseSMS(args []string) error {
 	text := strings.Join(args, " ")
 	if text == "" {

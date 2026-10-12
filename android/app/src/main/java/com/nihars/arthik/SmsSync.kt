@@ -1,14 +1,10 @@
 package com.nihars.arthik
 
 import android.Manifest
-import android.app.AlarmManager
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Build
 import android.provider.Telephony
 import java.time.Instant
 import java.time.ZoneId
@@ -85,31 +81,20 @@ object SmsSync {
 
     // ---- schedule ----------------------------------------------------------------
 
-    private fun pending(ctx: Context): PendingIntent = PendingIntent.getBroadcast(
-        ctx, 0, Intent(ctx, SmsAlarm::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-    )
+    private const val ALARM = 0
 
     /** True when Android lets the app wake at an exact minute (else it runs within ~15 min). */
-    fun exactAllowed(ctx: Context): Boolean {
-        val am = ctx.getSystemService(AlarmManager::class.java) ?: return false
-        return Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()
-    }
+    fun exactAllowed(ctx: Context) = DailyAlarm.exactAllowed(ctx)
 
     /** Sets (or clears) the next nightly run from the settings. */
     fun schedule(ctx: Context) {
         val p = Prefs(ctx)
-        val am = ctx.getSystemService(AlarmManager::class.java) ?: return
-        am.cancel(pending(ctx))
-        if (!p.smsEnabled) return
-        val at = SmsRules.nextRun(System.currentTimeMillis(), p.smsHour, p.smsMinute, ZoneId.systemDefault())
-        if (exactAllowed(ctx)) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pending(ctx))
-        else am.setWindow(AlarmManager.RTC_WAKEUP, at, 15 * 60_000L, pending(ctx))
-        p.smsNextRun = at
+        if (!p.smsEnabled) return DailyAlarm.cancel(ctx, SmsAlarm::class.java, ALARM)
+        p.smsNextRun = DailyAlarm.set(ctx, SmsAlarm::class.java, ALARM, p.smsHour, p.smsMinute)
     }
 
     /** Opens the system screen for exact alarms (Android 12+). */
-    fun exactAlarmIntent(ctx: Context): Intent? =
-        if (Build.VERSION.SDK_INT >= 31) Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:" + ctx.packageName)) else null
+    fun exactAlarmIntent(ctx: Context): Intent? = DailyAlarm.exactAlarmIntent(ctx)
 }
 
 /** Fires at the chosen time: copy new SMS, then set tomorrow's run. */
@@ -125,9 +110,4 @@ class SmsAlarm : BroadcastReceiver() {
             }
         }.start()
     }
-}
-
-/** Alarms do not survive a reboot, an app update or a clock change: set them again. */
-class SmsReschedule : BroadcastReceiver() {
-    override fun onReceive(ctx: Context, intent: Intent) = SmsSync.schedule(ctx.applicationContext)
 }
