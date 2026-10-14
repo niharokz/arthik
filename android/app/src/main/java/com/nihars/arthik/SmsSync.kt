@@ -32,7 +32,8 @@ object SmsSync {
                     val zone = ZoneId.systemDefault()
                     val from = SmsRules.windowStart(now, p.smsCheckpoint, p.smsEnabledAt, p.smsLookback, zone)
                     val scan = read(ctx, from, now, zone)
-                    val added = SmsStore(p.folder, p.smsDevice).add(scan.wanted, Instant.ofEpochMilli(now).atZone(zone).toLocalDate())
+                    val schedule = "%02d:%02d".format(p.smsHour, p.smsMinute)
+                    val added = SmsStore(p.folder, p.smsDevice).add(scan.wanted, Instant.ofEpochMilli(now).atZone(zone).toLocalDate(), schedule, SmsRules.iso(now, zone))
                     p.smsCheckpoint = now // only after the file was written
                     val since = SmsRules.iso(from, zone).take(16).replace('T', ' ')
                     "Saved $added new · since $since: ${scan.total} SMS, ${scan.wanted.size} from banks" + if (scan.total == 0) hint(ctx, now, zone) else ""

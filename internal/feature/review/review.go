@@ -21,6 +21,7 @@ func Register(rt *httpx.Router) {
 	rt.Handle("POST /api/inbox/{id}/reject", decide(inbox.Reject))
 	rt.Handle("POST /api/inbox/{id}/restore", decide(inbox.Restore))
 	rt.Handle("POST /api/inbox/{id}/unpair", decide(inbox.Unpair))
+	rt.Handle("POST /api/inbox/import", importNow)
 	rt.Handle("GET /api/inbox/rules", rules)
 	rt.Handle("DELETE /api/inbox/rules/{id}", deleteRule)
 }
@@ -40,9 +41,11 @@ func list(c *httpx.Ctx) error {
 	var out map[string]any
 	err := c.Book.View(func(d *book.Data, comp *book.Computed) error {
 		out = map[string]any{
-			"items":   inbox.Views(d, comp, statuses...),
-			"pending": inbox.Pending(d),
-			"status":  inbox.StatusOf(c.Book.Dir),
+			"items":    inbox.Views(d, comp, statuses...),
+			"pending":  inbox.Pending(d),
+			"status":   inbox.StatusOf(c.Book.Dir),
+			"phones":   inbox.Phones(c.Book.Dir),
+			"sms_time": d.Settings.InboxSMSTime,
 		}
 		return nil
 	})
@@ -50,6 +53,18 @@ func list(c *httpx.Ctx) error {
 		return err
 	}
 	return c.OK(out)
+}
+
+// importNow reads the SMS and Kronos files right away ("Check now").
+func importNow(c *httpx.Ctx) error {
+	added, ok, err := inbox.ImportFor(c.Book.Dir)
+	if !ok {
+		return httpx.Errorf(409, "this device doesn't import the inbox — your main device (nimory) does")
+	}
+	if err != nil {
+		return err
+	}
+	return c.OK(map[string]int{"added": added})
 }
 
 type acceptInput struct {

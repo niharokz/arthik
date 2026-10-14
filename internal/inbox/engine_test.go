@@ -352,3 +352,166 @@ func TestRunnerAI(t *testing.T) {
 		t.Fatalf("failure handling: %+v pause=%v", x, r.aiPause)
 	}
 }
+
+// A file change the signature misses (same size and mtime, e.g. a copy that kept
+// the old time) is still picked up by the periodic re-scan, and "Check now" imports at once.
+func TestRunnerRescan(t *testing.T) {
+	b := newBook(t)
+	dir := filepath.Join(b.Dir, book.InboxDir)
+	_ = os.MkdirAll(dir, 0o755)
+	f := filepath.Join(dir, "sms_phone.md")
+	msg := func(id, day string) string {
+		return `  - {id: "` + id + `", from: "AX-HDFCBK", at: "` + day + `T20:00:00+05:30", body: "Spent Rs.50 On HDFC Bank Card 4275 At TEA On ` + day + `:20:00:00."}` + "\n"
+	}
+	write := func(body string, at time.Time) {
+		t.Helper()
+		if err := os.WriteFile(f, []byte("device: phone\nmessages:\n"+body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_ = os.Chtimes(f, at, at)
+	}
+	count := func() (n int) {
+		_ = b.View(func(d *book.Data, _ *book.Computed) error { n = len(d.Drafts); return nil })
+		return n
+	}
+	stamp := time.Date(2026, 10, 10, 23, 30, 0, 0, time.UTC)
+	write(msg("aaaaaaaaaaaaaaaa", "2026-10-10"), stamp)
+	r := &Runner{Book: b, Cfg: config.Inbox{MaxAgeDays: 30, KeepDays: 120, PairDays: 2, Rescan: 10 * time.Minute}, Loc: time.UTC}
+	r.Tick(context.Background())
+	if count() != 1 {
+		t.Fatalf("first import: %d drafts", count())
+	}
+	// Same length and mtime, different message: invisible to the file check.
+	write(msg("bbbbbbbbbbbbbbbb", "2026-10-11"), stamp)
+	r.Tick(context.Background())
+	if count() != 1 {
+		t.Fatalf("imported before the re-scan was due: %d", count())
+	}
+	r.lastScan = time.Now().Add(-11 * time.Minute)
+	r.Tick(context.Background())
+	if count() != 2 {
+		t.Fatalf("re-scan missed the change: %d drafts", count())
+	}
+	// "Check now" through the dataset registry.
+	runners.Store(b.Dir, r)
+	defer runners.Delete(b.Dir)
+	write(msg("aaaaaaaaaaaaaaaa", "2026-10-10")+msg("cccccccccccccccc", "2026-10-11"), stamp)
+	if added, ok, err := ImportFor(b.Dir); err != nil || !ok || added != 1 {
+		t.Fatalf("check now: added %d ok %v err %v", added, ok, err)
+	}
+	if _, ok, _ := ImportFor("/nowhere"); ok {
+		t.Fatal("no runner must report ok=false")
+	}
+}
+
+func TestSMSDue(t *testing.T) {
+	ist := time.FixedZone("IST", 5*3600+1800)
+	at := func(s string) time.Time { v, _ := time.ParseInLocation("2006-01-02 15:04", s, ist); return v }
+	cases := []struct {
+		now, last string
+		want      bool
+	}{
+		{"2026-10-13 23:44", "2026-10-12 23:45", false}, // not yet today; yesterday's done
+		{"2026-10-13 23:45", "2026-10-12 23:45", true},  // time reached
+		{"2026-10-13 23:50", "2026-10-13 23:45", false}, // done for today
+		{"2026-10-14 09:00", "2026-10-12 23:45", true},  // server was down at 23:45: catch up once
+		{"2026-10-14 09:00", "2026-10-14 08:00", false}, // a manual run after the slot counts
+		{"2026-10-14 09:00", "", true},                  // never imported
+	}
+	for _, c := range cases {
+		last := time.Time{}
+		if c.last != "" {
+			last = at(c.last)
+		}
+		if got := SMSDue(at(c.now), "23:45", last); got != c.want {
+			t.Errorf("now %s last %q: got %v", c.now, c.last, got)
+		}
+	}
+	if SMSDue(at("2026-10-14 09:00"), "nope", time.Time{}) {
+		t.Error("a bad time must never be due")
+	}
+}
+
+// With a daily SMS time, Kronos drafts still come at once but SMS wait for the
+// time (or "Check now"); the time of the last SMS import is kept in drafts.md.
+func TestRunnerSMSSchedule(t *testing.T) {
+	b := newBook(t)
+	ist := time.FixedZone("IST", 5*3600+1800)
+	mutate(t, b, func(d *book.Data, ch *book.Change) error {
+		d.Settings.InboxSMSTime, ch.Settings = "23:45", true
+		d.SMSImport, ch.Drafts = book.Stamp(time.Date(2026, 10, 10, 23, 50, 0, 0, ist)), true
+		return nil
+	})
+	dir := filepath.Join(b.Dir, book.InboxDir)
+	_ = os.MkdirAll(dir, 0o755)
+	sms := func(ids ...string) {
+		body := "device: phone\nmessages:\n"
+		for _, id := range ids {
+			body += `  - {id: "` + id + `", from: "AX-HDFCBK", at: "2026-10-11T20:00:00+05:30", body: "Spent Rs.50 On HDFC Bank Card 4275 At TEA On 2026-10-11:20:00:00."}` + "\n"
+		}
+		_ = os.WriteFile(filepath.Join(dir, "sms_phone.md"), []byte(body), 0o644)
+	}
+	sms("aaaaaaaaaaaaaaaa")
+	_ = os.WriteFile(filepath.Join(dir, "kronos.md"), []byte("drafts:\n  - {id: sub-jio-2026-10-11, date: '2026-10-11', title: Jio, amount: 707.82}\n"), 0o644)
+	clock := time.Date(2026, 10, 11, 22, 0, 0, 0, ist)
+	r := &Runner{Book: b, Cfg: config.Inbox{MaxAgeDays: 30, KeepDays: 120, PairDays: 2, Rescan: 10 * time.Minute}, Loc: ist, Now: func() time.Time { return clock }}
+	ids := func() (out []string) {
+		_ = b.View(func(d *book.Data, _ *book.Computed) error {
+			for _, x := range d.Drafts {
+				out = append(out, x.ID)
+			}
+			return nil
+		})
+		return out
+	}
+	r.Tick(context.Background())
+	if got := ids(); len(got) != 1 || got[0] != "kronos-sub-jio-2026-10-11" {
+		t.Fatalf("22:00: want only the Kronos draft, got %v", got)
+	}
+	clock = time.Date(2026, 10, 11, 23, 46, 0, 0, ist)
+	r.Tick(context.Background())
+	if got := ids(); len(got) != 2 {
+		t.Fatalf("23:46: SMS not imported: %v", got)
+	}
+	var last string
+	_ = b.View(func(d *book.Data, _ *book.Computed) error { last = d.SMSImport; return nil })
+	if !book.ParseStamp(last).Equal(clock) {
+		t.Fatalf("last SMS import = %s", last)
+	}
+	sms("aaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbb") // arrives after the daily run
+	clock = clock.Add(10 * time.Minute)
+	r.Tick(context.Background())
+	if got := ids(); len(got) != 2 {
+		t.Fatalf("SMS imported before the next day's time: %v", got)
+	}
+	if added, err := r.Import(); err != nil || added != 1 { // "Check now" reads SMS anyway
+		t.Fatalf("check now: %d %v", added, err)
+	}
+	if st := StatusOf(b.Dir); st.SMSTime != "" { // not registered: zero status is fine
+		t.Fatalf("status %+v", st)
+	}
+	if r.status.SMSTime != "23:45" || !r.status.NextSMS.Equal(time.Date(2026, 10, 12, 23, 45, 0, 0, ist)) {
+		t.Fatalf("schedule shown = %q next %v", r.status.SMSTime, r.status.NextSMS)
+	}
+	// The stamp survives a reload from disk.
+	if err := b.Reload(); err != nil {
+		t.Fatal(err)
+	}
+	_ = b.View(func(d *book.Data, _ *book.Computed) error { last = d.SMSImport; return nil })
+	if last == "" {
+		t.Fatal("sms_imported was not saved in drafts.md")
+	}
+}
+
+// The phone's own timings come from the header of its SMS file.
+func TestPhones(t *testing.T) {
+	b := newBook(t)
+	dir := filepath.Join(b.Dir, book.InboxDir)
+	_ = os.MkdirAll(dir, 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "sms_phone.md"), []byte("device: \"phone\"\nschedule: \"23:30\"\nlast_run: \"2026-10-13T23:30:02+05:30\"\nmessages:\n  []\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "sms_phone.sync-conflict-20261013-111111-ABCDEFG.md"), []byte("device: x\nmessages: []\n"), 0o644)
+	got := Phones(b.Dir)
+	if len(got) != 1 || got[0].Device != "phone" || got[0].Schedule != "23:30" || got[0].LastRun != "2026-10-13T23:30:02+05:30" {
+		t.Fatalf("phones = %+v", got)
+	}
+}

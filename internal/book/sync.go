@@ -41,7 +41,19 @@ const TombstoneTTL = 90 * 24 * time.Hour
 var Now = time.Now
 
 // stamp returns the current time in the stored format.
-func stamp() string { return Now().UTC().Format(stampLayout) }
+func stamp() string { return Stamp(Now()) }
+
+// Stamp formats a time the way Arthik stores change times.
+func Stamp(t time.Time) string { return t.UTC().Format(stampLayout) }
+
+// ParseStamp reads a stored stamp (zero time when empty or unreadable).
+func ParseStamp(s string) time.Time {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
 
 // stampLayout is RFC 3339 with milliseconds, e.g. 2026-10-10T18:10:12.345Z.
 const stampLayout = "2006-01-02T15:04:05.000Z07:00"
@@ -245,6 +257,9 @@ func (b *Book) inboxConflicts(d *Data, ch *Change, notes *[]Problem) []string {
 			var doc draftsDoc
 			if _, err = store.Read(f, &doc); err == nil {
 				d.Drafts, taken = newestByID(d.Drafts, doc.Drafts, func(x model.Draft) (string, string) { return x.ID, x.Updated })
+				if doc.SMSImport > d.SMSImport { // the later SMS import wins
+					d.SMSImport, taken = doc.SMSImport, taken+1
+				}
 				ch.Drafts = ch.Drafts || taken > 0
 			}
 		case "learned":

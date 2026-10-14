@@ -57,6 +57,7 @@ docker compose run --rm -it arthik hash-password
 | `ARTHIK_WATCH_SECONDS` | app | How often to look for edits made by other apps (default 3). |
 | `ARTHIK_PRIMARY` | app | `true` (default): this instance writes computed files, imports the inbox and merges Syncthing conflict copies. Set `false` on any second instance sharing the folder. |
 | `ARTHIK_INBOX_MAX_AGE_DAYS`, `ARTHIK_INBOX_KEEP_DAYS`, `ARTHIK_INBOX_PAIR_DAYS` | app | Inbox: ignore older source items (30), forget reviewed drafts (120), pair a debit with a matching credit within N days (2). |
+| `ARTHIK_INBOX_RESCAN_MINUTES` | app | Re-read the inbox files at least this often, even when no file change was noticed (10). |
 | `ARTHIK_AI_URL`, `ARTHIK_AI_MODEL`, `ARTHIK_AI_TIMEOUT_SECONDS` | app | Optional Ollama that suggests categories for new merchants, e.g. `http://ollama:11434` and `qwen2.5:7b-instruct-q4_K_M`. Empty = off. |
 
 The phone app runs the same engine with `ARTHIK_MODE=local` (set by the app; not used on the server).
@@ -118,9 +119,18 @@ Unknown keys you add to any record are kept.
 ## Inbox
 
 Producers each own one file in `inbox/`, so no two programs ever write the same file.
-The main instance reads them within seconds of a change and adds a draft for every
-new item (ids are stable, so nothing is drafted twice; items older than
-`ARTHIK_INBOX_MAX_AGE_DAYS` are ignored). Review drafts on the **Inbox** screen:
+The main instance adds a draft for every new item (ids are stable, so nothing is
+drafted twice; items older than `ARTHIK_INBOX_MAX_AGE_DAYS` are ignored):
+
+| Step | When | Run it now |
+|---|---|---|
+| Phone copies bank SMS → `inbox/sms_<device>.md` | daily, time set in the app (Settings → Phone) | *Copy now* (app) |
+| SMS → drafts | *as soon as they arrive*, or *every day at HH:MM* (`inbox_sms_time`, set on the Inbox screen or in Settings) | *Make drafts now* |
+| Kronos subscriptions → drafts | as soon as Kronos writes `inbox/kronos.md` | *Make drafts now* |
+
+"As soon as" means within seconds of the file changing, re-checked at least every
+`ARTHIK_INBOX_RESCAN_MINUTES` (10) in case a change was missed. A daily SMS import
+missed while the server was down runs once when it is back. Review drafts on the **Inbox** screen:
 
 - **Accept** creates the transaction (id `d-<draft>`, so accepting on the phone and
   on nimory still makes one) and remembers the merchant in `inbox/learned.md`.

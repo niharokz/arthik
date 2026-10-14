@@ -315,6 +315,18 @@ func TestNavOrder(t *testing.T) {
 	if got, _ := json.Marshal(st["settings"].(map[string]any)["nav_order"]); string(got) != want {
 		t.Errorf("order lost: %s", got)
 	}
+	// SMS → drafts time: HH:MM or empty
+	s["inbox_sms_time"] = "25:00"
+	b, _ = json.Marshal(s)
+	if code, _ := o.do("PUT", "/api/settings", string(b)); code != 400 {
+		t.Errorf("bad SMS time = %d", code)
+	}
+	s["inbox_sms_time"] = "9:05"
+	b, _ = json.Marshal(s)
+	o.do("PUT", "/api/settings", string(b))
+	if _, st = o.do("GET", "/api/state", ""); st["settings"].(map[string]any)["inbox_sms_time"] != "09:05" {
+		t.Errorf("sms time = %v", st["settings"].(map[string]any)["inbox_sms_time"])
+	}
 	if code, _ := d.do("PUT", "/api/settings", string(b)); code != 403 {
 		t.Errorf("demo put = %d", code)
 	}
@@ -333,6 +345,9 @@ func TestInboxAPI(t *testing.T) {
 	}
 	if code, _ := o.do("GET", "/api/inbox?status=bogus", ""); code != 400 {
 		t.Errorf("bad status = %d", code)
+	}
+	if code, _ := o.do("POST", "/api/inbox/import", `{}`); code != 409 { // no importer runs in this test
+		t.Errorf("import without a runner = %d", code)
 	}
 	if code, _ := o.do("POST", "/api/inbox/nope/reject", `{}`); code != 404 {
 		t.Errorf("missing draft = %d", code)

@@ -3,6 +3,7 @@ package inbox
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -24,10 +25,15 @@ type Runner struct {
 	Cfg  config.Inbox
 	AI   *ai.Client // nil = no AI
 	Loc  *time.Location
+	Now  func() time.Time // clock (nil = time.Now); tests set it
 
-	sigs     string
-	aiPause  time.Time // after an AI failure, wait before trying again
+	importMu sync.Mutex // one import at a time (ticker and "Check now")
+	kSig     string     // kronos.md as last read
+	sSig     string     // SMS files as last read
+	lastScan time.Time  // last Kronos read, for the periodic re-scan
+	aiPause  time.Time  // after an AI failure, wait before trying again
 	lastDay  string
+	paused   string // load error that stopped imports, logged once
 	statusMu sync.Mutex
 	status   Status
 }
@@ -36,6 +42,9 @@ type Runner struct {
 type Status struct {
 	AI         bool      `json:"ai"`
 	LastImport time.Time `json:"last_import"`
+	SMSTime    string    `json:"sms_time"` // daily SMS → drafts time ("" = as they arrive)
+	NextSMS    time.Time `json:"next_sms"` // next scheduled SMS import
+	LastSMS    time.Time `json:"last_sms"` // last time SMS were read
 	Error      string    `json:"error,omitempty"`
 	AIError    string    `json:"ai_error,omitempty"`
 }
@@ -76,52 +85,179 @@ func (r *Runner) Run(ctx context.Context, every time.Duration) {
 	}
 }
 
-// Tick imports when a producer file changed (or the day changed), then lets the
-// AI look at one batch of drafts.
+// sources says which producer files an import reads.
+type sources struct{ kronos, sms bool }
+
+// Tick imports Kronos drafts when kronos.md changed (or the day changed, or the
+// re-scan interval passed), and bank SMS either the same way or once a day at the
+// time set in Settings. Then it lets the AI look at one batch of drafts.
 func (r *Runner) Tick(ctx context.Context) {
-	if !r.Book.Main() || r.Book.LoadError() != nil {
+	if !r.Book.Main() {
 		return
 	}
-	day := r.Book.Today().String()
-	if sig := r.signature(); sig != r.sigs || day != r.lastDay {
-		if err := r.importNow(); err != nil {
+	if le := r.Book.LoadError(); le != nil {
+		if msg := le.Error(); msg != r.paused { // say it once, not every tick
+			r.paused = msg
+			log.Printf("[%s] WARN inbox import paused until the data files load again: %v", r.Book.Name, le)
+			r.setStatus(func(s *Status) { s.Error = "Import paused — a data file can't be read: " + msg })
+		}
+		return
+	}
+	if r.paused != "" {
+		r.paused = ""
+		r.setStatus(func(s *Status) { s.Error = "" })
+	}
+	now := r.now()
+	at, last := r.smsSchedule()
+	r.importMu.Lock()
+	w := r.due(now, at, last)
+	r.importMu.Unlock()
+	if w.kronos || w.sms {
+		if _, err := r.run(w); err != nil {
 			log.Printf("[%s] WARN inbox import: %v", r.Book.Name, err)
-		} else {
-			r.sigs, r.lastDay = sig, day
 		}
 	}
+	r.showSchedule(now)
 	if r.AI != nil && time.Now().After(r.aiPause) {
 		r.categoriseBatch(ctx, 5)
 	}
 }
 
-// signature changes whenever a producer file (or the user's SMS rules) changes.
-func (r *Runner) signature() string {
+func (r *Runner) now() time.Time {
+	t := time.Now()
+	if r.Now != nil {
+		t = r.Now()
+	}
+	if r.Loc != nil {
+		t = t.In(r.Loc)
+	}
+	return t
+}
+
+// smsSchedule returns the SMS → drafts time from settings ("" = as they arrive)
+// and when SMS were last imported.
+func (r *Runner) smsSchedule() (at string, last time.Time) {
+	_ = r.Book.View(func(d *book.Data, _ *book.Computed) error {
+		at, last = d.Settings.InboxSMSTime, book.ParseStamp(d.SMSImport)
+		return nil
+	})
+	return at, last
+}
+
+// due decides what to read this tick. Call with importMu held.
+func (r *Runner) due(now time.Time, smsAt string, lastSMS time.Time) sources {
+	rescan := r.Cfg.Rescan
+	if rescan <= 0 {
+		rescan = 10 * time.Minute
+	}
+	kSig, sSig := r.signatures()
+	fresh := r.Book.Today().String() != r.lastDay || now.Sub(r.lastScan) >= rescan
+	w := sources{kronos: kSig != r.kSig || fresh}
+	if smsAt == "" {
+		w.sms = sSig != r.sSig || fresh
+	} else {
+		w.sms = SMSDue(now, smsAt, lastSMS)
+	}
+	return w
+}
+
+// SMSDue reports whether the daily SMS import at hh:mm ("23:45") should run now:
+// the latest such time has passed and nothing was imported since. After the
+// server was down at that time, it runs once as soon as it is back.
+func SMSDue(now time.Time, hhmm string, last time.Time) bool {
+	slot, ok := lastSlot(now, hhmm)
+	return ok && last.Before(slot)
+}
+
+// lastSlot is the latest hh:mm at or before now.
+func lastSlot(now time.Time, hhmm string) (time.Time, bool) {
+	t, err := time.Parse("15:04", hhmm)
+	if err != nil {
+		return time.Time{}, false
+	}
+	slot := time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, now.Location())
+	if slot.After(now) {
+		slot = slot.AddDate(0, 0, -1)
+	}
+	return slot, true
+}
+
+// signatures change whenever kronos.md, or an SMS file (or the SMS rules), changes.
+func (r *Runner) signatures() (kronos, sms string) {
 	dir := filepath.Join(r.Book.Dir, book.InboxDir)
 	files, _ := filepath.Glob(filepath.Join(dir, SMSGlob))
-	files = append(files, filepath.Join(dir, KronosFile), filepath.Join(r.Book.Dir, RulesFile))
+	files = append(files, filepath.Join(r.Book.Dir, RulesFile))
 	sort.Strings(files)
+	return fileSig(filepath.Join(dir, KronosFile)), fileSig(files...)
+}
+
+func fileSig(files ...string) string {
 	var b strings.Builder
 	for _, f := range files {
-		if st, err := os.Stat(f); err == nil {
-			b.WriteString(f + st.ModTime().String() + "|")
+		if st, err := os.Stat(f); err == nil { // size too: a copy can keep an older mtime
+			fmt.Fprintf(&b, "%s|%d|%d|", f, st.ModTime().UnixNano(), st.Size())
 		}
 	}
 	return b.String()
 }
 
-func (r *Runner) importNow() error {
-	p, err := LoadParser(r.Book.Dir)
-	if err != nil {
-		r.setStatus(func(s *Status) { s.Error = err.Error() })
-		return err
+// Import reads every producer file now — SMS too, whatever the schedule — and
+// adds what is new; it returns how many drafts were added ("Check now").
+func (r *Runner) Import() (int, error) {
+	added, err := r.run(sources{kronos: true, sms: true})
+	r.showSchedule(r.now())
+	return added, err
+}
+
+// ImportFor runs an import for the dataset in dir; ok is false when no importer
+// runs there (this device is not the main device).
+func ImportFor(dir string) (added int, ok bool, err error) {
+	v, found := runners.Load(dir)
+	if !found {
+		return 0, false, nil
 	}
-	items, errs := ReadSources(r.Book.Dir, p, r.Loc)
+	added, err = v.(*Runner).Import()
+	return added, true, err
+}
+
+// run reads the chosen producer files and adds new drafts. A failed read is
+// retried on the next tick (the signatures are only taken on success).
+func (r *Runner) run(w sources) (int, error) {
+	r.importMu.Lock()
+	defer r.importMu.Unlock()
+	kSig, sSig := r.signatures()
+	day, now := r.Book.Today().String(), r.now()
+	var items []Item
+	var errs []error
+	if w.kronos {
+		k, e := ReadKronos(r.Book.Dir)
+		items, errs = append(items, k...), append(errs, e...)
+	}
+	if w.sms {
+		p, err := LoadParser(r.Book.Dir)
+		if err != nil {
+			r.setStatus(func(s *Status) { s.Error = err.Error() })
+			return 0, err
+		}
+		m, e := ReadSMS(r.Book.Dir, p, r.Loc)
+		items, errs = append(items, m...), append(errs, e...)
+	}
 	added := 0
-	err = r.Book.Mutate(func(d *book.Data, ch *book.Change) error {
+	err := r.Book.Mutate(func(d *book.Data, ch *book.Change) error {
 		added = Ingest(d, ch, items, Options{Today: r.Book.Today(), Now: time.Now(), MaxAge: r.Cfg.MaxAgeDays, KeepDays: r.Cfg.KeepDays, PairDays: r.Cfg.PairDays})
+		if w.sms {
+			d.SMSImport, ch.Drafts = book.Stamp(now), true
+		}
 		return nil
 	})
+	if err == nil {
+		if w.kronos {
+			r.kSig, r.lastScan, r.lastDay = kSig, now, day
+		}
+		if w.sms {
+			r.sSig = sSig
+		}
+	}
 	if err == nil && len(errs) > 0 {
 		err = errors.Join(errs...)
 	}
@@ -129,11 +265,31 @@ func (r *Runner) importNow() error {
 	if err != nil {
 		msg = err.Error()
 	}
-	r.setStatus(func(s *Status) { s.LastImport, s.Error = time.Now(), msg })
+	r.setStatus(func(s *Status) {
+		s.LastImport, s.Error = time.Now(), msg
+		if w.sms {
+			s.LastSMS = now
+		}
+	})
 	if added > 0 {
 		log.Printf("[%s] inbox: %d new draft(s) to review", r.Book.Name, added)
 	}
-	return err
+	return added, err
+}
+
+// showSchedule puts the SMS schedule on the inbox screen.
+func (r *Runner) showSchedule(now time.Time) {
+	at, last := r.smsSchedule()
+	next := time.Time{}
+	if slot, ok := lastSlot(now, at); ok {
+		next = slot.AddDate(0, 0, 1)
+	}
+	r.setStatus(func(s *Status) {
+		s.SMSTime, s.NextSMS = at, next
+		if !last.IsZero() {
+			s.LastSMS = last
+		}
+	})
 }
 
 // categoriseBatch asks the AI about up to n drafts that only have the fallback

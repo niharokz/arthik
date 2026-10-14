@@ -66,7 +66,35 @@ type smsMessage struct {
 
 type smsDoc struct {
 	Device   string       `yaml:"device"`
+	Schedule string       `yaml:"schedule"` // when the phone copies SMS ("23:30")
+	LastRun  string       `yaml:"last_run"` // when it last did (RFC 3339)
 	Messages []smsMessage `yaml:"messages"`
+}
+
+// Phone is one phone's SMS capture as its file reports it.
+type Phone struct {
+	Device   string `json:"device"`
+	Schedule string `json:"schedule"`
+	LastRun  string `json:"last_run"`
+	Messages int    `json:"messages"`
+}
+
+// Phones lists the phones that copy SMS into inbox/ and when they do.
+func Phones(dir string) []Phone {
+	files, _ := filepath.Glob(filepath.Join(dir, book.InboxDir, SMSGlob))
+	sort.Strings(files)
+	out := []Phone{}
+	for _, f := range files {
+		if book.IsConflictCopy(filepath.Base(f)) {
+			continue
+		}
+		var sd smsDoc
+		if _, err := store.Read(f, &sd); err != nil {
+			continue
+		}
+		out = append(out, Phone{Device: sd.Device, Schedule: sd.Schedule, LastRun: sd.LastRun, Messages: len(sd.Messages)})
+	}
+	return out
 }
 
 type kronosDraft struct {
@@ -111,6 +139,13 @@ func draftID(prefix, id string) string {
 // ReadSources reads every producer file. A broken file is reported and skipped,
 // so one bad file never blocks the others.
 func ReadSources(dir string, p *Parser, loc *time.Location) ([]Item, []error) {
+	k, ek := ReadKronos(dir)
+	s, es := ReadSMS(dir, p, loc)
+	return append(k, s...), append(ek, es...)
+}
+
+// ReadKronos reads inbox/kronos.md (subscriptions due) into items.
+func ReadKronos(dir string) ([]Item, []error) {
 	var items []Item
 	var errs []error
 
@@ -132,7 +167,13 @@ func ReadSources(dir string, p *Parser, loc *time.Location) ([]Item, []error) {
 			CategoryHint: strings.TrimSpace(k.Category), Labels: k.Labels, Notes: strings.TrimSpace(k.Notes), Rule: k.Source,
 		})
 	}
+	return items, errs
+}
 
+// ReadSMS reads every inbox/sms_<device>.md into items (messages no rule reads are skipped).
+func ReadSMS(dir string, p *Parser, loc *time.Location) ([]Item, []error) {
+	var items []Item
+	var errs []error
 	files, _ := filepath.Glob(filepath.Join(dir, book.InboxDir, SMSGlob))
 	sort.Strings(files)
 	for _, f := range files {

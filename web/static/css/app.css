@@ -708,3 +708,19 @@ details > summary { transition: color .15s; }
   .seg > .thumb.anim, .fab, .item, .card { transition: none !important; }
 }
 .wlook input[type=range]:focus { outline: none; box-shadow: none; }
+
+.inbox-foot { font-size: .8rem; text-align: center; line-height: 1.6; }
+button.link { background: none; border: 0; padding: 0; min-height: 0; color: var(--teal); font: inherit; cursor: pointer; }
+button.link:hover { text-decoration: underline; background: none; }
+
+/* inbox timings: phone SMS copy → SMS to drafts → Kronos */
+.timings .tstep { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+.timings .tstep:first-of-type { border-top: 0; padding-top: 2px; }
+.timings .tn { flex: 0 0 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: .78rem; font-weight: 700;
+  background: var(--teal-soft); color: var(--teal-strong); }
+.timings .muted { font-size: .85rem; }
+.timings .tset { margin-top: 8px; gap: 8px; }
+.timings .tset select, .timings .tset input { width: auto; }
+.timings .tstep > button, .timings .tstep > small { flex: 0 0 auto; align-self: center; }
+.timings .tstep > .grow { flex: 1 1 220px; min-width: 0; }
+@media (max-width: 520px) { .timings .tstep > button { margin-left: 38px; } }

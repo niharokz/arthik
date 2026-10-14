@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.3.3 — 2026-10-14
+
+- **Two inbox timings**, shown together in a new *When drafts arrive* card (Inbox
+  screen and Settings):
+  1. **Phone copies bank SMS** → `inbox/sms_<device>.md` at the time set in the app
+     (Settings → Phone). The file now records that time and the last run
+     (`schedule:`, `last_run:`), so every device can show it. *Copy now* in the app.
+  2. **SMS become drafts** — new setting `inbox_sms_time` (settings.md): *As soon as
+     they arrive* (as before) or *Every day at HH:MM*. If nimory was down at that time,
+     it runs once when it is back. The time of the last SMS import is kept in
+     `drafts.md` (`sms_imported:`). *Make drafts now* imports at once, whatever the time.
+- Picking a remembered transaction while typing a title fills everything **except
+  the amount**, which stays what you typed or what the SMS said.
+- Kronos subscription drafts are unchanged: imported as soon as Kronos writes them.
+- Android build: `./android/build.sh quick` (no tests, 64-bit phones only), `ARTHIK_ABIS`
+  to choose phone CPUs, parallel Gradle, and each step's time printed.
+
+## 1.3.2 — 2026-10-14
+
+- **Inbox never waits for a file change it missed:** besides reacting to changed SMS
+  and Kronos files, the main device now re-reads them every 10 minutes
+  (`ARTHIK_INBOX_RESCAN_MINUTES`), and the change check also compares file sizes.
+  Importing is idempotent, so a re-read never makes duplicates.
+- Inbox screen: "Checked for new SMS and Kronos drafts 3 min ago · **Check now**"
+  (`POST /api/inbox/import`).
+- When a data file can't be read, the inbox import says so (log line and the inbox
+  banner) instead of pausing silently.
+
 ## 1.3.1 — 2026-10-12
 
 - **Android widgets:** three new 2×2 widgets next to the 4×2 overview — **Budget**

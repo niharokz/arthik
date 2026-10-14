@@ -56,6 +56,7 @@ type Data struct {
 	Categories []model.Category
 	Labels     []model.Label
 	Drafts     []model.Draft
+	SMSImport  string // when bank SMS were last turned into drafts (stamp, kept in drafts.md)
 	Rules      []model.Rule
 	Txns       []model.Transaction // sorted by date, time, id
 
@@ -253,7 +254,8 @@ type labelsDoc struct {
 	Labels []model.Label `yaml:"labels"`
 }
 type draftsDoc struct {
-	Drafts []model.Draft `yaml:"drafts"`
+	SMSImport string        `yaml:"sms_imported,omitempty"`
+	Drafts    []model.Draft `yaml:"drafts"`
 }
 type rulesDoc struct {
 	Rules []model.Rule `yaml:"rules"`
@@ -295,7 +297,7 @@ func (b *Book) reloadLocked() error {
 	d.Labels = ld.Labels
 	var dd draftsDoc
 	read(DraftsFile, &dd)
-	d.Drafts = dd.Drafts
+	d.Drafts, d.SMSImport = dd.Drafts, dd.SMSImport
 	var rd rulesDoc
 	read(RulesFile, &rd)
 	d.Rules = rd.Rules
@@ -496,7 +498,7 @@ func (b *Book) persistLocked(d *Data, ch *Change) error {
 		}
 	}
 	if ch.Drafts {
-		if err := w(DraftsFile, hdrDrafts, draftsDoc{nonNil(d.Drafts)}); err != nil {
+		if err := w(DraftsFile, hdrDrafts, draftsDoc{SMSImport: d.SMSImport, Drafts: nonNil(d.Drafts)}); err != nil {
 			return err
 		}
 	}
@@ -570,6 +572,7 @@ func (d *Data) clone() *Data {
 		Categories: append([]model.Category(nil), d.Categories...),
 		Labels:     append([]model.Label(nil), d.Labels...),
 		Drafts:     append([]model.Draft(nil), d.Drafts...),
+		SMSImport:  d.SMSImport,
 		Rules:      append([]model.Rule(nil), d.Rules...),
 		Txns:       append([]model.Transaction(nil), d.Txns...),
 		src:        make(map[string]string, len(d.src)),

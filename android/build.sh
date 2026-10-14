@@ -4,6 +4,7 @@
 #   ./android/build.sh keystore   create your signing key (once; keep it backed up)
 #   ./android/build.sh            signed release APK  → android/dist/arthik-<version>.apk
 #   ./android/build.sh debug      debug APK (no key)  → android/dist/arthik-<version>-debug.apk
+#   ./android/build.sh quick      signed release APK, no tests, 64-bit phones only (fastest)
 #
 # Settings come from android/.env (copy android/.env.example).
 set -euo pipefail
@@ -17,7 +18,9 @@ IMAGE=arthik-android-builder
 
 mkdir -p android/.cache/home android/dist "$KEYS_DIR"
 echo "== builder image =="
-docker build -q -t "$IMAGE" -f android/Dockerfile android > /dev/null
+# The Dockerfile copies nothing, so it is sent alone (no build context): sending
+# android/ would upload the multi-GB caches in android/.cache on every run.
+docker build -t "$IMAGE" - < android/Dockerfile
 
 # Runs a command in the builder as you (files stay yours), with caches kept in android/.cache.
 run() {
@@ -43,11 +46,15 @@ case "${1:-release}" in
     ;;
   release)
     [ -f "$KEY_FILE" ] || { echo "No signing key yet. Run: ./android/build.sh keystore"; exit 1; }
-    run -e ARTHIK_KEYSTORE=/keys/arthik.jks "$IMAGE" bash android/scripts/build-in-container.sh release
+    run -e ARTHIK_KEYSTORE=/keys/arthik.jks -e ARTHIK_QUICK -e ARTHIK_ABIS "$IMAGE" bash android/scripts/build-in-container.sh release
     ;;
   debug)
-    run "$IMAGE" bash android/scripts/build-in-container.sh debug
+    run -e ARTHIK_QUICK -e ARTHIK_ABIS "$IMAGE" bash android/scripts/build-in-container.sh debug
+    ;;
+  quick)
+    [ -f "$KEY_FILE" ] || { echo "No signing key yet. Run: ./android/build.sh keystore"; exit 1; }
+    run -e ARTHIK_KEYSTORE=/keys/arthik.jks -e ARTHIK_QUICK=1 -e ARTHIK_ABIS="${ARTHIK_ABIS:-arm64-v8a}" "$IMAGE" bash android/scripts/build-in-container.sh release
     ;;
   *)
-    echo "usage: $0 [keystore|release|debug]"; exit 2 ;;
+    echo "usage: $0 [keystore|release|debug|quick]"; exit 2 ;;
 esac

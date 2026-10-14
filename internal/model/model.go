@@ -68,6 +68,8 @@ type Settings struct {
 	// Inbox: category used when nothing better is known (empty = leave it to you).
 	InboxExpenseCategory string `yaml:"inbox_expense_category,omitempty" json:"inbox_expense_category"`
 	InboxIncomeCategory  string `yaml:"inbox_income_category,omitempty" json:"inbox_income_category"`
+	// Inbox: turn bank SMS into drafts once a day at this time ("23:45"); empty = as soon as they arrive.
+	InboxSMSTime string `yaml:"inbox_sms_time,omitempty" json:"inbox_sms_time"`
 
 	Extra map[string]any `yaml:",inline" json:"-"`
 }

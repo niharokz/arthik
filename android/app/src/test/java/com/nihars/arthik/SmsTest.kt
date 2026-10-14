@@ -67,6 +67,11 @@ class SmsTest {
         assertEquals(0, s.add(emptyList(), today)) // prunes the July message
         assertFalse(File(dir, "inbox/sms_phone.md").readText().contains("Rs 2"))
         assertTrue(File(dir, "inbox/sms_phone.md").readText().contains("Rs 1"))
+        // A run with nothing new still records when it ran, for the inbox screen.
+        assertEquals(0, s.add(emptyList(), today, "23:30", "2026-10-11T23:30:02+05:30"))
+        val stamped = File(dir, "inbox/sms_phone.md").readText()
+        assertTrue(stamped.contains("schedule: \"23:30\"\nlast_run: \"2026-10-11T23:30:02+05:30\"\nmessages:"))
+        assertTrue(stamped.contains("Rs 1"))
         dir.deleteRecursively()
     }
 }

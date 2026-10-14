@@ -46,6 +46,7 @@ type Inbox struct {
 	MaxAgeDays int           // ARTHIK_INBOX_MAX_AGE_DAYS: ignore source items older than this (default 30)
 	KeepDays   int           // ARTHIK_INBOX_KEEP_DAYS: forget reviewed drafts after this (default 120)
 	PairDays   int           // ARTHIK_INBOX_PAIR_DAYS: two SMS this close become one transfer (default 2)
+	Rescan     time.Duration // ARTHIK_INBOX_RESCAN_MINUTES: re-read the inbox files this often even when no change was seen (default 10)
 	AIURL      string        // ARTHIK_AI_URL: Ollama base URL, e.g. http://ollama:11434 (empty = no AI)
 	AIModel    string        // ARTHIK_AI_MODEL: model name, e.g. qwen2.5:7b-instruct-q4_K_M
 	AITimeout  time.Duration // ARTHIK_AI_TIMEOUT_SECONDS: per request (default 120)
@@ -138,6 +139,7 @@ func Load() (Config, error) {
 		MaxAgeDays: envInt("ARTHIK_INBOX_MAX_AGE_DAYS", 30),
 		KeepDays:   envInt("ARTHIK_INBOX_KEEP_DAYS", 120),
 		PairDays:   envInt("ARTHIK_INBOX_PAIR_DAYS", 2),
+		Rescan:     time.Duration(max(1, envInt("ARTHIK_INBOX_RESCAN_MINUTES", 10))) * time.Minute,
 		AIURL:      strings.TrimRight(env("ARTHIK_AI_URL", ""), "/"),
 		AIModel:    env("ARTHIK_AI_MODEL", ""),
 		AITimeout:  time.Duration(envInt("ARTHIK_AI_TIMEOUT_SECONDS", 120)) * time.Second,

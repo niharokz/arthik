@@ -166,21 +166,21 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
         if (document.activeElement === d.querySelector("#tx-title")) acShow();
       } catch { acItems = []; acHide(); } // offline web app: no suggestions
     }, 150);
-    // Fills the whole form from a remembered transaction (date and time stay as they are).
+    // Fills the form from a remembered transaction — everything except the amount,
+    // which stays what you typed (or what the SMS said). Date and time stay too.
     const acPick = (x) => {
       if (!x) return;
       pull();
       Object.assign(st, {
         type: x.type, title: x.title, notes: x.notes || "", labels: [...(x.labels || [])],
-        account: x.account || st.account, to: x.to_account || "", category: x.category || "", negative: paise(x.amount) < 0,
-        amount: x.splits?.length ? "" : fromPaise(Math.abs(paise(x.amount))),
-        splits: (x.splits || []).map((sp) => ({ category: sp.category, amount: fromPaise(paise(sp.amount)) })),
+        account: x.account || st.account, to: x.to_account || "", category: x.category || "",
+        splits: (x.splits || []).map((sp) => ({ category: sp.category, amount: "" })), // categories only
       });
       acHide();
       render(); // not redraw: that would read the old fields back over st
       haptic("tick");
-      const a = d.querySelector('[name="amount"]'); // ready to change the amount
-      if (a) { a.focus(); a.select(); }
+      const a = d.querySelector('[name="amount"]'); // ready to type the amount
+      if (a && !a.value) a.focus();
     };
 
     function wire() {

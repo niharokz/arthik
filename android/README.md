@@ -48,8 +48,14 @@ cp android/.env.example android/.env  # set ARTHIK_KEYSTORE_PASSWORD
 ```
 
 The first build downloads the Android SDK, Gradle and Go modules (a few minutes, cached
-in `android/.cache` afterwards). Each build runs the Go tests and the Android unit tests
-before it packages anything.
+in `android/.cache` afterwards — keep that folder). Each build runs the Go tests and the
+Android unit tests before it packages anything, and prints how long each step took.
+
+**Faster builds:** `./android/build.sh quick` makes the same signed APK but skips the
+tests and builds the engine for 64-bit phones only (`arm64-v8a`, i.e. any phone from the
+last ~8 years) — usually 3–4× faster. Run the full build before a release you keep.
+To choose the phone CPUs yourself, set `ARTHIK_ABIS` in `android/.env`
+(e.g. `ARTHIK_ABIS=arm64-v8a`).
 
 **Back up `~/.arthik-keys/arthik.jks` and its password.** Android only accepts an
 update signed with the same key. (If you lose it: uninstall, install the new APK and

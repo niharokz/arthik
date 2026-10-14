@@ -3,10 +3,10 @@
 // "same as" a transaction you already entered, or reject. Accepting teaches Arthik
 // what that merchant is, so the next draft fills itself in.
 
-import { html, money, fmtShort, relDay, reducedMotion } from "../util.js";
+import { html, raw, money, fmtShort, relDay, reducedMotion } from "../util.js";
 import { S, toast, ro, today, catName, catIcon, accName, loading, confirmSheet } from "../ui.js";
-import { get, post } from "../api.js";
-import { haptic } from "../native.js";
+import { get, post, put } from "../api.js";
+import { haptic, isApp, config, call, onNative } from "../native.js";
 import { openTx } from "../txform.js";
 
 // How the category was chosen: [badge, label].
@@ -65,6 +65,82 @@ export function draftRow(x, actions = true) {
   </li>`;
 }
 
+// ---- when drafts arrive: phone SMS copy → SMS to drafts → Kronos ----
+
+const pad2 = (n) => String(n).padStart(2, "0");
+const stamp = (v) => {
+  const d = v ? new Date(v) : null;
+  if (!d || Number.isNaN(+d) || d.getFullYear() < 2000) return "";
+  return `${fmtShort(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
+
+// The next time the clock shows hh:mm.
+function nextAt(hhmm) {
+  const [h, m] = hhmm.split(":").map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  if (d <= new Date()) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+/** The two timings (and Kronos) with their "now" buttons; res is GET /api/inbox. */
+export function timingsCard(res) {
+  const st = res.status || {};
+  const phones = res.phones || [];
+  const main = !!stamp(st.last_import); // only the main device imports
+  const at = res.sms_time || "";
+  const app = isApp ? config().sms || {} : null;
+  const phoneLine = phones.length
+    ? phones.map((p) => html`<div>${p.device}: ${p.schedule ? `daily at ${p.schedule}` : "nightly"}${stamp(p.last_run) ? ` · last ${stamp(p.last_run)}` : ""}</div>`)
+    : html`<div>No phone has sent SMS yet — switch it on in the Arthik app: Settings → Phone.</div>`;
+  return html`<section class="card timings" data-timings>
+    <header><h2>⏱ When drafts arrive</h2></header>
+    <div class="tstep"><span class="tn">1</span>
+      <div class="grow"><b>Phone copies bank SMS</b><div class="muted">${phoneLine}${app ? html`<div>Change it in Settings → Phone.</div>` : ""}</div></div>
+      ${app && app.enabled ? html`<button data-smsnow>Copy now</button>` : ""}</div>
+    <div class="tstep"><span class="tn">2</span>
+      <div class="grow"><b>SMS become drafts</b>
+        <div class="muted">${at ? `Every day at ${at}` : "As soon as the SMS file arrives"}${at ? ` · next ${stamp(nextAt(at))}` : ""}${stamp(st.last_sms) ? ` · last ${stamp(st.last_sms)}` : ""}</div>
+        ${ro() ? "" : html`<div class="row wrap tset">
+          <select data-smsmode aria-label="When SMS become drafts"><option value="" ${at ? "" : raw("selected")}>As soon as they arrive</option><option value="at" ${at ? raw("selected") : ""}>Every day at</option></select>
+          <input type="time" data-smstime value="${at || "23:45"}" ${at ? "" : raw("hidden")} aria-label="Time">
+          <button data-savetime hidden>Save</button></div>`}</div>
+      ${ro() ? "" : main ? html`<button data-check>Make drafts now</button>` : html`<small class="faint">done by your main device</small>`}</div>
+    <div class="tstep"><span class="tn">↻</span>
+      <div class="grow"><b>Subscriptions from Kronos</b><div class="muted">As soon as Kronos writes them${stamp(st.last_import) ? ` · checked ${stamp(st.last_import)}` : ""}</div></div></div>
+  </section>`;
+}
+
+/** Wires the timings card's buttons; after() re-renders the screen. */
+export function wireTimings(root, after) {
+  const card = root.querySelector("[data-timings]");
+  if (!card) return;
+  const mode = card.querySelector("[data-smsmode]"), time = card.querySelector("[data-smstime]"), save = card.querySelector("[data-savetime]");
+  const changed = () => { time.hidden = !mode.value; save.hidden = false; };
+  mode?.addEventListener("change", changed);
+  time?.addEventListener("input", changed);
+  save?.addEventListener("click", async () => {
+    try {
+      await put("/api/settings", { ...S.state.settings, inbox_sms_time: mode.value ? time.value : "" });
+      toast(mode.value ? `SMS become drafts every day at ${time.value}` : "SMS become drafts as soon as they arrive");
+      after();
+    } catch (e) { toast(e.message, true); }
+  });
+  card.querySelector("[data-check]")?.addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    try {
+      const r = await post("/api/inbox/import", {});
+      toast(r.added ? `${r.added} new draft${r.added > 1 ? "s" : ""}` : "Nothing new");
+    } catch (err) { toast(err.message, true); }
+    after();
+  });
+  card.querySelector("[data-smsnow]")?.addEventListener("click", (e) => {
+    e.target.disabled = true;
+    const off = onNative((ev) => { if (ev.type === "sms") { off(); toast(ev.result); after(); } });
+    call("smsRunNow");
+  });
+}
+
 // A draft can be accepted straight away when nothing is missing.
 const ready = (x) => (x.type === "transfer" ? x.account && x.to_account : x.account && x.category);
 
@@ -94,7 +170,9 @@ export async function render(root, ctx) {
       ${items.length ? html`<ul class="list drafts" data-list>${items.map((x) => draftRow(x))}</ul>`
       : html`<div class="empty">${tab === "pending" ? html`Nothing to review.<br><small>Bank SMS from the phone app and subscriptions from Kronos show up here.</small>` : "No reviewed drafts yet."}</div>`}
     </section>
-    <p class="faint" style="font-size:.8rem;text-align:center">${st.ai ? "✨ Local AI suggests categories for new merchants. " : ""}🧠 Accepting teaches Arthik the merchant's category.</p>`);
+    ${timingsCard(res)}
+    <p class="inbox-foot faint">${st.ai ? "✨ AI suggests categories for new merchants · " : ""}🧠 Accepting teaches Arthik the merchant's category.</p>`);
+  wireTimings(root, () => ctx.refresh());
 
   const byId = (id) => items.find((x) => x.id === id);
   const act = async (fn, okMsg) => {

@@ -9,6 +9,7 @@ import { logout, navOrder, NAV_ITEMS, BOTTOM_COUNT } from "../main.js";
 import { menuCard, wireMenuCard } from "./menu.js";
 import { isApp } from "../native.js";
 import { phoneCard, wirePhoneCard } from "./phone.js";
+import { timingsCard, wireTimings } from "./inbox.js";
 
 const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -43,6 +44,7 @@ export async function render(root, ctx) {
         ${ro() ? html`<p class="muted">The demo is read-only.</p>` : html`<button class="primary" type="submit">Save preferences</button>`}
       </form>
       <div class="stack">
+        <div data-timings-slot></div>
         <div class="card" data-rules><header><h2>🧠 Learned rules</h2></header><p class="muted" style="margin:0">Loading…</p></div>
         <div class="card"><header><h2>Export & import</h2></header>
           <p class="muted" style="margin-top:0">Export every transaction as CSV (the transaction list exports what you filtered). The same format imports back.</p>
@@ -73,6 +75,12 @@ export async function render(root, ctx) {
   wireMenuCard(root);
   root.querySelector("[data-import]")?.addEventListener("click", () => importSheet(ctx));
   rulesCard(root.querySelector("[data-rules]"));
+  get("/api/inbox").then((res) => { // the inbox timings, also shown on the Inbox screen
+    if (!ctx.alive()) return;
+    const slot = root.querySelector("[data-timings-slot]");
+    slot.innerHTML = String(timingsCard(res));
+    wireTimings(slot, () => ctx.refresh());
+  }).catch(() => {});
 }
 
 // What merchants become in the inbox, learned when you accept drafts. There can be

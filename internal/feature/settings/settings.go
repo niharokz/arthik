@@ -66,6 +66,13 @@ func validate(s *model.Settings) error {
 	if s.YearStartMonth < 1 || s.YearStartMonth > 12 {
 		return fmt.Errorf("year start month must be 1–12")
 	}
+	if s.InboxSMSTime != "" {
+		t, err := time.Parse("15:04", s.InboxSMSTime)
+		if err != nil {
+			return fmt.Errorf("SMS → drafts time must be HH:MM (24-hour), or empty for “as soon as they arrive”")
+		}
+		s.InboxSMSTime = t.Format("15:04")
+	}
 	if s.UpcomingDays < 1 || s.UpcomingDays > 365 {
 		return fmt.Errorf("upcoming days must be 1–365")
 	}
