@@ -30,6 +30,7 @@ type Runner struct {
 	importMu sync.Mutex // one import at a time (ticker and "Check now")
 	kSig     string     // kronos.md as last read
 	sSig     string     // SMS files as last read
+	seenRun  time.Time  // newest phone capture (last_run) the last SMS read saw
 	lastScan time.Time  // last Kronos read, for the periodic re-scan
 	aiPause  time.Time  // after an AI failure, wait before trying again
 	lastDay  string
@@ -50,6 +51,12 @@ type Status struct {
 }
 
 var runners sync.Map // dataset dir → *Runner
+
+// Runs reports whether this device imports the inbox for the dataset in dir.
+func Runs(dir string) bool {
+	_, ok := runners.Load(dir)
+	return ok
+}
 
 // StatusOf returns the runner status for a dataset (zero when none runs there).
 func StatusOf(dir string) Status {
@@ -156,9 +163,18 @@ func (r *Runner) due(now time.Time, smsAt string, lastSMS time.Time) sources {
 	if smsAt == "" {
 		w.sms = sSig != r.sSig || fresh
 	} else {
-		w.sms = SMSDue(now, smsAt, lastSMS)
+		w.sms = SMSDue(now, smsAt, lastSMS) || sSig != r.sSig && r.late(now, smsAt)
 	}
 	return w
+}
+
+// late reports a phone capture made before the last scheduled import but synced
+// after it (Syncthing on the phone often waits until morning): it is read now
+// instead of a day later.
+func (r *Runner) late(now time.Time, smsAt string) bool {
+	slot, ok := lastSlot(now, smsAt)
+	run := LastCapture(r.Book.Dir)
+	return ok && run.After(r.seenRun) && run.Before(slot)
 }
 
 // SMSDue reports whether the daily SMS import at hh:mm ("23:45") should run now:
@@ -229,6 +245,7 @@ func (r *Runner) run(w sources) (int, error) {
 	day, now := r.Book.Today().String(), r.now()
 	var items []Item
 	var errs []error
+	var seen time.Time
 	if w.kronos {
 		k, e := ReadKronos(r.Book.Dir)
 		items, errs = append(items, k...), append(errs, e...)
@@ -241,6 +258,7 @@ func (r *Runner) run(w sources) (int, error) {
 		}
 		m, e := ReadSMS(r.Book.Dir, p, r.Loc)
 		items, errs = append(items, m...), append(errs, e...)
+		seen = LastCapture(r.Book.Dir)
 	}
 	added := 0
 	err := r.Book.Mutate(func(d *book.Data, ch *book.Change) error {
@@ -255,7 +273,7 @@ func (r *Runner) run(w sources) (int, error) {
 			r.kSig, r.lastScan, r.lastDay = kSig, now, day
 		}
 		if w.sms {
-			r.sSig = sSig
+			r.sSig, r.seenRun = sSig, seen
 		}
 	}
 	if err == nil && len(errs) > 0 {

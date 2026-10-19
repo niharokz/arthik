@@ -515,3 +515,47 @@ func TestPhones(t *testing.T) {
 		t.Fatalf("phones = %+v", got)
 	}
 }
+
+// A capture the phone made before the daily import but that synced after it is
+// read when it lands; a capture made after the import waits for the next day.
+func TestRunnerLateSync(t *testing.T) {
+	b := newBook(t)
+	b.Today = func() dates.Date { return dates.MustParse("2026-10-19") }
+	ist := time.FixedZone("IST", 5*3600+1800)
+	mutate(t, b, func(d *book.Data, ch *book.Change) error {
+		d.Settings.InboxSMSTime, ch.Settings = "04:45", true
+		return nil
+	})
+	dir := filepath.Join(b.Dir, book.InboxDir)
+	_ = os.MkdirAll(dir, 0o755)
+	sms := func(lastRun string, ids ...string) {
+		body := "device: phone\nschedule: \"01:30\"\nlast_run: \"" + lastRun + "\"\nmessages:\n"
+		for _, id := range ids {
+			body += `  - {id: "` + id + `", from: "AX-HDFCBK", at: "2026-10-18T20:00:00+05:30", body: "Spent Rs.50 On HDFC Bank Card 4275 At TEA On 2026-10-18:20:00:00."}` + "\n"
+		}
+		_ = os.WriteFile(filepath.Join(dir, "sms_phone.md"), []byte(body), 0o644)
+	}
+	count := func() (n int) {
+		_ = b.View(func(d *book.Data, _ *book.Computed) error { n = len(d.Drafts); return nil })
+		return n
+	}
+	sms("2026-10-18T01:30:00+05:30") // yesterday's capture: nothing new yet
+	clock := time.Date(2026, 10, 19, 4, 46, 0, 0, ist)
+	r := &Runner{Book: b, Cfg: config.Inbox{MaxAgeDays: 30, KeepDays: 120, PairDays: 2, Rescan: 10 * time.Minute}, Loc: ist, Now: func() time.Time { return clock }}
+	r.Tick(context.Background())
+	if n := count(); n != 0 {
+		t.Fatalf("04:46: %d drafts", n)
+	}
+	sms("2026-10-19T01:30:00+05:30", "aaaaaaaaaaaaaaaa") // 01:30 capture lands at 07:00
+	clock = time.Date(2026, 10, 19, 7, 0, 0, 0, ist)
+	r.Tick(context.Background())
+	if n := count(); n != 1 {
+		t.Fatalf("late capture not read: %d drafts", n)
+	}
+	sms("2026-10-19T07:16:00+05:30", "aaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbb") // manual phone run after the import
+	clock = clock.Add(20 * time.Minute)
+	r.Tick(context.Background())
+	if n := count(); n != 1 {
+		t.Fatalf("capture after the import read before the next day: %d drafts", n)
+	}
+}

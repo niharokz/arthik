@@ -87,7 +87,7 @@ function nextAt(hhmm) {
 export function timingsCard(res) {
   const st = res.status || {};
   const phones = res.phones || [];
-  const main = !!stamp(st.last_import); // only the main device imports
+  const main = res.main ?? !!stamp(st.last_import); // only the main device imports
   const at = res.sms_time || "";
   const app = isApp ? config().sms || {} : null;
   const phoneLine = phones.length
@@ -96,16 +96,15 @@ export function timingsCard(res) {
   return html`<section class="card timings" data-timings>
     <header><h2>⏱ When drafts arrive</h2></header>
     <div class="tstep"><span class="tn">1</span>
-      <div class="grow"><b>Phone copies bank SMS</b><div class="muted">${phoneLine}${app ? html`<div>Change it in Settings → Phone.</div>` : ""}</div></div>
-      ${app && app.enabled ? html`<button data-smsnow>Copy now</button>` : ""}</div>
+      <div class="grow"><div class="thead"><b>Phone copies bank SMS</b>${app && app.enabled ? html`<button data-smsnow>Copy now</button>` : ""}</div>
+        <div class="muted">${phoneLine}${app ? html`<div>Change it in Settings → Phone.</div>` : ""}</div></div></div>
     <div class="tstep"><span class="tn">2</span>
-      <div class="grow"><b>SMS become drafts</b>
+      <div class="grow"><div class="thead"><b>SMS become drafts</b>${ro() ? "" : main ? html`<button data-check>Run now</button>` : html`<small class="faint">done by your main device</small>`}</div>
         <div class="muted">${at ? `Every day at ${at}` : "As soon as the SMS file arrives"}${at ? ` · next ${stamp(nextAt(at))}` : ""}${stamp(st.last_sms) ? ` · last ${stamp(st.last_sms)}` : ""}</div>
         ${ro() ? "" : html`<div class="row wrap tset">
           <select data-smsmode aria-label="When SMS become drafts"><option value="" ${at ? "" : raw("selected")}>As soon as they arrive</option><option value="at" ${at ? raw("selected") : ""}>Every day at</option></select>
           <input type="time" data-smstime value="${at || "23:45"}" ${at ? "" : raw("hidden")} aria-label="Time">
-          <button data-savetime hidden>Save</button></div>`}</div>
-      ${ro() ? "" : main ? html`<button data-check>Make drafts now</button>` : html`<small class="faint">done by your main device</small>`}</div>
+          <button data-savetime hidden>Save</button></div>`}</div></div>
     <div class="tstep"><span class="tn">↻</span>
       <div class="grow"><b>Subscriptions from Kronos</b><div class="muted">As soon as Kronos writes them${stamp(st.last_import) ? ` · checked ${stamp(st.last_import)}` : ""}</div></div></div>
   </section>`;
@@ -130,7 +129,8 @@ export function wireTimings(root, after) {
     e.target.disabled = true;
     try {
       const r = await post("/api/inbox/import", {});
-      toast(r.added ? `${r.added} new draft${r.added > 1 ? "s" : ""}` : "Nothing new");
+      const cap = stamp(r.last_capture);
+      toast(r.added ? `${r.added} new draft${r.added > 1 ? "s" : ""}` : `Nothing new${cap ? ` · phone SMS file here is from ${cap}` : ""}`);
     } catch (err) { toast(err.message, true); }
     after();
   });

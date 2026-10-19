@@ -721,6 +721,6 @@ button.link:hover { text-decoration: underline; background: none; }
 .timings .muted { font-size: .85rem; }
 .timings .tset { margin-top: 8px; gap: 8px; }
 .timings .tset select, .timings .tset input { width: auto; }
-.timings .tstep > button, .timings .tstep > small { flex: 0 0 auto; align-self: center; }
+.timings .thead { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; }
+.timings .thead > button, .timings .thead > small { flex: 0 0 auto; }
 .timings .tstep > .grow { flex: 1 1 220px; min-width: 0; }
-@media (max-width: 520px) { .timings .tstep > button { margin-left: 38px; } }

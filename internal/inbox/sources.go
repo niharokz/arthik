@@ -97,6 +97,17 @@ func Phones(dir string) []Phone {
 	return out
 }
 
+// LastCapture is the newest last_run among the phones' SMS files (zero if none).
+func LastCapture(dir string) time.Time {
+	var newest time.Time
+	for _, ph := range Phones(dir) {
+		if t, err := time.Parse(time.RFC3339, ph.LastRun); err == nil && t.After(newest) {
+			newest = t
+		}
+	}
+	return newest
+}
+
 type kronosDraft struct {
 	ID       string       `yaml:"id"`
 	Source   string       `yaml:"source"` // e.g. subscription

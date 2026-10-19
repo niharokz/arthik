@@ -8,6 +8,7 @@ data/
 /arthik
 /bin/
 /dist/
+/patch/
 # editors / OS
 .idea/
 .vscode/

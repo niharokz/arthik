@@ -125,8 +125,8 @@ drafted twice; items older than `ARTHIK_INBOX_MAX_AGE_DAYS` are ignored):
 | Step | When | Run it now |
 |---|---|---|
 | Phone copies bank SMS → `inbox/sms_<device>.md` | daily, time set in the app (Settings → Phone) | *Copy now* (app) |
-| SMS → drafts | *as soon as they arrive*, or *every day at HH:MM* (`inbox_sms_time`, set on the Inbox screen or in Settings) | *Make drafts now* |
-| Kronos subscriptions → drafts | as soon as Kronos writes `inbox/kronos.md` | *Make drafts now* |
+| SMS → drafts | *as soon as they arrive*, or *every day at HH:MM* (`inbox_sms_time`, set on the Inbox screen or in Settings) | *Run now* |
+| Kronos subscriptions → drafts | as soon as Kronos writes `inbox/kronos.md` | *Run now* |
 
 "As soon as" means within seconds of the file changing, re-checked at least every
 `ARTHIK_INBOX_RESCAN_MINUTES` (10) in case a change was missed. A daily SMS import

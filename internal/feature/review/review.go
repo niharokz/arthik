@@ -44,6 +44,7 @@ func list(c *httpx.Ctx) error {
 			"items":    inbox.Views(d, comp, statuses...),
 			"pending":  inbox.Pending(d),
 			"status":   inbox.StatusOf(c.Book.Dir),
+			"main":     inbox.Runs(c.Book.Dir),
 			"phones":   inbox.Phones(c.Book.Dir),
 			"sms_time": d.Settings.InboxSMSTime,
 		}
@@ -64,7 +65,7 @@ func importNow(c *httpx.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return c.OK(map[string]int{"added": added})
+	return c.OK(map[string]any{"added": added, "last_capture": inbox.LastCapture(c.Book.Dir)})
 }
 
 type acceptInput struct {

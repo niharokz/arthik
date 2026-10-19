@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.5 — 2026-10-19
+
+- *When drafts arrive*: step 2 (*SMS become drafts*) now always has its **Run now**
+  button beside it on the main device, like *Copy now* in step 1. It was hidden for
+  the first minute after a restart (the screen only showed it once an import had run).
+
+## 1.3.4 — 2026-10-19
+
+- **Late phone sync no longer costs a day.** With *Every day at HH:MM*, an SMS file the
+  phone wrote before that time but that synced after it (Syncthing on the phone often
+  waits until morning) is now read as soon as it lands, instead of at the next day's
+  run. A capture made after the daily run still waits for it (or *Run now*).
+- *Run now* with nothing new says when the phone's SMS file on this device was
+  written, so a file that hasn't synced yet is easy to spot.
+
 ## 1.3.3 — 2026-10-14
 
 - **Two inbox timings**, shown together in a new *When drafts arrive* card (Inbox
