@@ -2,7 +2,7 @@
 // with Bluecoins' calculator amount, remembered items, splits, labels, status and
 // past/future dates. It also reviews inbox drafts: saving accepts the draft.
 
-import { html, raw, esc, calc, fromPaise, paise, money, todayStr, nowTime, newId, debounce, qs, fmtShort } from "./util.js";
+import { html, raw, calc, fromPaise, paise, money, todayStr, nowTime, newId, debounce, qs, fmtShort } from "./util.js";
 import { S, sheet, toast, confirmSheet, catOptions, accOptions, ro, today, cat, accName, catName } from "./ui.js";
 import { get, post, txWrite } from "./api.js";
 import { haptic } from "./native.js";

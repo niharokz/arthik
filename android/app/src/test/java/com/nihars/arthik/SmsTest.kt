@@ -16,8 +16,8 @@ class SmsTest {
 
     @Test
     fun copiesOnlyBankMoneyMessages() {
-        assertTrue(SmsRules.wanted("AX-HDFCBK", "Spent Rs.2000 On HDFC Bank Card 4275 At GYFTR"))
-        assertTrue(SmsRules.wanted("JD-IDFCFB", "Your A/C XXXXX810353 is credited with INR 400.00"))
+        assertTrue(SmsRules.wanted("AX-HDFCBK", "Spent Rs.2000 On HDFC Bank Card 4111 At GYFTR"))
+        assertTrue(SmsRules.wanted("JD-IDFCFB", "Your A/C XXXXX819001 is credited with INR 400.00"))
         assertFalse(SmsRules.wanted("+919812345678", "Send me Rs 500 please")) // a person
         assertFalse(SmsRules.wanted("AX-HDFCBK", "123456 is your OTP for txn of Rs 500"))
         assertFalse(SmsRules.wanted("AX-SWIGGY", "Your order is on the way"))

@@ -198,15 +198,6 @@ class Bridge(private val a: MainActivity) {
         prefs.smsLookback = days.coerceIn(1, 7)
     }
 
-    /** Name used in inbox/sms_<name>.md (letters, digits, dashes). */
-    @JavascriptInterface
-    fun setSmsDevice(name: String): Boolean {
-        val n = name.trim().lowercase()
-        if (!Regex("[a-z0-9-]{1,24}").matches(n)) return false
-        prefs.smsDevice = n
-        return true
-    }
-
     /** Copies new messages now (result: "sms" event). */
     @JavascriptInterface
     fun smsRunNow() {
@@ -246,10 +237,6 @@ class Bridge(private val a: MainActivity) {
             a.ui { a.notifyDone(r) }
         }
     }
-
-    /** Notice settings and last result as JSON. */
-    @JavascriptInterface
-    fun notifyInfo(): String = notifyJson().toString()
 
     // ---- look ----
 

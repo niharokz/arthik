@@ -60,7 +60,7 @@ func list(c *httpx.Ctx) error {
 func importNow(c *httpx.Ctx) error {
 	added, ok, err := inbox.ImportFor(c.Book.Dir)
 	if !ok {
-		return httpx.Errorf(409, "this device doesn't import the inbox — your main device (nimory) does")
+		return httpx.Errorf(409, "this device doesn't import the inbox — your main device (the server) does")
 	}
 	if err != nil {
 		return err

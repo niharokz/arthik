@@ -26,22 +26,22 @@ func TestParseBankSamples(t *testing.T) {
 		body string
 		want Parsed
 	}{
-		{"Your A/C XXXXX810353 is credited with INR 400.00 on 10/10/26 23:53. Your new balance is INR 10,41,284.21. Team IDFC FIRST Bank",
-			Parsed{Rule: "account-first", Kind: KindIncome, Amount: money.MustParse("400"), Digits: "0353", Date: "2026-10-10", Time: "23:53", Balance: money.MustParse("1041284.21")}},
-		{"INR 20.00 spent on YES BANK Card X3334 @UPI_SANJAY KUMAR ROUT 10-10-2026 09:57:36 pm. Avl Lmt INR 233,870.00. SMS BLKCC 3334 to 9840909000 if not you",
-			Parsed{Rule: "card-spent", Kind: KindExpense, Amount: money.MustParse("20"), Digits: "3334", Merchant: "SANJAY KUMAR ROUT", Date: "2026-10-10", Time: "21:57", Available: money.MustParse("233870")}},
-		{"Spent Rs.2000 On HDFC Bank Card 4275 At GYFTR VIA SMARTBUY On 2026-10-09:20:34:36.Not You? To Block+Reissue Call 18002586161/SMS BLOCK CC 4275 to 7308080808",
-			Parsed{Rule: "card-spent-verb-first", Kind: KindExpense, Amount: money.MustParse("2000"), Digits: "4275", Merchant: "GYFTR VIA SMARTBUY", Date: "2026-10-09", Time: "20:34"}},
-		{"Rs.131.00 spent on your SBI Credit Card ending 6338 at SWIGGYPVTLTDFOOD1 on 09/10/26. Trxn. not done by you? Report at https://sbicard.com/Dispute",
-			Parsed{Rule: "card-spent", Kind: KindExpense, Amount: money.MustParse("131"), Digits: "6338", Merchant: "SWIGGYPVTLTDFOOD1", Date: "2026-10-09"}},
-		{"Payment of Rs 5,000 received towards your SBI Credit Card ending 6338 on 08/10/26",
-			Parsed{Rule: "card-payment", Kind: KindTransferIn, Amount: money.MustParse("5000"), Digits: "6338", Date: "2026-10-08"}},
+		{"Your A/C XXXXX819001 is credited with INR 400.00 on 10/10/26 23:53. Your new balance is INR 1,23,456.78. Team IDFC FIRST Bank",
+			Parsed{Rule: "account-first", Kind: KindIncome, Amount: money.MustParse("400"), Digits: "9001", Date: "2026-10-10", Time: "23:53", Balance: money.MustParse("123456.78")}},
+		{"INR 20.00 spent on YES BANK Card X3222 @UPI_RAVI KUMAR 10-10-2026 09:57:36 pm. Avl Lmt INR 150,000.00. SMS BLKCC 3222 to 9840909000 if not you",
+			Parsed{Rule: "card-spent", Kind: KindExpense, Amount: money.MustParse("20"), Digits: "3222", Merchant: "RAVI KUMAR", Date: "2026-10-10", Time: "21:57", Available: money.MustParse("150000")}},
+		{"Spent Rs.2000 On HDFC Bank Card 4111 At GYFTR VIA SMARTBUY On 2026-10-09:20:34:36.Not You? To Block+Reissue Call 18002586161/SMS BLOCK CC 4111 to 7308080808",
+			Parsed{Rule: "card-spent-verb-first", Kind: KindExpense, Amount: money.MustParse("2000"), Digits: "4111", Merchant: "GYFTR VIA SMARTBUY", Date: "2026-10-09", Time: "20:34"}},
+		{"Rs.131.00 spent on your SBI Credit Card ending 6444 at SWIGGYPVTLTDFOOD1 on 09/10/26. Trxn. not done by you? Report at https://sbicard.com/Dispute",
+			Parsed{Rule: "card-spent", Kind: KindExpense, Amount: money.MustParse("131"), Digits: "6444", Merchant: "SWIGGYPVTLTDFOOD1", Date: "2026-10-09"}},
+		{"Payment of Rs 5,000 received towards your SBI Credit Card ending 6444 on 08/10/26",
+			Parsed{Rule: "card-payment", Kind: KindTransferIn, Amount: money.MustParse("5000"), Digits: "6444", Date: "2026-10-08"}},
 		{"Rs.500.00 debited from A/c XX1234 on 09-10-26 to VPA shop@okaxis. Not you? call",
 			Parsed{Rule: "amount-first", Kind: KindExpense, Amount: money.MustParse("500"), Digits: "1234", Merchant: "shop", Date: "2026-10-09"}},
-		{"A/c XX1234 debited by Rs.500.00 on 09Oct26 trf to SANJAY KUMAR Refno 1234",
-			Parsed{Rule: "account-first", Kind: KindExpense, Amount: money.MustParse("500"), Digits: "1234", Merchant: "SANJAY KUMAR", Date: "2026-10-09"}},
-		{"Dear Customer, Rs 250.00 has been refunded to your card ending 4275 by AMAZON on 11-10-2026",
-			Parsed{Rule: "generic", Generic: true, Kind: KindIncome, Amount: money.MustParse("250"), Digits: "4275", Merchant: "AMAZON", Date: "2026-10-11"}},
+		{"A/c XX1234 debited by Rs.500.00 on 09Oct26 trf to RAVI SHANKAR Refno 1234",
+			Parsed{Rule: "account-first", Kind: KindExpense, Amount: money.MustParse("500"), Digits: "1234", Merchant: "RAVI SHANKAR", Date: "2026-10-09"}},
+		{"Dear Customer, Rs 250.00 has been refunded to your card ending 4111 by AMAZON on 11-10-2026",
+			Parsed{Rule: "generic", Generic: true, Kind: KindIncome, Amount: money.MustParse("250"), Digits: "4111", Merchant: "AMAZON", Date: "2026-10-11"}},
 	}
 	for _, c := range cases {
 		got, ok := p.Parse(c.body)
@@ -56,9 +56,9 @@ func TestParseIgnoresNonTransactions(t *testing.T) {
 	for _, body := range []string{
 		"123456 is your OTP for txn of Rs 500 at AMAZON. Do not share.",
 		"Get a pre-approved loan of Rs 5,00,000 today. Apply now",
-		"Rs 1,200 will be debited from your A/c XX0353 on 15-10-26 for your SIP",
+		"Rs 1,200 will be debited from your A/c XX9001 on 15-10-26 for your SIP",
 		"Your HDFC card bill of Rs 18,450 is due on 13/10/26. Minimum amount due Rs 920",
-		"Txn of Rs 500 on card 4275 declined due to insufficient balance",
+		"Txn of Rs 500 on card 4111 declined due to insufficient balance",
 		"Hello! Your parcel is out for delivery.",
 	} {
 		if got, ok := p.Parse(body); ok {
@@ -80,7 +80,7 @@ rules:
 	if !ok || got.Rule != "my-bank" || got.Merchant != "TEASHOP" || got.Amount != money.MustParse("99") {
 		t.Fatalf("user rule: %+v %v", got, ok)
 	}
-	got, _ = p.Parse("Rs.131.00 spent on your SBI Credit Card ending 6338 at SWIGGY on 09/10/26.")
+	got, _ = p.Parse("Rs.131.00 spent on your SBI Credit Card ending 6444 at SWIGGY on 09/10/26.")
 	if got.Rule == "card-spent" {
 		t.Fatal("disabled rule still used")
 	}
@@ -94,12 +94,12 @@ rules:
 
 func TestKeyAndPretty(t *testing.T) {
 	for in, want := range map[string]string{
-		"UPI_SANJAY KUMAR ROUT": "upi sanjay kumar rout",
-		"Sanjay  Kumar Rout":    "sanjay kumar rout",
-		"SWIGGYPVTLTDFOOD1":     "swiggypvtltdfood",
-		"GYFTR VIA SMARTBUY":    "gyftr via smartbuy",
-		"AMAZON 12345":          "amazon",
-		"":                      "",
+		"UPI_RAVI KUMAR":     "upi ravi kumar",
+		"Ravi  Kumar":        "ravi kumar",
+		"SWIGGYPVTLTDFOOD1":  "swiggypvtltdfood",
+		"GYFTR VIA SMARTBUY": "gyftr via smartbuy",
+		"AMAZON 12345":       "amazon",
+		"":                   "",
 	} {
 		if got := Key(in); got != want {
 			t.Errorf("Key(%q) = %q, want %q", in, got, want)
@@ -131,7 +131,7 @@ func TestReadsFileWrittenByPhone(t *testing.T) {
 		t.Fatalf("items %+v errs %v", items, errs)
 	}
 	it := items[0]
-	if it.ID != "sms-42826d02ee9f0b6f" || it.Amount != money.MustParse("2000") || it.Digits != "4275" || !strings.Contains(it.Raw, `"GYFTR"`) || !strings.Contains(it.Raw, "\n") {
+	if it.ID != "sms-42826d02ee9f0b6f" || it.Amount != money.MustParse("2000") || it.Digits != "4111" || !strings.Contains(it.Raw, `"GYFTR"`) || !strings.Contains(it.Raw, "\n") {
 		t.Fatalf("item %+v", it)
 	}
 }

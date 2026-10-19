@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-// Modes: "server" is the web app on nimory; "local" is the engine inside the phone app.
+// Modes: "server" is the web app on the home server; "local" is the engine inside the phone app.
 const (
 	ModeServer = "server"
 	ModeLocal  = "local"

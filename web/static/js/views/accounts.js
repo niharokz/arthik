@@ -80,7 +80,7 @@ async function detail(root, ctx, id) {
   ctx.actionsEl.querySelector("[data-rec]")?.addEventListener("click", () => reconcile(a, tx.items.filter((t) => !t.scheduled), ctx));
 }
 
-// "4275, 0353" → ["4275", "0353"]
+// "4111, 9001" → ["4111", "9001"]
 const digits = (s) => (s || "").split(/[\s,]+/).filter(Boolean);
 
 function accountForm(a, ctx) {
@@ -104,7 +104,7 @@ function accountForm(a, ctx) {
       <label class="f"><span>Credit limit</span><input name="credit_limit" inputmode="decimal" value="${a.credit_limit || ""}"></label>
       <label class="f"><span>Statement day / due day</span><span class="row"><input name="statement_day" inputmode="numeric" placeholder="e.g. 18" value="${a.statement_day || ""}"><input name="due_day" inputmode="numeric" placeholder="e.g. 7" value="${a.due_day || ""}"></span></label>
     </div>` : ""}
-    <label class="f"><span>SMS digits (e.g. 4275, 0353)</span><input name="sms_digits" inputmode="numeric" placeholder="last 4 digits banks print" value="${(a.sms_digits || []).join(", ")}"></label>
+    <label class="f"><span>SMS digits (e.g. 4111, 9001)</span><input name="sms_digits" inputmode="numeric" placeholder="last 4 digits banks print" value="${(a.sms_digits || []).join(", ")}"></label>
     ${colorField("color", a.color)}
     <label class="f"><span>Notes</span><textarea name="notes">${a.notes || ""}</textarea></label>
     <label class="check"><input type="checkbox" name="hidden" ${a.hidden ? raw("checked") : ""}> Hide from the overview</label>

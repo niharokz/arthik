@@ -231,8 +231,8 @@ func smsItem(m smsMessage, p *Parser, loc *time.Location) (Item, bool) {
 	return it, true
 }
 
-// Key normalises a merchant or name for learning: "UPI_SANJAY KUMAR ROUT" and
-// "Sanjay Kumar Rout" are one key; "SWIGGYPVTLTDFOOD1" loses the trailing digits.
+// Key normalises a merchant or name for learning: "RAVI KUMAR" and "Ravi  Kumar"
+// are one key; "SWIGGYPVTLTDFOOD1" loses the trailing digits.
 func Key(s string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(s) {

@@ -7,7 +7,7 @@ import (
 )
 
 // SMS digits link an account to the last digits banks print in their messages
-// ("Card XX4275", "A/C XXXXX810353" → 4275, 0353).
+// ("Card XX4111", "A/C XXXXX819001" → 4111, 9001).
 
 var digitsRe = regexp.MustCompile(`^\d{3,6}$`)
 
@@ -45,7 +45,7 @@ func (d *Data) DigitsFree(digits []string, self string) error {
 }
 
 // AccountByDigits returns the account whose SMS digits match the end of digits
-// (an SMS may print more digits than you stored, e.g. 810353 vs 0353).
+// (an SMS may print more digits than you stored, e.g. 819001 vs 9001).
 func (d *Data) AccountByDigits(digits string) (string, bool) {
 	if digits == "" {
 		return "", false

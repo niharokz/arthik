@@ -19,7 +19,7 @@ function smsBlock(c) {
   const m = c.sms || {};
   const folder = c.mode === "folder" && c.folder_ok;
   return html`<div class="psec"><b>📩 Bank SMS → Inbox</b>
-    <div class="muted" style="font-size:.85rem">Every night new bank and card SMS are copied to <code>inbox/sms_${m.device || "phone"}.md</code> in your folder; Arthik on nimory turns them into drafts to review. Only messages after the last run are read — never older ones.</div></div>
+    <div class="muted" style="font-size:.85rem">Every night new bank and card SMS are copied to <code>inbox/sms_${m.device || "phone"}.md</code> in your folder; Arthik on your server turns them into drafts to review. Only messages after the last run are read — never older ones.</div></div>
     <div class="prow">
       <div class="grow"><b>SMS permission</b>${m.restricted_settings && !m.permission ? html`<div class="muted">If Android blocks it: App info → ⋮ → <b>Allow restricted settings</b>, then allow SMS.</div>` : ""}</div>
       ${m.permission ? html`<span class="badge">✓ Allowed</span>` : html`<button class="primary" data-smsperm>Allow</button>`}
@@ -178,7 +178,7 @@ export function phoneCard() {
       ${c.files_access ? html`<span class="badge">✓ Allowed</span>` : html`<button class="primary" data-access>Allow</button>`}
     </div>
     <label class="prow">
-      <div class="grow"><b>This phone is the main device</b><div class="muted">Leave off when nimory runs Arthik: nimory then writes balances, merges sync conflicts and imports the inbox (SMS and Kronos drafts). Turn on only if the phone is used without the server.</div></div>
+      <div class="grow"><b>This phone is the main device</b><div class="muted">Leave off when your server runs Arthik: it then writes balances, merges sync conflicts and imports the inbox (SMS and Kronos drafts). Turn on only if the phone is used without the server.</div></div>
       <input type="checkbox" class="switch" data-primary ${c.primary ? raw("checked") : ""}>
     </label>
     <div class="prow">
@@ -231,7 +231,7 @@ export function wirePhoneCard(root, ctx) {
   $("[data-primary]")?.addEventListener("change", async (e) => {
     const on = e.target.checked;
     const ok = await confirmSheet(on ? "Make this phone the main device?" : "Stop being the main device?",
-      on ? "Only one device should be main. If nimory also runs Arthik on this folder, keep this off." : "nimory (or another main device) will write balances and import the inbox.",
+      on ? "Only one device should be main. If your server also runs Arthik on this folder, keep this off." : "Your server (or another main device) will write balances and import the inbox.",
       "Restart engine", false);
     if (!ok) { e.target.checked = !on; return; }
     call("setPrimary", on);

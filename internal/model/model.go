@@ -135,7 +135,7 @@ type Account struct {
 	Hidden          bool         `yaml:"hidden,omitempty" json:"hidden,omitempty"`
 	Archived        bool         `yaml:"archived,omitempty" json:"archived,omitempty"`
 	ExcludeNetWorth bool         `yaml:"exclude_net_worth,omitempty" json:"exclude_net_worth,omitempty"`
-	SMSDigits       []string     `yaml:"sms_digits,omitempty,flow" json:"sms_digits,omitempty"` // last digits banks use in SMS, e.g. ['0353']
+	SMSDigits       []string     `yaml:"sms_digits,omitempty,flow" json:"sms_digits,omitempty"` // last digits banks use in SMS, e.g. ['9001']
 
 	// computed (rewritten on every change)
 	Balance   money.Amount `yaml:"balance" json:"balance"`                     // as of today

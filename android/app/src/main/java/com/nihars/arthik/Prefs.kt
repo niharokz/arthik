@@ -16,7 +16,7 @@ class Prefs(ctx: Context) {
         get() = sp.getString("folder", "") ?: ""
         set(v) = sp.edit().putString("folder", v).apply()
 
-    /** This phone writes computed files and imports the inbox (off when nimory runs Arthik). */
+    /** This phone writes computed files and imports the inbox (off when the server runs Arthik). */
     var primary: Boolean
         get() = sp.getBoolean("primary", false)
         set(v) = sp.edit().putBoolean("primary", v).apply()

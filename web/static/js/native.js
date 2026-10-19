@@ -29,13 +29,6 @@ window.arthikNative = { onEvent: (e) => handlers.forEach((fn) => fn(typeof e ===
 /** Subscribes to native events; returns an unsubscribe function. */
 export function onNative(fn) { handlers.add(fn); return () => handlers.delete(fn); }
 
-/** Waits for one native event of the given type. */
-export function nextEvent(type) {
-  return new Promise((resolve) => {
-    const off = onNative((e) => { if (e.type === type) { off(); resolve(e); } });
-  });
-}
-
 /** Light vibration feedback (confirm | error | tick). */
 export const haptic = (kind = "tick") => call("haptic", kind);
 

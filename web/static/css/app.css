@@ -98,7 +98,6 @@ small, .muted { color: var(--muted); }
 .pos { color: var(--income); }
 .neg { color: var(--expense); }
 .hide-amounts .amt { filter: blur(6px); }
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 [hidden] { display: none !important; }
 
 /* ---- shell ---------------------------------------------------------- */
@@ -313,7 +312,6 @@ dialog.sheet::backdrop { background: rgba(10, 20, 18, 0.45); }
 .chart .exp { fill: var(--expense-mark); }
 .chart .one { fill: var(--teal); }
 .chart .hit { fill: transparent; cursor: pointer; }
-.chart .hit:hover + .hl, .chart .hl { pointer-events: none; }
 .chart .cross { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 3 3; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
@@ -693,9 +691,6 @@ button.primary:hover { box-shadow: 0 4px 14px color-mix(in srgb, var(--teal) 35%
 /* the + button tucks away while you scroll down a list and returns when you scroll up */
 .fab { transition: transform .28s var(--ease), opacity .2s, background-color .15s; }
 .fab-away .fab { transform: translateY(calc(100% + 24px)) scale(.8); opacity: 0; pointer-events: none; }
-
-/* numbers settle in when the period changes */
-.amt.ticking { color: inherit; }
 
 /* toggles: a little spring */
 input.switch::after { transition: transform .28s cubic-bezier(.3, 1.5, .5, 1); }

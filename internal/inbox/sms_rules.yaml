@@ -44,19 +44,19 @@ merchant_strip:
   - '[\s.,:;-]+$'
 
 rules:
-  # INR 20.00 spent on YES BANK Card X3334 @UPI_SANJAY KUMAR ROUT 10-10-2026 09:57:36 pm. Avl Lmt INR 233,870.00
-  # Rs.131.00 spent on your SBI Credit Card ending 6338 at SWIGGYPVTLTDFOOD1 on 09/10/26.
+  # INR 20.00 spent on YES BANK Card X3222 @UPI_RAVI KUMAR 10-10-2026 09:57:36 pm. Avl Lmt INR 150,000.00
+  # Rs.131.00 spent on your SBI Credit Card ending 6444 at SWIGGYPVTLTDFOOD1 on 09/10/26.
   - name: card-spent
     type: expense
     match: '(?i){cur}\s*(?P<amount>{amount})\s+(?:was\s+|has\s+been\s+)?spent\s+(?:on|using|via)\s+(?:your\s+)?.*?card\s+(?:no\.?\s+)?(?:ending\s+(?:with\s+|in\s+)?)?[X*]*(?P<digits>\d{4})\s+(?:@\s*|at\s+|on\s+)(?P<merchant>.+?)\s+(?:on\s+)?(?P<date>{date})(?:[\s:]+(?P<time>{time}))?(?:.*?(?:avl|available)\.?\s+(?:lmt|limit|bal(?:ance)?)\.?[:\s]*{cur}?\s*(?P<available>{amount}))?'
 
-  # Spent Rs.2000 On HDFC Bank Card 4275 At GYFTR VIA SMARTBUY On 2026-10-09:20:34:36
+  # Spent Rs.2000 On HDFC Bank Card 4111 At GYFTR VIA SMARTBUY On 2026-10-09:20:34:36
   - name: card-spent-verb-first
     type: expense
     match: '(?i)(?:spent|txn of|transaction of|purchase of)\s+{cur}\s*(?P<amount>{amount})\s+(?:on|using)\s+.*?card\s+(?:ending\s+(?:with\s+)?)?[X*]*(?P<digits>\d{4})\s+(?:at|@)\s+(?P<merchant>.+?)\s+on\s+(?P<date>{date})(?:[\s:]+(?P<time>{time}))?'
 
-  # Payment of Rs 5,000 received towards your SBI Credit Card ending 6338
-  # Payment of Rs.5000 has been credited to your HDFC Bank Credit Card XX4275
+  # Payment of Rs 5,000 received towards your SBI Credit Card ending 6444
+  # Payment of Rs.5000 has been credited to your HDFC Bank Credit Card XX4111
   - name: card-payment
     type: transfer_in
     match: '(?i)payment\s+of\s+{cur}\s*(?P<amount>{amount})\s+(?:has\s+been\s+|is\s+|was\s+)?(?:received|credited|successful)\s+(?:towards|to|on|against|for)\s+(?:your\s+)?.*?card\s+(?:no\.?\s+)?(?:ending\s+(?:with\s+|in\s+)?)?[X*]*(?P<digits>\d{4})(?:.*?on\s+(?P<date>{date}))?'
@@ -64,14 +64,14 @@ rules:
     type: transfer_in
     match: '(?i)received\s+(?:a\s+|your\s+)?payment\s+of\s+{cur}\s*(?P<amount>{amount}).*?card\s+(?:no\.?\s+)?(?:ending\s+(?:with\s+|in\s+)?)?[X*]*(?P<digits>\d{4})(?:.*?on\s+(?P<date>{date}))?'
 
-  # Your A/C XXXXX810353 is credited with INR 400.00 on 10/10/26 23:53. Your new balance is INR 10,41,284.21
-  # A/c XX1234 debited by Rs.500.00 on 09Oct26 trf to SANJAY KUMAR Refno 1234
+  # Your A/C XXXXX819001 is credited with INR 400.00 on 10/10/26 23:53. Your new balance is INR 1,23,456.78
+  # A/c XX1234 debited by Rs.500.00 on 09Oct26 trf to RAVI SHANKAR Refno 1234
   - name: account-first
     type: auto
     match: '(?i)a/?c\.?\s*(?:no\.?\s*)?[X*]*\d*?(?P<digits>\d{3,4})\s+(?:is\s+|has\s+been\s+|was\s+)?(?P<dir>credited|debited)\s+(?:with|by|for)\s+{cur}\s*(?P<amount>{amount})(?:\s+on\s+(?P<date>{date})(?:\s+(?P<time>{time}))?)?(?:.*?(?:trf\s+to|transfer\s+to|transferred\s+to|to\s+vpa|from\s+vpa|by|from|towards)\s+(?P<merchant>[A-Za-z][A-Za-z0-9 ._@&-]{2,40}?)(?:\s+ref|\s+rrn|\s+on\b|\.|$))?(?:.*?bal(?:ance)?(?:\s+is)?[:\s]*{cur}\s*(?P<balance>{amount}))?'
 
   # Rs.500.00 debited from A/c XX1234 on 09-10-26 to VPA shop@okaxis
-  # INR 12,000.00 credited to your A/c XX0353 on 01/10/26 by SALARY ACME
+  # INR 12,000.00 credited to your A/c XX9001 on 01/10/26 by SALARY ACME
   - name: amount-first
     type: auto
     match: '(?i){cur}\s*(?P<amount>{amount})\s+(?:has\s+been\s+|is\s+|was\s+)?(?P<dir>credited|debited|deposited|withdrawn)\s+(?:to|from|in|into)\s+(?:your\s+)?(?:a/?c|account|acct)\.?\s*(?:no\.?\s*)?[X*]*\d*?(?P<digits>\d{3,4})\b(?:.*?on\s+(?P<date>{date})(?:\s+(?P<time>{time}))?)?(?:.*?(?:to\s+vpa|from\s+vpa|to|by|from|towards)\s+(?P<merchant>[A-Za-z][A-Za-z0-9 ._@&-]{2,40}?)(?:\s+ref|\s+rrn|\s+on\b|\.|$))?(?:.*?bal(?:ance)?(?:\s+is)?[:\s]*{cur}\s*(?P<balance>{amount}))?'

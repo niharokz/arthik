@@ -4,11 +4,12 @@
 !.env.example
 data/
 *.md.bak
-# build output
+# build output and patch bundles
+/patch/
+*.zip
 /arthik
 /bin/
 /dist/
-/patch/
 # editors / OS
 .idea/
 .vscode/

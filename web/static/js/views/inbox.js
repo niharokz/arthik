@@ -18,7 +18,7 @@ const STATUS = { accepted: "Accepted", matched: "Same as existing", rejected: "R
 const when = (x) => `${fmtShort(x.date)}${x.time ? " " + x.time : ""} · ${relDay(x.date, today())}`;
 const source = (x) => (x.source === "sms" ? "SMS" : x.source === "kronos" ? "Kronos" : x.source);
 
-// The account part of a row ("HDFC Card", "Savings → Card", "…4275?").
+// The account part of a row ("HDFC Card", "Savings → Card", "…4111?").
 function where(x) {
   const name = (id) => (id ? accName(id) : x.digits ? `…${x.digits}?` : "account?");
   return x.type === "transfer" ? `${name(x.account)} → ${name(x.to_account)}` : name(x.account);

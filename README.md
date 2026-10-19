@@ -135,7 +135,7 @@ missed while the server was down runs once when it is back. Review drafts on the
 - **Accept** creates the transaction (id `d-<draft>`, so accepting on the phone and
   on nimory still makes one) and remembers the merchant in `inbox/learned.md`.
 - **Edit** opens the normal form (with the original SMS above it); saving accepts.
-  Tick *Remember …4275* and the account keeps those SMS digits.
+  Tick *Remember …4111* and the account keeps those SMS digits.
 - **Same — don't add** links the draft to a transaction you already entered.
 - **Reject** sets it aside (*Done* tab → *Restore*). **Not a transfer** splits a pair.
 
@@ -146,7 +146,7 @@ override patterns for your banks in `<FINANCE_PATH>/inbox/sms_rules.md` — same
 tried first, `disable: [name]` switches a built-in off. Test one with:
 
 ```sh
-docker exec arthik arthik parse-sms "Spent Rs.2000 On HDFC Bank Card 4275 At GYFTR On 2026-10-09:20:34:36"
+docker exec arthik arthik parse-sms "Spent Rs.2000 On HDFC Bank Card 4111 At GYFTR On 2026-10-09:20:34:36"
 ```
 
 ## Command line

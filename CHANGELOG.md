@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.6 — 2026-10-20
+
+- Cleanup before publishing: unused JS helpers, CSS rules and two unused phone-bridge
+  calls removed; real card/account digits, balances and names in tests and sample SMS
+  replaced with made-up ones; user-facing text says "your server" instead of a host name.
+- Server image builds faster: `android/`, `patch/` and zips are no longer sent to Docker
+  (the build context was ~480 MB). `patch/` and `*.zip` are gitignored.
+
 ## 1.3.5 — 2026-10-19
 
 - *When drafts arrive*: step 2 (*SMS become drafts*) now always has its **Run now**

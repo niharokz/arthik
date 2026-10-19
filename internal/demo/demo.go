@@ -88,14 +88,14 @@ func amt(r int64) money.Amount { return money.FromRupees(r) }
 func accounts(start dates.Date) []model.Account {
 	od := start.AddDays(-1).String()
 	return []model.Account{
-		{ID: "savings", Name: "Savings Bank", Type: "bank", OpeningBalance: amt(185000), OpeningDate: od, Color: "#3a807a", SMSDigits: []string{"0353"}},
+		{ID: "savings", Name: "Savings Bank", Type: "bank", OpeningBalance: amt(185000), OpeningDate: od, Color: "#3a807a", SMSDigits: []string{"9001"}},
 		{ID: "salary", Name: "Salary Account", Type: "bank", OpeningBalance: amt(42000), OpeningDate: od, Color: "#4f6fa8", SMSDigits: []string{"1122"}},
 		{ID: "cash", Name: "Cash", Type: "cash", OpeningBalance: amt(6500), OpeningDate: od},
 		{ID: "wallet", Name: "UPI Wallet", Type: "wallet", OpeningBalance: amt(1200), OpeningDate: od},
 		{ID: "mutual-funds", Name: "Mutual Funds", Type: "investment", OpeningBalance: amt(320000), OpeningDate: od, Color: "#7a5ea8"},
 		{ID: "fixed-deposit", Name: "Fixed Deposit", Type: "deposit", OpeningBalance: amt(200000), OpeningDate: od},
-		{ID: "rewards-card", Name: "Rewards Card", Type: "credit_card", OpeningBalance: amt(-18450), OpeningDate: od, CreditLimit: amt(250000), StatementDay: 18, DueDay: 7, Color: "#b4553f", SMSDigits: []string{"4275"}},
-		{ID: "travel-card", Name: "Travel Card", Type: "credit_card", OpeningBalance: amt(-4200), OpeningDate: od, CreditLimit: amt(150000), StatementDay: 2, DueDay: 22, SMSDigits: []string{"3334"}},
+		{ID: "rewards-card", Name: "Rewards Card", Type: "credit_card", OpeningBalance: amt(-18450), OpeningDate: od, CreditLimit: amt(250000), StatementDay: 18, DueDay: 7, Color: "#b4553f", SMSDigits: []string{"4111"}},
+		{ID: "travel-card", Name: "Travel Card", Type: "credit_card", OpeningBalance: amt(-4200), OpeningDate: od, CreditLimit: amt(150000), StatementDay: 2, DueDay: 22, SMSDigits: []string{"3222"}},
 		{ID: "car-loan", Name: "Car Loan", Type: "loan", OpeningBalance: amt(-385000), OpeningDate: od},
 	}
 }
@@ -208,11 +208,11 @@ func inboxDrafts(d *book.Data, ch *book.Change, today dates.Date) {
 		it.Kind, it.Amount, it.Digits, it.Merchant = kind, amt(amount), digits, merchant
 		items = append(items, it)
 	}
-	add(sms("1", day(0), "13:42", "Rs.486.00 spent on your Rewards Card ending 4275 at SWIGGY on "+today.Format("02/01/06")+"."), inbox.KindExpense, 486, "4275", "SWIGGY")
-	add(sms("2", day(0), "07:05", "INR 60.00 debited from A/c XX0353 to VPA ramesh kumar. UPI Ref 4121"), inbox.KindExpense, 60, "0353", "RAMESH KUMAR")
-	add(sms("3", day(1), "19:20", "INR 1,249.00 spent on Travel Card X3334 @DECATHLON SPORTS "+today.AddDays(-1).Format("02-01-2006")+" 07:20:11 pm."), inbox.KindExpense, 1249, "3334", "DECATHLON SPORTS")
-	add(sms("4", day(1), "10:02", "Rs 18,450.00 debited from A/c XX0353 towards card payment."), inbox.KindExpense, 18450, "0353", "")
-	add(sms("5", day(1), "10:03", "Payment of Rs 18,450.00 received towards your Rewards Card ending 4275."), inbox.KindTransferIn, 18450, "4275", "")
+	add(sms("1", day(0), "13:42", "Rs.486.00 spent on your Rewards Card ending 4111 at SWIGGY on "+today.Format("02/01/06")+"."), inbox.KindExpense, 486, "4111", "SWIGGY")
+	add(sms("2", day(0), "07:05", "INR 60.00 debited from A/c XX9001 to VPA ramesh kumar. UPI Ref 4121"), inbox.KindExpense, 60, "9001", "RAMESH KUMAR")
+	add(sms("3", day(1), "19:20", "INR 1,249.00 spent on Travel Card X3222 @DECATHLON SPORTS "+today.AddDays(-1).Format("02-01-2006")+" 07:20:11 pm."), inbox.KindExpense, 1249, "3222", "DECATHLON SPORTS")
+	add(sms("4", day(1), "10:02", "Rs 18,450.00 debited from A/c XX9001 towards card payment."), inbox.KindExpense, 18450, "9001", "")
+	add(sms("5", day(1), "10:03", "Payment of Rs 18,450.00 received towards your Rewards Card ending 4111."), inbox.KindTransferIn, 18450, "4111", "")
 	add(sms("6", day(2), "16:47", "INR 2,000.00 spent on card 9911 at GYFTR VIA SMARTBUY on "+today.AddDays(-2).Format("2006-01-02")+"."), inbox.KindExpense, 2000, "9911", "GYFTR VIA SMARTBUY")
 	items = append(items, inbox.Item{ID: "kronos-sub-demo-internet", Source: inbox.SourceKronos, Date: day(0), Kind: inbox.KindExpense, Amount: amt(799),
 		Title: "Fibre internet", Merchant: "Fibre internet", AccountHint: "Rewards Card", CategoryHint: "bills/internet", Notes: "Subscription · monthly", Rule: "subscription"})

@@ -36,12 +36,12 @@ show the same books.
 - Docker on the machine that builds the APK (nimory is fine). No Android Studio.
 - No Google account, subscription or Play Store. You install the APK yourself.
 - A phone with Android 8 or newer.
-- nimory running Arthik **1.3.1** (same version as the app). Redeploy the server first.
+- The server running the same Arthik version as the app. Redeploy the server first.
 
 ## Build the APK
 
 ```sh
-cd /home/datar/docker/arthik          # the repo
+cd ~/arthik                           # the repo
 cp android/.env.example android/.env  # set ARTHIK_KEYSTORE_PASSWORD
 ./android/build.sh keystore           # once: creates ~/.arthik-keys/arthik.jks
 ./android/build.sh                    # → android/dist/arthik-<version>.apk

@@ -1,7 +1,7 @@
 // Shared UI pieces: the app store, lookups, toasts, sheets (dialogs), confirm and
 // the period switcher used by categories, budgets and reports.
 
-import { html, raw, esc, todayStr } from "./util.js";
+import { html, raw, todayStr } from "./util.js";
 import { get } from "./api.js";
 import { syncBars, haptic, applyAccent } from "./native.js";
 
@@ -38,11 +38,8 @@ export function catName(id, full = false) {
   return c.name;
 }
 export const catIcon = (id) => { const c = cat(id); return c?.icon || (c?.parent ? cat(c.parent)?.icon : "") || "🏷️"; };
-export const accIcon = (id) => acc(id)?.icon || "🏦";
 export const labelName = (id) => label(id)?.name || id;
-export const topCats = (kind) => (S.state.categories || []).filter((c) => !c.parent && (!kind || c.kind === kind || (kind !== "both" && c.kind === "both")));
 export const kids = (id) => (S.state.categories || []).filter((c) => c.parent === id);
-export const activeAccounts = () => (S.state.accounts || []).filter((a) => !a.archived);
 
 /** <option>s of categories grouped parent → children, for a transaction kind. */
 export function catOptions(kind, selected) {
@@ -320,6 +317,3 @@ export function closeTopSheet() {
   open._close ? open._close() : open.close();
   return true;
 }
-export const errorBox = (e) => html`<div class="card"><p class="neg">${e.message || e}</p></div>`;
-
-export { esc };

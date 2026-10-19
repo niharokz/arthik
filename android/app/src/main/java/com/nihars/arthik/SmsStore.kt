@@ -5,7 +5,7 @@ import java.time.LocalDate
 
 /**
  * inbox/sms_<device>.md in the finance folder. Only this phone writes it; Arthik on
- * nimory reads it and turns bank messages into drafts. One message per line, so the
+ * the server reads it and turns bank messages into drafts. One message per line, so the
  * file stays easy to read and to append to:
  *
  *   - {id: "…", from: "AX-HDFCBK", at: "2026-10-09T20:34:40+05:30", body: "…"}

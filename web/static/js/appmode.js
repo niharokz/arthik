@@ -44,7 +44,7 @@ function welcome(root, c) {
     <button class="choice card" data-demo>
       <span class="ic">👀</span><span><b>Explore the demo</b><br><small>Six months of made-up data, read-only. Switch to your own folder any time in Settings.</small></span></button>
     <button class="choice card" data-pick>
-      <span class="ic">📁</span><span><b>Use my finance folder</b><br><small>Pick the folder Syncthing keeps in sync with nimory (…/notes/data/finance). Arthik reads and writes it directly.</small></span></button>
+      <span class="ic">📁</span><span><b>Use my finance folder</b><br><small>Pick the folder Syncthing keeps in sync with your server. Arthik reads and writes it directly.</small></span></button>
     <p class="faint" style="text-align:center;font-size:.8rem">Arthik ${c.version || ""}</p>
   </div></div>`);
   root.querySelector("[data-demo]").addEventListener("click", () => call("useDemo"));

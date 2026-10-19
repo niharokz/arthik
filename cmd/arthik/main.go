@@ -40,7 +40,7 @@ import (
 )
 
 // version is set at build time: -ldflags "-X main.version=1.0.0".
-var version = "1.3.5"
+var version = "1.3.6"
 
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime)

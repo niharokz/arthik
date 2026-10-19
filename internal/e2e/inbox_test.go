@@ -44,7 +44,7 @@ func drafts(b *book.Book) map[string]model.Draft {
 func TestInboxAcrossDevices(t *testing.T) {
 	m, main, phone := setup(t)
 	err := main.Mutate(func(d *book.Data, ch *book.Change) error {
-		d.Accounts = append(d.Accounts, model.Account{ID: "card", Name: "HDFC Regalia Gold CC", Type: "credit_card", OpeningBalance: money.FromRupees(-5000), SMSDigits: []string{"4275"}})
+		d.Accounts = append(d.Accounts, model.Account{ID: "card", Name: "HDFC Regalia Gold CC", Type: "credit_card", OpeningBalance: money.FromRupees(-5000), SMSDigits: []string{"4111"}})
 		d.Categories = append(d.Categories, model.Category{ID: "utility", Name: "Utilities", Kind: model.KindExpense})
 		ch.Accounts, ch.Categories = true, true
 		return nil
@@ -58,7 +58,7 @@ func TestInboxAcrossDevices(t *testing.T) {
 
 	writeFile(t, m.dirs[1], "inbox/sms_phone.md", `device: phone
 messages:
-  - {id: "1111111111111111", from: "AX-HDFCBK", at: "2026-10-05T20:34:40Z", body: "Spent Rs.2000 On HDFC Bank Card 4275 At GYFTR VIA SMARTBUY On 2026-10-05:20:34:36.Not You? Call"}
+  - {id: "1111111111111111", from: "AX-HDFCBK", at: "2026-10-05T20:34:40Z", body: "Spent Rs.2000 On HDFC Bank Card 4111 At GYFTR VIA SMARTBUY On 2026-10-05:20:34:36.Not You? Call"}
   - {id: "2222222222222222", from: "AX-HDFCBK", at: "2026-10-05T21:00:00Z", body: "Your OTP is 123456 for txn of Rs 99"}
 `)
 	settle(t, m, main, phone)
@@ -133,7 +133,7 @@ drafts:
 	// The next GYFTR message fills itself in from what was learned.
 	writeFile(t, m.dirs[1], "inbox/sms_phone.md", `device: phone
 messages:
-  - {id: "3333333333333333", from: "AX-HDFCBK", at: "2026-10-06T10:00:00Z", body: "Spent Rs.500 On HDFC Bank Card 4275 At GYFTR VIA SMARTBUY On 2026-10-06:10:00:00."}
+  - {id: "3333333333333333", from: "AX-HDFCBK", at: "2026-10-06T10:00:00Z", body: "Spent Rs.500 On HDFC Bank Card 4111 At GYFTR VIA SMARTBUY On 2026-10-06:10:00:00."}
 `)
 	settle(t, m, main, phone)
 	mainRun.Tick(ctx)

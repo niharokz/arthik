@@ -32,8 +32,8 @@ func newBook(t *testing.T) *book.Book {
 	b.Today = func() dates.Date { return dates.MustParse(today) }
 	mutate(t, b, func(d *book.Data, ch *book.Change) error {
 		d.Accounts = []model.Account{
-			{ID: "idfc", Name: "IDFC Select Savings", Type: "bank", OpeningBalance: money.FromRupees(10000), SMSDigits: []string{"0353"}},
-			{ID: "hdfc", Name: "HDFC Regalia Gold CC", Type: "credit_card", OpeningBalance: money.FromRupees(-1000), CreditLimit: money.FromRupees(50000), SMSDigits: []string{"4275"}},
+			{ID: "idfc", Name: "IDFC Select Savings", Type: "bank", OpeningBalance: money.FromRupees(10000), SMSDigits: []string{"9001"}},
+			{ID: "hdfc", Name: "HDFC Regalia Gold CC", Type: "credit_card", OpeningBalance: money.FromRupees(-1000), CreditLimit: money.FromRupees(50000), SMSDigits: []string{"4111"}},
 			{ID: "cash", Name: "Cash", Type: "cash"},
 		}
 		d.Categories = []model.Category{
@@ -99,16 +99,16 @@ func TestCategoryPriority(t *testing.T) {
 		return nil
 	})
 	ingest(t, b,
-		spend("a", "2026-10-09", 2000, "4275", "GYFTR VIA SMARTBUY"),
-		spend("b", "2026-10-09", 131, "6338", "SWIGGYPVTLTDFOOD1"),
+		spend("a", "2026-10-09", 2000, "4111", "GYFTR VIA SMARTBUY"),
+		spend("b", "2026-10-09", 131, "6444", "SWIGGYPVTLTDFOOD1"),
 		Item{ID: "c", Source: SourceKronos, Date: today, Kind: KindExpense, Amount: money.MustParse("800"), Title: "Elcty (Bangalore)", Merchant: "Elcty (Bangalore)", AccountHint: "idfc select savings", CategoryHint: "household/utilities"},
-		spend("d", "2026-10-10", 20, "3334", "SANJAY KUMAR ROUT"),
+		spend("d", "2026-10-10", 20, "3222", "RAVI KUMAR"),
 	)
 	for id, want := range map[string]struct{ cat, via, title, acc string }{
 		"a": {"gifts", model.ViaLearned, "Amazon gift card", "hdfc"},
 		"b": {"food", model.ViaPast, "Swiggy", ""},
 		"c": {"utility", model.ViaSource, "Elcty (Bangalore)", "idfc"},
-		"d": {"misc", model.ViaDefault, "Sanjay Kumar Rout", ""},
+		"d": {"misc", model.ViaDefault, "Ravi Kumar", ""},
 	} {
 		x := draft(t, b, id)
 		if x.Category != want.cat || x.Via != want.via || x.Title != want.title || x.Account != want.acc {
@@ -119,10 +119,10 @@ func TestCategoryPriority(t *testing.T) {
 
 func TestIngestOnceAndOnlyRecent(t *testing.T) {
 	b := newBook(t)
-	if n := ingest(t, b, spend("a", "2026-10-09", 10, "4275", "X"), spend("old", "2026-08-01", 10, "4275", "X")); n != 1 {
+	if n := ingest(t, b, spend("a", "2026-10-09", 10, "4111", "X"), spend("old", "2026-08-01", 10, "4111", "X")); n != 1 {
 		t.Fatalf("added %d, want 1 (the old one is past max age)", n)
 	}
-	if n := ingest(t, b, spend("a", "2026-10-09", 10, "4275", "X")); n != 0 {
+	if n := ingest(t, b, spend("a", "2026-10-09", 10, "4111", "X")); n != 0 {
 		t.Fatalf("re-import added %d", n)
 	}
 	mutate(t, b, func(d *book.Data, ch *book.Change) error {
@@ -137,7 +137,7 @@ func TestIngestOnceAndOnlyRecent(t *testing.T) {
 	if x := draft(t, b, "a"); x.ID != "" {
 		t.Fatal("old reviewed draft not purged")
 	}
-	if n := ingest(t, b, spend("a", "2026-10-09", 10, "4275", "X")); n != 0 {
+	if n := ingest(t, b, spend("a", "2026-10-09", 10, "4111", "X")); n != 0 {
 		t.Fatal("accepted draft came back after purge")
 	}
 }
@@ -146,9 +146,9 @@ func TestIngestOnceAndOnlyRecent(t *testing.T) {
 func TestPairAndUnpair(t *testing.T) {
 	b := newBook(t)
 	ingest(t, b,
-		spend("out", "2026-10-09", 18450, "0353", ""),
-		Item{ID: "in", Source: SourceSMS, Date: "2026-10-10", Kind: KindTransferIn, Amount: money.FromRupees(18450), Digits: "4275"},
-		spend("other", "2026-10-09", 18450, "4275", "SHOP"), // spending on the card is never a transfer source
+		spend("out", "2026-10-09", 18450, "9001", ""),
+		Item{ID: "in", Source: SourceSMS, Date: "2026-10-10", Kind: KindTransferIn, Amount: money.FromRupees(18450), Digits: "4111"},
+		spend("other", "2026-10-09", 18450, "4111", "SHOP"), // spending on the card is never a transfer source
 	)
 	out, in := draft(t, b, "out"), draft(t, b, "in")
 	if out.Type != model.TxTransfer || out.Account != "idfc" || out.ToAccount != "hdfc" || out.Pair != "in" || in.Status != model.DraftMerged {
@@ -208,7 +208,7 @@ func TestAcceptLearnsAndIsIdempotent(t *testing.T) {
 // Accepted on the phone and nimory: the second accept finds the transaction.
 func TestAcceptWhenTransactionExists(t *testing.T) {
 	b := newBook(t)
-	ingest(t, b, spend("s", "2026-10-09", 131, "4275", "SWIGGY"))
+	ingest(t, b, spend("s", "2026-10-09", 131, "4111", "SWIGGY"))
 	addTx(t, b, book.Entry{ID: TxID("s"), Type: model.TxExpense, Date: "2026-10-09", Title: "Swiggy", Amount: money.FromRupees(131), Account: "hdfc", Category: "food"})
 	mutate(t, b, func(d *book.Data, ch *book.Change) error {
 		_, err := Accept(d, ch, "s", book.Entry{Category: "food"}, false)
@@ -225,7 +225,7 @@ func TestAcceptWhenTransactionExists(t *testing.T) {
 func TestMatchRejectRestore(t *testing.T) {
 	b := newBook(t)
 	addTx(t, b, book.Entry{Type: model.TxExpense, Date: "2026-10-08", Title: "Dinner", Amount: money.FromRupees(486), Account: "hdfc", Category: "food"})
-	ingest(t, b, spend("m", "2026-10-09", 486, "4275", "ZOMATO"), spend("r", "2026-10-09", 99, "4275", "SPAM"))
+	ingest(t, b, spend("m", "2026-10-09", 486, "4111", "ZOMATO"), spend("r", "2026-10-09", 99, "4111", "SPAM"))
 	var v []View
 	_ = b.View(func(d *book.Data, c *book.Computed) error { v = Views(d, c, model.DraftPending); return nil })
 	var same *Same
@@ -260,8 +260,8 @@ func TestMatchRejectRestore(t *testing.T) {
 // The balance an SMS reports is checked against what Arthik would show.
 func TestBalanceWarning(t *testing.T) {
 	b := newBook(t)
-	ok := Item{ID: "ok", Source: SourceSMS, Date: "2026-10-09", Kind: KindIncome, Amount: money.FromRupees(400), Digits: "0353", Balance: money.FromRupees(10400)}
-	off := Item{ID: "off", Source: SourceSMS, Date: "2026-10-10", Kind: KindIncome, Amount: money.FromRupees(100), Digits: "0353", Balance: money.FromRupees(99999)}
+	ok := Item{ID: "ok", Source: SourceSMS, Date: "2026-10-09", Kind: KindIncome, Amount: money.FromRupees(400), Digits: "9001", Balance: money.FromRupees(10400)}
+	off := Item{ID: "off", Source: SourceSMS, Date: "2026-10-10", Kind: KindIncome, Amount: money.FromRupees(100), Digits: "9001", Balance: money.FromRupees(99999)}
 	ingest(t, b, ok, off)
 	_ = b.View(func(d *book.Data, c *book.Computed) error {
 		for _, v := range Views(d, c) {
@@ -281,8 +281,8 @@ func TestRunnerImportsFiles(t *testing.T) {
 	_ = os.MkdirAll(dir, 0o755)
 	_ = os.WriteFile(filepath.Join(dir, "sms_phone.md"), []byte(`device: phone
 messages:
-  - {id: "1111111111111111", from: "AX-HDFCBK", at: "2026-10-09T20:34:40+05:30", body: "Spent Rs.2000 On HDFC Bank Card 4275 At GYFTR VIA SMARTBUY On 2026-10-09:20:34:36."}
-  - {from: "AX-HDFCBK", at: "2026-10-09T21:00:00+05:30", body: "Spent Rs.50 On HDFC Bank Card 4275 At TEA On 2026-10-09:21:00:00."}
+  - {id: "1111111111111111", from: "AX-HDFCBK", at: "2026-10-09T20:34:40+05:30", body: "Spent Rs.2000 On HDFC Bank Card 4111 At GYFTR VIA SMARTBUY On 2026-10-09:20:34:36."}
+  - {from: "AX-HDFCBK", at: "2026-10-09T21:00:00+05:30", body: "Spent Rs.50 On HDFC Bank Card 4111 At TEA On 2026-10-09:21:00:00."}
 `), 0o644)
 	_ = os.WriteFile(filepath.Join(dir, "kronos.md"), []byte("updated: x\n\ndrafts:\n  - {id: sub-jio-2026-10-11, date: '2026-10-11', title: Jio, amount: 707.82, account: Cash, category: utility}\n"), 0o644)
 	r := &Runner{Book: b, Cfg: config.Inbox{MaxAgeDays: 30, KeepDays: 120, PairDays: 2}, Loc: time.UTC}
@@ -328,7 +328,7 @@ func TestRunnerAI(t *testing.T) {
 		d.SetRule(model.Rule{ID: "swiggy", Match: "swiggy", Category: "food"}, ch)
 		return nil
 	})
-	ingest(t, b, spend("g", "2026-10-09", 2000, "4275", "GYFTR VIA SMARTBUY"), spend("s", "2026-10-09", 99, "4275", "SWIGGY"))
+	ingest(t, b, spend("g", "2026-10-09", 2000, "4111", "GYFTR VIA SMARTBUY"), spend("s", "2026-10-09", 99, "4111", "SWIGGY"))
 	r := &Runner{Book: b, AI: ai.New(srv.URL, "test-model", 5*time.Second)}
 	r.categoriseBatch(context.Background(), 5)
 	if x := draft(t, b, "g"); x.Category != "gifts" || x.Via != model.ViaAI || x.Title != "Gyftr" || !x.AITried {
@@ -339,14 +339,14 @@ func TestRunnerAI(t *testing.T) {
 	}
 	// A made-up category is ignored; the draft keeps its fallback.
 	answer = `{"category":"crypto","title":""}`
-	ingest(t, b, spend("x", today, 10, "4275", "SOMETHING NEW"))
+	ingest(t, b, spend("x", today, 10, "4111", "SOMETHING NEW"))
 	r.categoriseBatch(context.Background(), 5)
 	if x := draft(t, b, "x"); x.Category != "misc" || x.Via != model.ViaDefault || !x.AITried {
 		t.Fatalf("invented category used: %+v", x)
 	}
 	// Unreachable AI: nothing is marked, the runner pauses.
 	srv.Close()
-	ingest(t, b, spend("y", today, 10, "4275", "ANOTHER"))
+	ingest(t, b, spend("y", today, 10, "4111", "ANOTHER"))
 	r.categoriseBatch(context.Background(), 5)
 	if x := draft(t, b, "y"); x.AITried || r.aiPause.IsZero() {
 		t.Fatalf("failure handling: %+v pause=%v", x, r.aiPause)
@@ -361,7 +361,7 @@ func TestRunnerRescan(t *testing.T) {
 	_ = os.MkdirAll(dir, 0o755)
 	f := filepath.Join(dir, "sms_phone.md")
 	msg := func(id, day string) string {
-		return `  - {id: "` + id + `", from: "AX-HDFCBK", at: "` + day + `T20:00:00+05:30", body: "Spent Rs.50 On HDFC Bank Card 4275 At TEA On ` + day + `:20:00:00."}` + "\n"
+		return `  - {id: "` + id + `", from: "AX-HDFCBK", at: "` + day + `T20:00:00+05:30", body: "Spent Rs.50 On HDFC Bank Card 4111 At TEA On ` + day + `:20:00:00."}` + "\n"
 	}
 	write := func(body string, at time.Time) {
 		t.Helper()
@@ -447,7 +447,7 @@ func TestRunnerSMSSchedule(t *testing.T) {
 	sms := func(ids ...string) {
 		body := "device: phone\nmessages:\n"
 		for _, id := range ids {
-			body += `  - {id: "` + id + `", from: "AX-HDFCBK", at: "2026-10-11T20:00:00+05:30", body: "Spent Rs.50 On HDFC Bank Card 4275 At TEA On 2026-10-11:20:00:00."}` + "\n"
+			body += `  - {id: "` + id + `", from: "AX-HDFCBK", at: "2026-10-11T20:00:00+05:30", body: "Spent Rs.50 On HDFC Bank Card 4111 At TEA On 2026-10-11:20:00:00."}` + "\n"
 		}
 		_ = os.WriteFile(filepath.Join(dir, "sms_phone.md"), []byte(body), 0o644)
 	}
@@ -531,7 +531,7 @@ func TestRunnerLateSync(t *testing.T) {
 	sms := func(lastRun string, ids ...string) {
 		body := "device: phone\nschedule: \"01:30\"\nlast_run: \"" + lastRun + "\"\nmessages:\n"
 		for _, id := range ids {
-			body += `  - {id: "` + id + `", from: "AX-HDFCBK", at: "2026-10-18T20:00:00+05:30", body: "Spent Rs.50 On HDFC Bank Card 4275 At TEA On 2026-10-18:20:00:00."}` + "\n"
+			body += `  - {id: "` + id + `", from: "AX-HDFCBK", at: "2026-10-18T20:00:00+05:30", body: "Spent Rs.50 On HDFC Bank Card 4111 At TEA On 2026-10-18:20:00:00."}` + "\n"
 		}
 		_ = os.WriteFile(filepath.Join(dir, "sms_phone.md"), []byte(body), 0o644)
 	}
