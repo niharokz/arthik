@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 data/
+state/
 *.md.bak
 # build output and patch bundles
 /patch/

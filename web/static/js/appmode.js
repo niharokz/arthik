@@ -1,9 +1,9 @@
 // Screens shown only inside the Android app before a session opens: the first-run
-// welcome (demo or your own folder) and the app lock (PIN / fingerprint).
+// welcome (demo, your own folder or restoring saved settings) and the app lock.
 // The native side owns the secrets; this file only draws the screens and calls it.
 
 import { html } from "./util.js";
-import { sheet, toast } from "./ui.js";
+import { sheet, toast, confirmSheet } from "./ui.js";
 import { isApp, call, config, json, onNative, haptic, applyAccent, syncBars } from "./native.js";
 
 /** Decides what to show before the app is entered. */
@@ -45,10 +45,54 @@ function welcome(root, c) {
       <span class="ic">👀</span><span><b>Explore the demo</b><br><small>Six months of made-up data, read-only. Switch to your own folder any time in Settings.</small></span></button>
     <button class="choice card" data-pick>
       <span class="ic">📁</span><span><b>Use my finance folder</b><br><small>Pick the folder Syncthing keeps in sync with your server. Arthik reads and writes it directly.</small></span></button>
+    <button class="choice card" data-restore>
+      <span class="ic">♻️</span><span><b>Restore my settings</b><br><small>Pick the folder that has <code>arthik-phone.yaml</code> from your old phone or install.</small></span></button>
     <p class="faint" style="text-align:center;font-size:.8rem">Arthik ${c.version || ""}</p>
   </div></div>`);
   root.querySelector("[data-demo]").addEventListener("click", () => call("useDemo"));
   root.querySelector("[data-pick]").addEventListener("click", () => pickFolder(root));
+  root.querySelector("[data-restore]").addEventListener("click", () => chooseSettingsFolder(true));
+}
+
+/**
+ * Picks the folder for the settings file (arthik-phone.yaml). A file already there
+ * is loaded (restore = true, or after asking); otherwise this phone's settings are
+ * saved there. done() runs when nothing needs a restart.
+ */
+export function chooseSettingsFolder(restore = false, done = () => {}) {
+  const off = onNative((e) => { if (e.type === "config_dir") { off(); settingsChosen(e, restore, done); } });
+  call("chooseConfigDir");
+}
+
+async function settingsChosen(r, restore, done) {
+  if (!r.ok) return settingsHelp(r.error || "That folder can't be used", restore, done);
+  if (!r.exists) {
+    toast(restore ? `No arthik-phone.yaml in ${r.path} — this phone's settings are saved there from now on` : "Settings are saved to " + r.path, restore);
+    return done();
+  }
+  if (restore || await confirmSheet("Load the saved settings?", `${r.path} already has arthik-phone.yaml. Load it (this phone's settings are replaced; the PIN is never in the file), or keep this phone's settings and overwrite the file.`, "Load file", false)) {
+    const err = call("loadConfig");
+    return err ? toast(err, true) : toast("Settings restored — reopening Arthik");
+  }
+  call("saveConfig");
+  toast("File overwritten with this phone's settings");
+  done();
+}
+
+// Picker failed: type the folder instead.
+function settingsHelp(error, restore, done) {
+  sheet("Folder for the settings file", html`
+    <p class="neg">${error}</p>
+    <p class="muted">Type the full path, for example <code>/storage/emulated/0/Notes/.arthik</code>.</p>
+    <label class="f"><span>Folder path</span><input name="p" autocapitalize="off" autocomplete="off" spellcheck="false"></label>`,
+  html`<span class="grow"></span><button data-close>Cancel</button><button class="primary" data-ok>Use folder</button>`, (d, close) => {
+    d.querySelector("[data-ok]").addEventListener("click", () => {
+      const r = json("setConfigDir", d.querySelector("[name=p]").value.trim());
+      if (!r.ok) return toast(r.error || "That folder can't be used", true);
+      close();
+      settingsChosen(r, restore, done);
+    });
+  });
 }
 
 /** Runs the native folder picker; the app restarts the engine when it succeeds. */

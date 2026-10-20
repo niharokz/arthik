@@ -28,7 +28,8 @@ and due subscriptions into drafts you accept with one tap.
 
 ```sh
 git clone https://gitlab.com/niharokz/arthik.git && cd arthik
-cp .env.example .env        # set FINANCE_PATH, PUID/PGID, ARTHIK_USER, ARTHIK_PASSWORD, ARTHIK_SECRET
+cp .env.example .env        # set FINANCE_PATH, STATE_PATH, PUID/PGID, ARTHIK_USER, ARTHIK_PASSWORD, ARTHIK_SECRET, ARTHIK_DEVICE_KEY
+mkdir -p state              # or your STATE_PATH; must be writable by PUID:PGID
 docker compose up -d --build
 ```
 
@@ -49,10 +50,16 @@ docker compose run --rm -it arthik hash-password
 | Variable | Used by | Meaning |
 |---|---|---|
 | `FINANCE_PATH` | compose | Host folder with the data files (mounted at `/data/finance`). |
-| `PUID`, `PGID` | compose | User the container runs as (must own `FINANCE_PATH`). |
+| `STATE_PATH` | compose | Host folder for server-only files (`bans.json`), mounted at `/state`. Not synced. |
+| `PUID`, `PGID` | compose | User the container runs as (must own `FINANCE_PATH` and `STATE_PATH`). |
 | `TZ` | app | Time zone that decides “today”. |
 | `ARTHIK_USER`, `ARTHIK_PASSWORD` | app | Your sign-in; the password may be a bcrypt hash. |
 | `ARTHIK_SECRET` | app | Signs session cookies; set it so you stay signed in across restarts. |
+| `ARTHIK_SESSION_HOURS` | app | How long a sign-in lasts without the device key (12). |
+| `ARTHIK_DEVICE_KEY` | app | Typed once on a device (sign-in screen or Settings → This device): that device stays signed in until it signs out. Change it to sign all such devices out. ≥ 24 characters, e.g. `openssl rand -hex 32`. |
+| `ARTHIK_LOGIN_MAX_FAILS`, `ARTHIK_BAN_DAYS` | app | Failed sign-ins (or wrong device keys) within a day before an address is banned from the whole site (5), and for how long (30 days). |
+| `ARTHIK_BAN_EXEMPT` | app | Comma-separated CIDRs never banned (empty). |
+| `ARTHIK_TRUSTED_PROXIES` | app | Proxies whose `CF-Connecting-IP` / `X-Forwarded-For` name the client (private ranges). |
 | `ARTHIK_DEMO`, `ARTHIK_DEMO_USER`, `ARTHIK_DEMO_PASSWORD` | app | Read-only demo user (data in `<FINANCE_PATH>/demouser`, regenerated monthly). |
 | `ARTHIK_WATCH_SECONDS` | app | How often to look for edits made by other apps (default 3). |
 | `ARTHIK_PRIMARY` | app | `true` (default): this instance writes computed files, imports the inbox and merges Syncthing conflict copies. Set `false` on any second instance sharing the folder. |
@@ -61,6 +68,18 @@ docker compose run --rm -it arthik hash-password
 | `ARTHIK_AI_URL`, `ARTHIK_AI_MODEL`, `ARTHIK_AI_TIMEOUT_SECONDS` | app | Optional Ollama that suggests categories for new merchants, e.g. `http://ollama:11434` and `qwen2.5:7b-instruct-q4_K_M`. Empty = off. |
 
 The phone app runs the same engine with `ARTHIK_MODE=local` (set by the app; not used on the server).
+
+## Sign-in and lock-out
+
+- A sign-in lasts `ARTHIK_SESSION_HOURS` (12). On your own devices, enter the device key
+  once (sign-in screen → *Device key*, or Settings → *This device*); that device then stays
+  signed in until you sign out. A new key in `.env` signs them all out.
+- Five failed sign-ins or wrong device keys from one address within a day ban it from
+  every page for `ARTHIK_BAN_DAYS`. Bans survive restarts (`STATE_PATH/bans.json`) and are
+  lifted only by you: `docker exec arthik arthik bans`, `docker exec arthik arthik unban <ip|all>`.
+- Behind Caddy + Cloudflare Tunnel the client address is read from `CF-Connecting-IP` /
+  `X-Forwarded-For`, and only when the request comes from a trusted proxy, so a client
+  can't choose its own address.
 
 ## Several devices on one folder
 
@@ -160,6 +179,8 @@ arthik demo-seed        regenerate the demo data now
 arthik health           exit 0 when the server answers (Docker health check)
 arthik summary          this month's spending vs budget and the inbox, as JSON (read-only)
 arthik parse-sms TEXT   show how the inbox would read an SMS
+arthik bans             list banned addresses (and until when)
+arthik unban IP|all     lift a ban; the running server notices at once
 arthik version
 ```
 

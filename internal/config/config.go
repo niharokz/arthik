@@ -38,8 +38,23 @@ type Config struct {
 	Secret       string        // ARTHIK_SECRET — signs sessions; random per start when empty
 	WatchEvery   time.Duration // ARTHIK_WATCH_SECONDS, default 3
 
-	Inbox Inbox
+	Security Security
+	Inbox    Inbox
 }
+
+// Security configures sessions and banning (server mode).
+type Security struct {
+	SessionTTL     time.Duration // ARTHIK_SESSION_HOURS: a sign-in without the device key lasts this long (default 12)
+	DeviceKey      string        // ARTHIK_DEVICE_KEY: typed into Settings, keeps that device signed in until sign-out ("" = off)
+	MaxFails       int           // ARTHIK_LOGIN_MAX_FAILS: failed sign-ins (within a day) before an address is banned (default 5)
+	BanTerm        time.Duration // ARTHIK_BAN_DAYS: how long a ban lasts (default 30)
+	StateDir       string        // ARTHIK_STATE_DIR: server-only files such as bans.json (default /state)
+	TrustedProxies string        // ARTHIK_TRUSTED_PROXIES: CIDRs whose forwarding headers are believed (default: private ranges)
+	BanExempt      string        // ARTHIK_BAN_EXEMPT: CIDRs that are never banned (default none)
+}
+
+// DefaultTrustedProxies are the private ranges a reverse proxy in Docker uses.
+const DefaultTrustedProxies = "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,::1/128,fc00::/7"
 
 // Inbox configures the review inbox (SMS and Kronos drafts) and the optional AI.
 type Inbox struct {
@@ -135,6 +150,15 @@ func Load() (Config, error) {
 	if n := envInt("ARTHIK_WATCH_SECONDS", 3); n > 0 {
 		c.WatchEvery = time.Duration(n) * time.Second
 	}
+	c.Security = Security{
+		SessionTTL:     time.Duration(envInt("ARTHIK_SESSION_HOURS", 12)) * time.Hour,
+		DeviceKey:      strings.TrimSpace(os.Getenv("ARTHIK_DEVICE_KEY")),
+		MaxFails:       envInt("ARTHIK_LOGIN_MAX_FAILS", 5),
+		BanTerm:        time.Duration(envInt("ARTHIK_BAN_DAYS", 30)) * 24 * time.Hour,
+		StateDir:       env("ARTHIK_STATE_DIR", "/state"),
+		TrustedProxies: env("ARTHIK_TRUSTED_PROXIES", DefaultTrustedProxies),
+		BanExempt:      env("ARTHIK_BAN_EXEMPT", ""),
+	}
 	c.Inbox = Inbox{
 		MaxAgeDays: envInt("ARTHIK_INBOX_MAX_AGE_DAYS", 30),
 		KeepDays:   envInt("ARTHIK_INBOX_KEEP_DAYS", 120),
@@ -168,6 +192,9 @@ func Load() (Config, error) {
 	}
 	if c.Password == "" {
 		return c, fmt.Errorf("ARTHIK_PASSWORD is not set (put it in .env — plain text or a hash from `arthik hash-password`)")
+	}
+	if k := c.Security.DeviceKey; k != "" && len(k) < 24 {
+		return c, fmt.Errorf("ARTHIK_DEVICE_KEY must be at least 24 characters (make one with: openssl rand -hex 32)")
 	}
 	if strings.EqualFold(c.User, c.DemoUser) && c.DemoEnabled {
 		return c, fmt.Errorf("ARTHIK_USER and ARTHIK_DEMO_USER must differ")

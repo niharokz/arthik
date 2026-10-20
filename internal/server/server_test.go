@@ -53,7 +53,7 @@ func setup(t *testing.T) (*client, *client) {
 	if p := db.Problems(); len(p) > 0 {
 		t.Fatalf("demo data has problems: %+v", p)
 	}
-	a := auth.New("secret",
+	a := auth.New("secret", auth.Options{},
 		&auth.Account{User: httpx.User{Name: "owner", Book: own}, Password: "pw-owner"},
 		&auth.Account{User: httpx.User{Name: "demouser", ReadOnly: true, Book: db}, Password: "demo", ShowHint: true})
 	srv := httptest.NewServer(New(a, Options{}))
@@ -167,7 +167,7 @@ func TestLocalMode(t *testing.T) {
 	}
 	db, _ := book.Open(dir+"/demo", "demo", true)
 	const token = "0123456789abcdef0123"
-	a := auth.New("",
+	a := auth.New("", auth.Options{},
 		&auth.Account{User: httpx.User{Name: "me", Book: own}},
 		&auth.Account{User: httpx.User{Name: "demouser", ReadOnly: true, Book: db}})
 	a.EnableLocal(token)

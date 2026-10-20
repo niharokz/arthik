@@ -2,7 +2,7 @@
 
 > Internal reference for the Nimory homelab. Share this file (plus only the files being
 > changed) instead of the full source. No secret values — only names and paths.
-> Last reviewed: 2026-10-11 (v1.2.1: inbox for SMS + Kronos drafts, learned rules, optional Ollama, reminders removed, device lock + nightly SMS on Android, new logo).
+> Last reviewed: 2026-10-20 (v1.0.1: IP ban after failed sign-ins, 12-hour sessions + device key, phone settings file).
 
 ---
 
@@ -29,9 +29,9 @@ No locks on data files (Nimory rule): any app may edit them; arthik re-reads on 
 | Image | `golang:1.23-alpine` (runs `go vet` + `go test`) → `alpine:3.20`, binary `/usr/local/bin/arthik` |
 | Command | `arthik serve`, listens on `:8080` |
 | User | `.env` `PUID:PGID`, `init`, `read_only` root fs, `no-new-privileges` |
-| Volume | `$FINANCE_PATH → /data/finance` (rw) |
+| Volume | `$FINANCE_PATH → /data/finance` (rw) · `$STATE_PATH → /state` (rw, `bans.json`; not synced) |
 | Network | external `homelab`; Caddy proxies `arthik.nihars.com` / `arthik.nimory` → `arthik:8080` (no host port) |
-| `.env` | compose: `FINANCE_PATH PUID PGID TZ` · app: `ARTHIK_USER ARTHIK_PASSWORD ARTHIK_SECRET ARTHIK_DEMO ARTHIK_DEMO_USER ARTHIK_DEMO_PASSWORD ARTHIK_WATCH_SECONDS ARTHIK_PRIMARY` |
+| `.env` | compose: `FINANCE_PATH STATE_PATH PUID PGID TZ` · app: `ARTHIK_USER ARTHIK_PASSWORD ARTHIK_SECRET ARTHIK_SESSION_HOURS ARTHIK_DEVICE_KEY ARTHIK_LOGIN_MAX_FAILS ARTHIK_BAN_DAYS ARTHIK_BAN_EXEMPT ARTHIK_TRUSTED_PROXIES ARTHIK_DEMO ARTHIK_DEMO_USER ARTHIK_DEMO_PASSWORD ARTHIK_WATCH_SECONDS ARTHIK_PRIMARY` |
 | Health | `GET /healthz`; `arthik health` is the Docker healthcheck |
 | Logs | stdout (json-file 10 MB × 3) |
 
@@ -67,7 +67,8 @@ internal/ai/                Ollama /api/chat client: picks a category id from th
 internal/query/             shared transaction filter (list, search, export, reports)
 internal/view/              API shapes: Tx, Account(+Card statement info), BudgetFor (period scaling)
 internal/httpx/             Router (auth, CSRF header, read-only guard, panic recovery), JSON helpers
-internal/auth/              users, HMAC session cookie, bcrypt/plain password, login rate limit, /api/login|logout|me
+internal/auth/              users, HMAC session cookie (12 h, or until sign-out with the device key), bcrypt/plain password, /api/login|logout|me|device-key
+internal/guard/             failed sign-ins → IP ban (bans.json in /state), client IP behind trusted proxies
 internal/feature/<name>/    one package per feature, each with Register(rt):
   state        GET /api/state, GET /api/period
   accounts     POST/PUT/DELETE /api/accounts, /{id}/history, /{id}/reconcile
@@ -123,7 +124,7 @@ mirrors (`replace` in go.mod), same as Omnimo/Kronos.
 - **Future-dated** transactions are stored normally; they count in `projected_balance` and
   in nothing else until their date (`Computed.Effective`). The scheduler recomputes when the
   day changes. Period totals/reports exclude them.
-- **Recurring bills** are not Arthik's job (reminders were removed in 1.2.1): Kronos drops
+- **Recurring bills** are not Arthik's job (reminders were removed in 0.2.1): Kronos drops
   due subscriptions into the inbox and you accept them. Old `reminder:` keys on
   transactions survive as unknown keys; an old `reminders.md` is simply ignored.
 
@@ -175,7 +176,7 @@ including offline edits on both sides, deletes, edits of the same transaction, a
 account created offline, and the inbox (phone SMS file → drafts on nimory; phone
 accepts offline while nimory imports a Kronos draft; one transaction, rule learned).
 
-### Inbox (v1.2.1)
+### Inbox (v0.2.1)
 
 ```
  phone app ── nightly ──► inbox/sms_phone.md ┐
@@ -247,9 +248,16 @@ cookie, secret random per start so every launch needs the app). `/` redirects to
 
 ## 7. Security
 
-Signed cookie (`HttpOnly`, `SameSite=Lax`, `Secure` behind HTTPS), 30-day sessions; every
-non-GET needs header `X-Arthik` (CSRF) and is refused for read-only users; login limited to
-10 failures / 15 min per IP (`CF-Connecting-IP` aware); CSP `script-src 'self'`.
+Signed cookie (`HttpOnly`, `SameSite=Lax`, `Secure` behind HTTPS). A sign-in lasts
+`ARTHIK_SESSION_HOURS` (12); a device that presents `ARTHIK_DEVICE_KEY` (at sign-in or via
+`POST /api/device-key`) gets a session with no expiry, tied to a tag of the key, so a new
+key in `.env` ends them all. Every non-GET needs header `X-Arthik` (CSRF) and is refused
+for read-only users. 5 failed sign-ins or wrong keys per IP within 24 h → the IP gets 403
+on every path but `/healthz` for `ARTHIK_BAN_DAYS` (30); bans persist in `/state/bans.json`
+and only `arthik unban` (or editing the file) lifts them. The client IP is taken from
+`CF-Connecting-IP`, then the right-most untrusted `X-Forwarded-For` hop, only when the
+peer is in `ARTHIK_TRUSTED_PROXIES`. CSP `script-src 'self'`. The phone engine (local
+mode) has no passwords, bans or expiry; the app lock guards it.
 
 ---
 

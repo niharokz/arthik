@@ -41,7 +41,16 @@ class Bridge(private val a: MainActivity) {
         put("accent", accentJson())
         put("widget", Widget.placed(a))
         put("widget_look", widgetLookJson())
+        put("config", configJson())
     }.toString()
+
+    private fun configJson() = JSONObject().apply {
+        val dir = prefs.configDir
+        put("dir", dir)
+        put("file", AppConfig.FILE)
+        put("exists", dir.isNotEmpty() && java.io.File(dir, AppConfig.FILE).isFile)
+        put("error", app.configError)
+    }
 
     private fun notifyJson() = JSONObject().apply {
         put("enabled", prefs.notifyEnabled)
@@ -114,6 +123,31 @@ class Bridge(private val a: MainActivity) {
         if (err == null) a.ui { a.folderChosen(Paths.clean(path)!!) }
         return JSONObject().put("ok", err == null).put("error", err ?: "").toString()
     }
+
+    // ---- settings file ----
+
+    /** Opens the folder picker for the settings file (result: "config_dir" event). */
+    @JavascriptInterface
+    fun chooseConfigDir() = a.ui { a.chooseConfigDir() }
+
+    /** Uses a typed folder for the settings file; returns {ok, path, exists, error}. */
+    @JavascriptInterface
+    fun setConfigDir(path: String): String = a.configDirChosen(Paths.clean(path) ?: path).toString()
+
+    /** Stops keeping a settings file (the file itself stays). */
+    @JavascriptInterface
+    fun clearConfigDir() {
+        prefs.configDir = ""
+        app.configError = ""
+    }
+
+    /** Writes the settings file now. */
+    @JavascriptInterface
+    fun saveConfig() = app.saveConfig()
+
+    /** Loads the settings file and applies it (the engine restarts); returns "" or an error. */
+    @JavascriptInterface
+    fun loadConfig(): String = a.restoreConfig()
 
     /** Opens the system screen to allow file access (result: "access" event). */
     @JavascriptInterface

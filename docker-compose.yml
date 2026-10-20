@@ -13,6 +13,7 @@ services:
       ARTHIK_LISTEN: ":8080"
     volumes:
       - ${FINANCE_PATH:?set FINANCE_PATH in .env}:/data/finance
+      - ${STATE_PATH:-./state}:/state # server-only files (bans.json); never synced
     init: true
     read_only: true
     tmpfs:

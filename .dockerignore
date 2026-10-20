@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 data/
+state/
 # the server image needs only Go code and web/
 android/
 patch/

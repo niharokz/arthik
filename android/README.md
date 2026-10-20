@@ -43,7 +43,7 @@ show the same books.
 ```sh
 cd ~/arthik                           # the repo
 cp android/.env.example android/.env  # set ARTHIK_KEYSTORE_PASSWORD
-./android/build.sh keystore           # once: creates ~/.arthik-keys/arthik.jks
+./android/build.sh keystore           # once: creates $KEYS_HOME/.arthik-keys/arthik.jks
 ./android/build.sh                    # → android/dist/arthik-<version>.apk
 ```
 
@@ -57,7 +57,7 @@ last ~8 years) — usually 3–4× faster. Run the full build before a release y
 To choose the phone CPUs yourself, set `ARTHIK_ABIS` in `android/.env`
 (e.g. `ARTHIK_ABIS=arm64-v8a`).
 
-**Back up `~/.arthik-keys/arthik.jks` and its password.** Android only accepts an
+**Back up `$KEYS_HOME/.arthik-keys/arthik.jks` and its password.** Android only accepts an
 update signed with the same key. (If you lose it: uninstall, install the new APK and
 pick the folder again — your data lives in the folder, so nothing is lost.)
 
@@ -140,12 +140,18 @@ night*, pick the time (default 23:30).
 
 | Screen | What it does |
 |---|---|
-| Welcome | Demo (read-only sample data, generated on the phone) or your own folder. |
-| Settings → Phone | Change folder, switch to demo, file access, main-device switch, app lock, phone colours, inbox notice, widget, bank SMS copy, engine log, restart. |
+| Welcome | Demo (read-only sample data, generated on the phone), your own folder, or *Restore my settings* from a saved settings file. |
+| Settings → Phone | Change folder, switch to demo, file access, main-device switch, app lock, phone colours, inbox notice, widget, bank SMS copy, settings file, engine log, restart. |
 | Lock | Either a 4–8 digit Arthik PIN (stored hashed, optional fingerprint on top; five wrong PINs pause entry for 30 s) or **Fingerprint / face** with the phone's own screen lock as backup (needs a screen lock on the phone). Locks again after the delay you choose. |
 
-Phone settings live in the app, not in the synced folder, so the phone and nimory
-never fight over them.
+Phone settings live in the app. Settings → Phone → **Settings file** also copies them,
+on every change, to `arthik-phone.yaml` in a folder you choose (keep it outside the
+finance folder, e.g. `Notes/.arthik`). After a reinstall or on a new phone, *Restore my
+settings* on the welcome screen (or *Load*) brings them back. The PIN is never written
+there — set it again; SMS copy needs SMS permission granted again on a new install.
+
+The signing key lives in `$KEYS_HOME/.arthik-keys/arthik.jks` (`KEYS_HOME` defaults to
+`~/.local/share/keys`; `ARTHIK_KEYSTORE_DIR` in `android/.env` overrides the folder).
 
 Everything else — accounts, categories, budgets, inbox, reports, calendar,
 import/export (saved to *Downloads*) — is the same as on the web.

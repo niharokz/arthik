@@ -7,7 +7,7 @@ import { html, raw, countUp, replay } from "./util.js";
 import { S, loadState, toast, ro, closeTopSheet, watchSegments } from "./ui.js";
 import { isApp, call } from "./native.js";
 import { appGate } from "./appmode.js";
-import { get, post, flush, onQueue, queue } from "./api.js";
+import { get, post, flush, onQueue, queue, deviceKey, setDeviceKey } from "./api.js";
 import { openTx } from "./txform.js";
 
 import * as dashboard from "./views/dashboard.js";
@@ -182,6 +182,8 @@ async function loginScreen(me) {
     <div class="brand"><img src="/icon.svg" alt=""><div><h1>Arthik</h1><small>double-entry personal finance</small></div></div>
     <label class="f"><span>User</span><input name="user" autocomplete="username" required autofocus></label>
     <label class="f"><span>Password</span><input name="password" type="password" autocomplete="current-password" required></label>
+    <details class="keybox" ${deviceKey() ? raw("open") : ""}><summary>Device key (stay signed in)</summary>
+      <label class="f"><span>Key from the server's .env — leave empty for a ${me.session_hours || 12}-hour sign-in</span><input name="key" type="password" autocomplete="off" value="${deviceKey()}"></label></details>
     <button class="primary block" type="submit">Sign in</button>
     <p class="neg" data-err hidden></p>
     ${demo ? html`<div class="demo-box"><b>Try the demo</b> (read-only, made-up data)<br>
@@ -190,9 +192,10 @@ async function loginScreen(me) {
     <p style="margin:14px 0 0;font-size:.85rem"><a href="/">About Arthik</a></p>
   </form></div>`);
   const f = root.querySelector("[data-login]");
-  const submit = async (user, password) => {
+  const submit = async (user, password, key = "") => {
     try {
-      await post("/api/login", { user, password });
+      await post("/api/login", { user, password, key });
+      if (user !== demo?.user) setDeviceKey(key);
       await boot();
     } catch (e) {
       const el = f.querySelector("[data-err]");
@@ -200,7 +203,7 @@ async function loginScreen(me) {
       el.textContent = e.message;
     }
   };
-  f.addEventListener("submit", (e) => { e.preventDefault(); submit(f.user.value, f.password.value); });
+  f.addEventListener("submit", (e) => { e.preventDefault(); submit(f.user.value, f.password.value, f.key.value.trim()); });
   f.querySelector("[data-demo]")?.addEventListener("click", () => submit(demo.user, demo.password));
 }
 

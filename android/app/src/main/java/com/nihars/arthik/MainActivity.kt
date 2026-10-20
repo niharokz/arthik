@@ -67,6 +67,7 @@ class MainActivity : Activity() {
         private const val REQ_SMS = 4
         private const val REQ_CONFIRM = 5
         private const val REQ_NOTIFY = 6
+        private const val REQ_CONFIG = 7
         private const val EXTRA_ROUTE = "route"
         private const val SPLASH_DP = 160 // the icon circle of Android 12's splash screen
         private val ROUTE = Regex("[a-z]+(/[A-Za-z0-9_.-]+)?")
@@ -365,6 +366,56 @@ class MainActivity : Activity() {
         Storage.requestAccess(this, REQ_ACCESS)
     }
 
+    // ---- settings file ---------------------------------------------------------------
+
+    /** Opens the folder picker for the settings file (result: "config_dir" event). */
+    fun chooseConfigDir() {
+        if (!Storage.hasAccess(this)) {
+            requestAccess(pickAfter = false)
+            return event("config_dir", JSONObject().put("ok", false).put("error", "Allow file access first, then choose the folder again."))
+        }
+        away()
+        try {
+            startActivityForResult(Storage.pickerIntent(), REQ_CONFIG)
+        } catch (e: ActivityNotFoundException) {
+            event("config_dir", JSONObject().put("ok", false).put("error", "This phone has no folder picker. Type the path instead."))
+        }
+    }
+
+    /**
+     * Keeps the settings file in path. When a file is already there, nothing is
+     * overwritten: the page offers to load it. Returns {ok, path, exists, error}.
+     */
+    fun configDirChosen(path: String?): JSONObject {
+        val err = Storage.check(this, path)
+        if (err != null) return JSONObject().put("ok", false).put("error", err)
+        val exists = java.io.File(path!!, AppConfig.FILE).isFile
+        prefs.configDir = path
+        if (!exists) arthik.saveConfig()
+        return JSONObject().put("ok", true).put("path", path).put("exists", exists)
+    }
+
+    /** Loads the settings file and applies it; returns "" or an error. */
+    fun restoreConfig(): String {
+        val dir = prefs.configDir.ifEmpty { return "Choose the settings folder first." }
+        val values = try {
+            AppConfig.load(dir) ?: return "There is no ${AppConfig.FILE} in $dir."
+        } catch (e: IllegalArgumentException) {
+            return "${AppConfig.FILE} can't be read: ${e.message}"
+        } catch (e: java.io.IOException) {
+            return "${AppConfig.FILE} can't be read: ${e.message}"
+        }
+        val v = values.toMutableMap()
+        if (v["sms_enabled"] == true && !SmsSync.permitted(this)) v["sms_enabled"] = false // allow SMS again on this phone
+        if (v["lock_mode"] == "pin" && prefs.pinHash.isEmpty()) v.remove("lock_mode") // the PIN never leaves the phone
+        prefs.import(v)
+        SmsSync.schedule(this)
+        InboxNotify.schedule(this)
+        Widget.draw(applicationContext, Summary.cached(this))
+        ui { restartEngine() }
+        return ""
+    }
+
     // An external screen is opening: don't treat the trip as "app left".
     private fun away() { awayForResult = true }
 
@@ -388,6 +439,15 @@ class MainActivity : Activity() {
             REQ_FILE -> {
                 fileCallback?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data))
                 fileCallback = null
+            }
+            REQ_CONFIG -> {
+                val uri = data?.data
+                if (resultCode != RESULT_OK || uri == null) return // cancelled
+                val path = Storage.pathOf(uri)
+                arthik.bg.execute {
+                    val r = configDirChosen(path)
+                    ui { event("config_dir", r) }
+                }
             }
             REQ_FOLDER -> {
                 val uri = data?.data
@@ -498,7 +558,7 @@ class MainActivity : Activity() {
         }
     }
 
-    /** "1.1.0 (10100)". */
+    /** "1.0.1 (30001)". */
     fun versionLabel(): String {
         val info = packageManager.getPackageInfo(packageName, 0)
         val code = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()

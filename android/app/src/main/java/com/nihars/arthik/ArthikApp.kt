@@ -28,9 +28,26 @@ class ArthikApp : Application() {
     /** Last folder error shown on the welcome/error screen ("" = none). */
     @Volatile var engineError = ""
 
+    /** Last problem writing the settings file ("" = none). */
+    @Volatile var configError = ""
+
     override fun onCreate() {
         super.onCreate()
         prefs = Prefs(this)
         engine = Engine(this)
+        prefs.onChange { key -> if (key in AppConfig.KEYS) saveConfig() }
+    }
+
+    /** Writes the settings file now (in the background); no-op without a chosen folder. */
+    fun saveConfig() {
+        val dir = prefs.configDir.takeIf { it.isNotEmpty() } ?: return
+        bg.execute {
+            configError = try {
+                AppConfig.save(dir, prefs.exportable(), java.time.OffsetDateTime.now().withNano(0).toString())
+                ""
+            } catch (e: Exception) {
+                "Couldn't save $dir/${AppConfig.FILE}: ${e.message}"
+            }
+        }
     }
 }

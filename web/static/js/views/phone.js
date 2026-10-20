@@ -1,12 +1,13 @@
 // Settings → Phone (only inside the Android app): data folder or demo, file access,
 // main-device switch, app lock (PIN or fingerprint/face), look (Material You), the
-// morning inbox notice, the home-screen widget, the nightly bank-SMS copy and the
-// engine log. Settings are stored by the app itself.
+// morning inbox notice, the home-screen widget, the nightly bank-SMS copy, the
+// settings file and the engine log. Settings are stored by the app itself and
+// mirrored to arthik-phone.yaml in a folder you choose.
 
 import { html, raw, fmtShort } from "../util.js";
 import { sheet, toast, confirmSheet, colorField, wireColorFields, hexColor } from "../ui.js";
 import { call, config, onNative, applyAccent } from "../native.js";
-import { pickFolder } from "../appmode.js";
+import { pickFolder, chooseSettingsFolder } from "../appmode.js";
 
 const LOCK_AFTER = [[0, "Immediately"], [60, "After 1 minute"], [300, "After 5 minutes"], [900, "After 15 minutes"], [1800, "After 30 minutes"], [3600, "After 1 hour"]];
 const LOCKS = { pin: "Arthik PIN", device: "Fingerprint / face (phone screen lock as backup)", none: "Off" };
@@ -35,6 +36,21 @@ function smsBlock(c) {
         <select data-lookback style="width:auto">${[1, 2, 3, 4, 5, 6, 7].map((n) => html`<option value="${n}" ${n === m.lookback ? raw("selected") : ""}>${n} day${n > 1 ? "s" : ""}</option>`)}</select></div>
       <div class="prow"><div class="grow"><b>Last run</b><div class="muted">${stamp(m.last_run)}${m.last_result ? " · " + m.last_result : ""}${m.next_run ? html`<br>Next: ${stamp(m.next_run)}` : ""}</div></div>
         <button data-smsnow>Run now</button></div>` : ""}`;
+}
+
+// The settings file: where this phone's settings are kept (restored on a new install).
+function configBlock(c) {
+  const f = c.config || {};
+  return html`<div class="psec"><b>💾 Settings file</b>
+    <div class="muted" style="font-size:.85rem">This phone's settings are copied to <code>${f.file || "arthik-phone.yaml"}</code> in a folder you choose, on every change. After a reinstall, pick the same folder to get them back. The PIN is never written there.</div></div>
+    <div class="prow">
+      <div class="grow"><b>Folder</b><div class="muted ellipsis" title="${f.dir || ""}">${f.dir || "Not kept in a file"}</div>
+        ${f.error ? html`<div class="neg">${f.error}</div>` : f.dir && !f.exists ? html`<div class="neg">The file isn't there yet — tap Save now.</div>` : ""}</div>
+      <div class="row wrap">
+        <button class="${f.dir ? "" : "primary"}" data-cfgdir>${f.dir ? "Change" : "Choose folder"}</button>
+        ${f.dir ? html`<button data-cfgsave>Save now</button><button data-cfgload>Load</button><button data-cfgoff>Stop</button>` : ""}
+      </div>
+    </div>`;
 }
 
 // Look: Material You colours (Android 12+).
@@ -198,6 +214,7 @@ export function phoneCard() {
     ${notifyBlock(c)}
     ${widgetBlock(c)}
     ${smsBlock(c)}
+    ${configBlock(c)}
     <div class="prow">
       <div class="grow"><b>Engine</b><div class="muted">Arthik ${c.version || ""} runs on this phone; nothing leaves it except through Syncthing.</div></div>
       <div class="row wrap"><button data-log>View log</button><button data-restart>Restart</button></div>
@@ -273,6 +290,14 @@ export function wirePhoneCard(root, ctx) {
   $("[data-widget]")?.addEventListener("click", () => { call("refreshWidget"); toast("Widgets updated"); });
   wireWidgetLook(card, config());
   $("[data-locknow]")?.addEventListener("click", () => call("lockNow"));
+  $("[data-cfgdir]")?.addEventListener("click", () => chooseSettingsFolder(false, redraw));
+  $("[data-cfgsave]")?.addEventListener("click", () => { call("saveConfig"); toast("Settings saved"); setTimeout(redraw, 400); });
+  $("[data-cfgload]")?.addEventListener("click", async () => {
+    if (!await confirmSheet("Load the settings file?", "This phone's settings are replaced by the ones in the file (the PIN stays as it is).", "Load", false)) return;
+    const err = call("loadConfig");
+    if (err) toast(err, true); else toast("Settings restored — reopening Arthik");
+  });
+  $("[data-cfgoff]")?.addEventListener("click", () => { call("clearConfigDir"); toast("Settings are no longer copied to a file"); redraw(); });
   $("[data-restart]")?.addEventListener("click", () => call("restartEngine"));
   $("[data-log]")?.addEventListener("click", () => {
     sheet("Engine log", html`<pre class="log">${call("log") || "(empty)"}</pre>`, html`<span class="grow"></span><button data-close>Close</button>`,

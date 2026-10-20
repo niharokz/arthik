@@ -4,7 +4,7 @@
 
 import { html, raw, qs, debounce, reducedMotion } from "../util.js";
 import { S, toast, formData, ro, sheet, PERIODS, catOptions, catName } from "../ui.js";
-import { get, put, del, postText } from "../api.js";
+import { get, put, post, del, postText, deviceKey, setDeviceKey } from "../api.js";
 import { logout, navOrder, NAV_ITEMS, BOTTOM_COUNT } from "../main.js";
 import { menuCard, wireMenuCard } from "./menu.js";
 import { isApp } from "../native.js";
@@ -57,7 +57,8 @@ export async function render(root, ctx) {
         ${isApp ? "" : html`<div class="card"><header><h2>Account</h2></header>
           <p style="margin-top:0">Signed in as <b>${st.user}</b>${ro() ? " (read-only demo)" : ""}. ${ro() ? "" : html`<span class="muted">The password is set in the server's .env file.</span>`}</p>
           <button data-logout>Sign out</button>
-          <p class="faint" style="font-size:.8rem;margin-bottom:0">Arthik ${st.version} · <a href="/">About</a></p></div>`}
+          <p class="faint" style="font-size:.8rem;margin-bottom:0">Arthik ${st.version} · <a href="/">About</a></p></div>
+        ${ro() ? "" : html`<div class="card" data-devkey></div>`}`}
       </div>
     </div>`);
   root.querySelector("[data-settings]").addEventListener("submit", async (e) => {
@@ -71,6 +72,7 @@ export async function render(root, ctx) {
     } catch (err) { toast(err.message, true); }
   });
   root.querySelector("[data-logout]")?.addEventListener("click", logout);
+  deviceKeyCard(root.querySelector("[data-devkey]"));
   if (isApp) wirePhoneCard(root, ctx);
   wireMenuCard(root);
   root.querySelector("[data-import]")?.addEventListener("click", () => importSheet(ctx));
@@ -176,4 +178,41 @@ function report(r, dry) {
     ${r.new_categories?.length ? html`<p>New categories: ${r.new_categories.join(", ")}</p>` : ""}
     ${r.new_labels?.length ? html`<p>New labels: ${r.new_labels.join(", ")}</p>` : ""}
     ${r.errors.length ? html`<ul style="max-height:200px;overflow:auto;padding-left:18px">${r.errors.slice(0, 50).map((e) => html`<li>line ${e.line}: ${e.msg}</li>`)}</ul>` : ""}</div>`;
+}
+
+// ---- this device: the device key keeps it signed in until sign-out ----
+
+async function deviceKeyCard(card) {
+  if (!card) return;
+  let me;
+  try { me = await get("/api/me"); } catch { return; }
+  const until = me.expires ? new Date(me.expires) : null;
+  const status = me.remembered
+    ? html`<p class="pos" style="margin-top:0">✓ This device stays signed in until you sign out.</p>`
+    : html`<p class="muted" style="margin-top:0">Signed in until ${until ? until.toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "the session ends"}. Enter the device key to stay signed in on this device.</p>`;
+  card.innerHTML = String(html`<header><h2>🔐 This device</h2></header>${status}
+    ${me.device_key ? html`<form class="row wrap" data-keyform style="gap:8px">
+        <input name="key" type="password" autocomplete="off" placeholder="Device key" value="${deviceKey()}" style="flex:1 1 220px" aria-label="Device key">
+        <button class="primary" type="submit">Save</button>
+        ${deviceKey() || me.remembered ? html`<button type="button" data-forget>Forget on this device</button>` : ""}
+      </form>
+      <p class="faint" style="font-size:.8rem;margin-bottom:0">The key lives in the server's .env. Changing it there signs every remembered device out — enter the new one here again. ${me.remembered ? "" : "A wrong key counts as a failed sign-in."}</p>`
+    : html`<p class="faint" style="font-size:.85rem;margin:0">No device key is set on the server. Add ARTHIK_DEVICE_KEY to .env to keep chosen devices signed in.</p>`}`);
+  card.querySelector("[data-keyform]")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const key = e.target.key.value.trim();
+    if (!key) return;
+    try {
+      await post("/api/device-key", { key });
+      setDeviceKey(key);
+      toast("This device stays signed in until you sign out");
+      deviceKeyCard(card);
+    } catch (err) { toast(err.message, true); }
+  });
+  card.querySelector("[data-forget]")?.addEventListener("click", async () => {
+    setDeviceKey("");
+    try { await del("/api/device-key"); } catch { /* signed out already */ }
+    toast("Device key removed — this sign-in now ends like any other");
+    deviceKeyCard(card);
+  });
 }

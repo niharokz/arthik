@@ -1,10 +1,45 @@
 package com.nihars.arthik
 
 import android.content.Context
+import android.content.SharedPreferences
 
-/** App settings stored on the phone only (never in the synced folder). */
+/**
+ * App settings on the phone. The user-facing ones are also mirrored to a settings
+ * file in a folder chosen in Settings → Phone (see AppConfig).
+ */
 class Prefs(ctx: Context) {
     private val sp = ctx.getSharedPreferences("arthik", Context.MODE_PRIVATE)
+    private var listener: SharedPreferences.OnSharedPreferenceChangeListener? = null
+
+    /** Calls fn with the key of every changed setting (one listener; kept referenced). */
+    fun onChange(fn: (String) -> Unit) {
+        listener?.let { sp.unregisterOnSharedPreferenceChangeListener(it) }
+        listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key -> if (key != null) fn(key) }.also {
+            sp.registerOnSharedPreferenceChangeListener(it)
+        }
+    }
+
+    /** Folder of the settings file ("" = not kept in a file). */
+    var configDir: String
+        get() = sp.getString("config_dir", "") ?: ""
+        set(v) = sp.edit().putString("config_dir", v).apply()
+
+    /** The settings that go in the file, as stored now. */
+    fun exportable(): Map<String, Any?> = sp.all.filterKeys { it in AppConfig.KEYS }
+
+    /** Applies values read from the settings file. */
+    fun import(values: Map<String, Any>) {
+        val e = sp.edit()
+        for ((k, v) in values) {
+            when (v) {
+                is String -> e.putString(k, v)
+                is Boolean -> e.putBoolean(k, v)
+                is Int -> e.putInt(k, v)
+                is Long -> e.putLong(k, v)
+            }
+        }
+        e.commit()
+    }
 
     /** "" (first run), "demo" or "folder". */
     var mode: String

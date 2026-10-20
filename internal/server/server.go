@@ -20,13 +20,16 @@ import (
 	"gitlab.com/niharokz/arthik/internal/feature/state"
 	"gitlab.com/niharokz/arthik/internal/feature/summary"
 	"gitlab.com/niharokz/arthik/internal/feature/transactions"
+	"gitlab.com/niharokz/arthik/internal/guard"
 	"gitlab.com/niharokz/arthik/internal/httpx"
 	"gitlab.com/niharokz/arthik/web"
 )
 
 // Options tune the handler.
 type Options struct {
-	Local bool // phone app: no about page, the app opens straight away
+	Local    bool                       // phone app: no about page, the app opens straight away
+	Guard    *guard.Guard               // blocks banned addresses (nil = none)
+	ClientIP func(*http.Request) string // real client address, for the guard
 }
 
 // New returns the HTTP handler.
@@ -88,6 +91,9 @@ func New(a *auth.Auth, o Options) http.Handler {
 		}
 		files.ServeHTTP(w, r)
 	})
+	if o.Guard != nil {
+		return headers(o.Guard.Middleware(o.ClientIP, mux))
+	}
 	return headers(mux)
 }
 

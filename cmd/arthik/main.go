@@ -8,6 +8,8 @@
 //	arthik demo-seed        regenerate the demo dataset now
 //	arthik health           exit 0 if the running server answers (Docker healthcheck)
 //	arthik summary          month spend vs budget and the inbox, as JSON (phone widget)
+//	arthik bans             list banned addresses
+//	arthik unban IP|all     lift a ban
 //	arthik version
 package main
 
@@ -34,13 +36,14 @@ import (
 	"gitlab.com/niharokz/arthik/internal/demo"
 	"gitlab.com/niharokz/arthik/internal/feature/state"
 	"gitlab.com/niharokz/arthik/internal/feature/summary"
+	"gitlab.com/niharokz/arthik/internal/guard"
 	"gitlab.com/niharokz/arthik/internal/httpx"
 	"gitlab.com/niharokz/arthik/internal/inbox"
 	"gitlab.com/niharokz/arthik/internal/server"
 )
 
-// version is set at build time: -ldflags "-X main.version=1.0.0".
-var version = "1.3.6"
+// version is set at build time: -ldflags "-X main.version=1.0.1".
+var version = "1.0.1"
 
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime)
@@ -67,6 +70,10 @@ func main() {
 		err = printSummary()
 	case "parse-sms":
 		err = parseSMS(os.Args[2:])
+	case "bans":
+		err = listBans()
+	case "unban":
+		err = unban(os.Args[2:])
 	case "version", "--version", "-v":
 		fmt.Println("arthik", version)
 	case "help", "--help", "-h":
@@ -91,6 +98,8 @@ usage: arthik <command>
   health           check that the running server answers
   summary          this month's spending and the inbox as JSON (read-only)
   parse-sms TEXT   show how an SMS would be read (uses <data>/inbox/sms_rules.md too)
+  bans             list addresses banned after failed sign-ins
+  unban IP|all     lift a ban (the running server notices at once)
   version          print the version
 `
 
@@ -161,11 +170,26 @@ func serve() error {
 	if len(accounts) == 0 {
 		return fmt.Errorf("nothing to serve: set ARTHIK_DATA or enable the demo")
 	}
-	a := auth.New(cfg.Secret, accounts...)
+	opt := auth.Options{SessionTTL: cfg.Security.SessionTTL}
+	var g *guard.Guard
+	if !cfg.Local() {
+		trusted, err := guard.ParseNets(cfg.Security.TrustedProxies)
+		if err != nil {
+			return fmt.Errorf("ARTHIK_TRUSTED_PROXIES: %w", err)
+		}
+		exempt, err := guard.ParseNets(cfg.Security.BanExempt)
+		if err != nil {
+			return fmt.Errorf("ARTHIK_BAN_EXEMPT: %w", err)
+		}
+		g = guard.New(guard.Options{Dir: cfg.Security.StateDir, MaxFails: cfg.Security.MaxFails, Term: cfg.Security.BanTerm, Exempt: exempt})
+		opt.Guard, opt.DeviceKey = g, cfg.Security.DeviceKey
+		opt.ClientIP = func(r *http.Request) string { return guard.ClientIP(r, trusted) }
+	}
+	a := auth.New(cfg.Secret, opt, accounts...)
 	if cfg.Local() {
 		a.EnableLocal(cfg.LocalToken)
 	} else if cfg.Secret == "" {
-		log.Printf("WARN ARTHIK_SECRET is empty — sign-ins will not survive a restart")
+		log.Printf("WARN ARTHIK_SECRET is empty — sign-ins (and remembered devices) end at every restart")
 	}
 	if own != nil {
 		if le := own.LoadError(); le != nil {
@@ -173,7 +197,7 @@ func serve() error {
 		}
 	}
 
-	srv := &http.Server{Addr: cfg.Listen, Handler: server.New(a, server.Options{Local: cfg.Local()}),
+	srv := &http.Server{Addr: cfg.Listen, Handler: server.New(a, server.Options{Local: cfg.Local(), Guard: g, ClientIP: opt.ClientIP}),
 		ReadTimeout: server.ReadTimeout, WriteTimeout: server.WriteTimeout, IdleTimeout: server.IdleTimeout}
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
@@ -357,5 +381,55 @@ func parseSMS(args []string) error {
 	if r.Available != 0 {
 		fmt.Printf("available: %s\n", r.Available)
 	}
+	return nil
+}
+
+// stateDir is where the server keeps bans.json (same setting as the server).
+func stateDir() (string, error) {
+	cfg, err := config.Load()
+	if err != nil && cfg.Security.StateDir == "" {
+		return "", err
+	}
+	return cfg.Security.StateDir, nil
+}
+
+func listBans() error {
+	dir, err := stateDir()
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	ips, bans, err := guard.List(dir, now)
+	if err != nil {
+		return err
+	}
+	if len(ips) == 0 {
+		fmt.Println("no banned addresses")
+		return nil
+	}
+	for _, ip := range ips {
+		b := bans[ip]
+		fmt.Printf("%-40s until %s  (%s, since %s)\n", ip, b.Until.Local().Format("2006-01-02 15:04"), b.Reason, b.Since.Local().Format("2006-01-02 15:04"))
+	}
+	return nil
+}
+
+func unban(args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: arthik unban IP|all")
+	}
+	dir, err := stateDir()
+	if err != nil {
+		return err
+	}
+	n, err := guard.Unban(dir, args[0])
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		fmt.Println(args[0], "is not banned")
+		return nil
+	}
+	fmt.Printf("lifted %d ban(s)\n", n)
 	return nil
 }

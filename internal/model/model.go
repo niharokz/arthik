@@ -77,7 +77,7 @@ type Settings struct {
 // NavItems are the screens that can be ordered in the menu (Settings always stays last).
 var NavItems = []string{"home", "tx", "inbox", "accounts", "reports", "calendar", "categories", "budgets", "labels"}
 
-// retiredNav renames menu items from older versions (Scheduled became Inbox in 1.2.1).
+// retiredNav renames menu items from older versions (Scheduled became Inbox in 0.2.1).
 var retiredNav = map[string]string{"scheduled": "inbox"}
 
 // NormNav cleans a menu order: renames retired items, drops repeats and appends

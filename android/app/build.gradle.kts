@@ -10,10 +10,11 @@ val arthikVersion: String = (findProperty("arthikVersion") as String?)
     ?: Regex("var version = \"([^\"]+)\"").find(rootProject.file("../cmd/arthik/main.go").readText())?.groupValues?.get(1)
     ?: "0.0.0"
 
-// 1.1.0 → 10100
+// 1.0.1 → 30001. The +20000 keeps codes above the old pre-release builds (up to 10306),
+// so phones update in place after the numbering restarted at 1.0.1.
 fun versionCodeOf(v: String): Int {
     val p = v.split(".").map { it.takeWhile(Char::isDigit).toIntOrNull() ?: 0 } + listOf(0, 0, 0)
-    return p[0] * 10000 + p[1] * 100 + p[2]
+    return 20000 + p[0] * 10000 + p[1] * 100 + p[2]
 }
 
 // Release signing comes from the environment (android/.env), never from the repo.

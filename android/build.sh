@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."                       # repo root
 
 ENV_FILE=android/.env
 if [ -f "$ENV_FILE" ]; then set -a; . "$ENV_FILE"; set +a; fi
-KEYS_DIR="${ARTHIK_KEYSTORE_DIR:-$HOME/.arthik-keys}"
+KEYS_DIR="${ARTHIK_KEYSTORE_DIR:-${KEYS_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/keys}/.arthik-keys}"
 KEY_FILE="$KEYS_DIR/arthik.jks"
 IMAGE=arthik-android-builder
 

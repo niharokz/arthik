@@ -400,7 +400,7 @@ func normSettings(s model.Settings) model.Settings {
 		s.Theme = def.Theme
 	}
 	if len(s.NavOrder) > 0 {
-		s.NavOrder, _ = model.NormNav(s.NavOrder) // e.g. "scheduled" from 1.2.0 → "inbox"
+		s.NavOrder, _ = model.NormNav(s.NavOrder) // e.g. "scheduled" from 0.2.0 → "inbox"
 	}
 	return s
 }

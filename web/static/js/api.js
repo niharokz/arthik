@@ -21,6 +21,11 @@ function save(q) {
   listeners.forEach((fn) => fn(q.length));
 }
 
+// The device key (ARTHIK_DEVICE_KEY) saved on this device: sign-ins with it last until sign-out.
+const DKEY = "arthik.device_key";
+export const deviceKey = () => { try { return localStorage.getItem(DKEY) || ""; } catch { return ""; } };
+export const setDeviceKey = (k) => { try { k ? localStorage.setItem(DKEY, k) : localStorage.removeItem(DKEY); } catch { /* blocked */ } };
+
 /** Pending offline changes. */
 export const queue = () => load();
 export const onQueue = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
