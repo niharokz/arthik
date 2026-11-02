@@ -31,10 +31,10 @@ type Config struct {
 	Listen       string        // ARTHIK_LISTEN, default :8080
 	DataDir      string        // ARTHIK_DATA, default /data/finance (owner's dataset; may be empty in local mode)
 	User         string        // ARTHIK_USER, default "admin"
-	Password     string        // ARTHIK_PASSWORD (plain text or bcrypt hash) — required
-	DemoEnabled  bool          // ARTHIK_DEMO, default true
-	DemoUser     string        // ARTHIK_DEMO_USER, default "demouser"
-	DemoPassword string        // ARTHIK_DEMO_PASSWORD, default "demo" (shown on the login screen)
+	Password     string        // ARTHIK_PASSWORD_HASH (bcrypt, preferred) or ARTHIK_PASSWORD — required
+	DemoEnabled  bool          // on when ARTHIK_DEMO_USER and ARTHIK_DEMO_PASSWORD are both set (always in local mode)
+	DemoUser     string        // ARTHIK_DEMO_USER: read-only demo login, shown on the start page
+	DemoPassword string        // ARTHIK_DEMO_PASSWORD
 	Secret       string        // ARTHIK_SECRET — signs sessions; random per start when empty
 	WatchEvery   time.Duration // ARTHIK_WATCH_SECONDS, default 3
 
@@ -140,10 +140,9 @@ func Load() (Config, error) {
 		Listen:       env("ARTHIK_LISTEN", ":8080"),
 		DataDir:      env("ARTHIK_DATA", "/data/finance"),
 		User:         env("ARTHIK_USER", "admin"),
-		Password:     os.Getenv("ARTHIK_PASSWORD"),
-		DemoEnabled:  !strings.EqualFold(env("ARTHIK_DEMO", "true"), "false"),
-		DemoUser:     env("ARTHIK_DEMO_USER", "demouser"),
-		DemoPassword: env("ARTHIK_DEMO_PASSWORD", "demo"),
+		Password:     env("ARTHIK_PASSWORD_HASH", os.Getenv("ARTHIK_PASSWORD")),
+		DemoUser:     strings.TrimSpace(os.Getenv("ARTHIK_DEMO_USER")),
+		DemoPassword: os.Getenv("ARTHIK_DEMO_PASSWORD"),
 		Secret:       os.Getenv("ARTHIK_SECRET"),
 		WatchEvery:   3 * time.Second,
 	}
@@ -168,6 +167,7 @@ func Load() (Config, error) {
 		AIModel:    env("ARTHIK_AI_MODEL", ""),
 		AITimeout:  time.Duration(envInt("ARTHIK_AI_TIMEOUT_SECONDS", 120)) * time.Second,
 	}
+	c.DemoEnabled = c.DemoUser != "" && c.DemoPassword != ""
 	if c.Inbox.KeepDays <= c.Inbox.MaxAgeDays {
 		return c, fmt.Errorf("ARTHIK_INBOX_KEEP_DAYS (%d) must be larger than ARTHIK_INBOX_MAX_AGE_DAYS (%d), or old items would be imported again", c.Inbox.KeepDays, c.Inbox.MaxAgeDays)
 	}
@@ -185,13 +185,17 @@ func Load() (Config, error) {
 		if os.Getenv("ARTHIK_USER") == "" {
 			c.User = "me"
 		}
+		c.DemoEnabled, c.DemoUser = true, "demouser" // the phone app's "Explore the demo"
 		return c, nil
 	case ModeServer:
 	default:
 		return c, fmt.Errorf("ARTHIK_MODE must be server or local, not %q", c.Mode)
 	}
 	if c.Password == "" {
-		return c, fmt.Errorf("ARTHIK_PASSWORD is not set (put it in .env — plain text or a hash from `arthik hash-password`)")
+		return c, fmt.Errorf("ARTHIK_PASSWORD_HASH (or ARTHIK_PASSWORD) is not set — make a hash with `arthik hash-password`")
+	}
+	if h := os.Getenv("ARTHIK_PASSWORD_HASH"); h != "" && !strings.HasPrefix(h, "$2") {
+		return c, fmt.Errorf("ARTHIK_PASSWORD_HASH is not a bcrypt hash (make one with `arthik hash-password`)")
 	}
 	if k := c.Security.DeviceKey; k != "" && len(k) < 24 {
 		return c, fmt.Errorf("ARTHIK_DEVICE_KEY must be at least 24 characters (make one with: openssl rand -hex 32)")

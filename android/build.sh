@@ -6,14 +6,18 @@
 #   ./android/build.sh debug      debug APK (no key)  → android/dist/arthik-<version>-debug.apk
 #   ./android/build.sh quick      signed release APK, no tests, 64-bit phones only (fastest)
 #
-# Settings come from android/.env (copy android/.env.example).
+# Settings come from android/.env (copy android/.env.example), or from
+# $KEYS_HOME/.arthik-keys/arthik.env next to the key (CI: the release runner).
 set -euo pipefail
 cd "$(dirname "$0")/.."                       # repo root
 
 ENV_FILE=android/.env
 if [ -f "$ENV_FILE" ]; then set -a; . "$ENV_FILE"; set +a; fi
-KEYS_DIR="${ARTHIK_KEYSTORE_DIR:-${KEYS_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/keys}/.arthik-keys}"
+# Signing keys live with the other apps' keys: $KEYS_HOME/.arthik-keys
+KEYS_HOME="${KEYS_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/keys}"
+KEYS_DIR="${ARTHIK_KEYSTORE_DIR:-$KEYS_HOME/.arthik-keys}"
 KEY_FILE="$KEYS_DIR/arthik.jks"
+if [ -z "${ARTHIK_KEYSTORE_PASSWORD:-}" ] && [ -f "$KEYS_DIR/arthik.env" ]; then set -a; . "$KEYS_DIR/arthik.env"; set +a; fi
 IMAGE=arthik-android-builder
 
 mkdir -p android/.cache/home android/dist "$KEYS_DIR"
@@ -24,7 +28,8 @@ docker build -t "$IMAGE" - < android/Dockerfile
 
 # Runs a command in the builder as you (files stay yours), with caches kept in android/.cache.
 run() {
-  docker run --rm -t --user "$(id -u):$(id -g)" \
+  local tty=(); [ -t 1 ] && tty=(-t)            # CI has no terminal
+  docker run --rm ${tty[@]+"${tty[@]}"} --user "$(id -u):$(id -g)" \
     -v "$PWD":/src -v "$KEYS_DIR":/keys -w /src \
     -e HOME=/src/android/.cache/home \
     -e JAVA_TOOL_OPTIONS=-Duser.home=/src/android/.cache/home \

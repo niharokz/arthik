@@ -73,8 +73,8 @@ async function detail(root, ctx, id) {
         <div class="sub">${b ? `${money(fromPaise(paise(b) - paise(tot.totals[id] || "0")))} left` : c.budget ? "" : "no budget set"}</div></div>
       <div class="card stat"><div class="label">Monthly average · 12 months</div><div class="value">${amt(trend.average)}</div></div>
     </div>
-    <div class="card" style="margin-top:14px"><header><h2>Last 12 months</h2></header>${columns(trend.rows.map((r) => ({ label: r.label, value: r.total })), { name: c.name })}</div>
-    <div class="card"><header><h2>Transactions · ${tot.range.label}</h2><a href="#/tx?category=${encodeURIComponent(id)}">All</a></header><div data-list>${grouped(tx.items)}</div></div>`);
+    <div class="card" style="margin-top:14px"><header><h2>Transactions · ${tot.range.label}</h2><a href="#/tx?category=${encodeURIComponent(id)}">All</a></header><div data-list>${grouped(tx.items)}</div></div>
+    <div class="card"><header><h2>Last 12 months</h2></header>${columns(trend.rows.map((r) => ({ label: r.label, value: r.total })), { name: c.name })}</div>`);
   wirePeriod(root, p, tot, () => detail(root, ctx, id));
   wireTips(root);
   wireRows(root.querySelector("[data-list]"), tx.items, (t) => openTx(t, () => ctx.refresh()));

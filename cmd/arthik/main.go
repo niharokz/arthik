@@ -42,8 +42,8 @@ import (
 	"gitlab.com/niharokz/arthik/internal/server"
 )
 
-// version is set at build time: -ldflags "-X main.version=1.0.1".
-var version = "1.0.1"
+// version is set at build time from the VERSION file: -ldflags "-X main.version=$(cat VERSION)".
+var version = "dev"
 
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime)

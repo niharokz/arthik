@@ -1,7 +1,7 @@
 // Budgets: budget vs actual for any period. Budgets are set per category (with their
 // own period) and scaled to the period you view; they reset every period.
 
-import { html, raw, qs, money, amt, paise, fromPaise } from "../util.js";
+import { html, qs, money, amt, paise, fromPaise } from "../util.js";
 import { S, sheet, ro, loading, periodState, periodQuery, periodBar, wirePeriod, catName, catIcon, cat } from "../ui.js";
 import { get } from "../api.js";
 import { categoryForm } from "./categories.js";
@@ -53,4 +53,3 @@ function progressNote(r) {
   return html`<p class="muted" style="margin:8px 0 0;font-size:.85rem">Day ${day} of ${len} — ${Math.round((day * 100) / len)}% of the period gone.</p>`;
 }
 
-export { raw };

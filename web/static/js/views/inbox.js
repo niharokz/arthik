@@ -4,9 +4,9 @@
 // what that merchant is, so the next draft fills itself in.
 
 import { html, raw, money, fmtShort, relDay, reducedMotion } from "../util.js";
-import { S, toast, ro, today, catName, catIcon, accName, loading, confirmSheet } from "../ui.js";
+import { S, toast, ro, today, catName, catIcon, accName, loading, confirmSheet, celebrate } from "../ui.js";
 import { get, post, put } from "../api.js";
-import { haptic, isApp, config, call, onNative } from "../native.js";
+import { isApp, config, call, onNative } from "../native.js";
 import { openTx } from "../txform.js";
 
 // How the category was chosen: [badge, label].
@@ -175,18 +175,19 @@ export async function render(root, ctx) {
   wireTimings(root, () => ctx.refresh());
 
   const byId = (id) => items.find((x) => x.id === id);
-  const act = async (fn, okMsg) => {
+  const act = async (fn, okMsg, kind = "ok") => {
     if (ro()) return toast("The demo is read-only");
-    try { await fn(); haptic("confirm"); toast(okMsg); } catch (e) { toast(e.message, true); }
+    try { await fn(); celebrate(kind); toast(okMsg); } catch (e) { toast(e.message, true); }
     ctx.refresh();
   };
-  // Slides a card away before the list reloads (resolves at once with reduced motion).
-  const leave = (id) => new Promise((resolve) => {
+  // Swipes a card away before the list reloads: right and green when accepted, left
+  // and red when rejected (resolves at once with reduced motion).
+  const leave = (id, how = "accept") => new Promise((resolve) => {
     const li = root.querySelector(`[data-draft="${CSS.escape(id)}"]`);
     if (!li || reducedMotion()) return resolve();
     li.style.height = li.offsetHeight + "px";
-    li.classList.add("leaving");
-    setTimeout(resolve, 260);
+    li.classList.add("leaving", how);
+    setTimeout(resolve, 380);
   });
   const path = (id, verb) => `/api/inbox/${encodeURIComponent(id)}/${verb}`;
   const edit = (x) => (ro() ? toast("The demo is read-only") : openTx({}, () => ctx.refresh(), { draft: x }));
@@ -205,13 +206,13 @@ export async function render(root, ctx) {
     }, `Accepted ${readyOnes.length}`);
   });
   root.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => edit(byId(b.dataset.edit))));
-  root.querySelectorAll("[data-reject]").forEach((b) => b.addEventListener("click", () => act(() => leave(b.dataset.reject).then(() => post(path(b.dataset.reject, "reject"), {})), "Rejected")));
-  root.querySelectorAll("[data-restore]").forEach((b) => b.addEventListener("click", () => act(() => post(path(b.dataset.restore, "restore"), {}), "Back in the inbox")));
+  root.querySelectorAll("[data-reject]").forEach((b) => b.addEventListener("click", () => act(() => leave(b.dataset.reject, "reject").then(() => post(path(b.dataset.reject, "reject"), {})), "Rejected", "reject")));
+  root.querySelectorAll("[data-restore]").forEach((b) => b.addEventListener("click", () => act(() => leave(b.dataset.restore, "restore").then(() => post(path(b.dataset.restore, "restore"), {})), "Back in the inbox", "edit")));
   root.querySelectorAll("[data-unpair]").forEach((b) => b.addEventListener("click", () => act(() => post(path(b.dataset.unpair, "unpair"), {}), "Split into two drafts")));
   root.querySelectorAll("[data-same]").forEach((b) => b.addEventListener("click", async () => {
     const x = byId(b.dataset.same);
     if (ro()) return toast("The demo is read-only");
     if (!(await confirmSheet("Already recorded?", `“${x.title}” will be linked to “${x.same.title}” and nothing new is added.`, "Link", false))) return;
-    act(() => post(path(x.id, "match"), { txn: x.same.id }), "Linked");
+    act(() => leave(x.id).then(() => post(path(x.id, "match"), { txn: x.same.id })), "Linked");
   }));
 }

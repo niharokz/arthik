@@ -10,3 +10,6 @@ patch/
 *.zip
 *.md
 !web/**
+.gitlab
+.gitlab-ci.yml
+scripts

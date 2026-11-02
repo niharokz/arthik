@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Launch logo: the icon's mark on a teal circle, drawn exactly like Android 12's
-     splash icon (160 dp circle, foreground at 240/108 scale) so the hand-over is seamless. -->
+<!-- Launch logo: the icon's mark on its dark circle, drawn like Android 12's splash icon (160 dp circle, the 108 dp foreground cropped to 72) so the hand-over is seamless. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="160dp"
     android:height="160dp"
@@ -8,19 +7,17 @@
     android:viewportHeight="72">
     <path android:fillColor="@color/teal_icon" android:pathData="M0,36a36,36 0,1 0,72 0a36,36 0,1 0,-72 0" />
     <group
-        android:scaleX="0.14"
-        android:scaleY="0.14"
-        android:translateX="0.16"
-        android:translateY="-0.68">
-        <path android:fillColor="#FFFFFFFF" android:pathData="M226,170a74,74 0,1 0,148 0a74,74 0,1 0,-148 0" />
-        <path android:fillColor="#00000000" android:strokeColor="#FF3A807A" android:strokeWidth="16"
-            android:strokeLineCap="round" android:strokeLineJoin="round"
-            android:pathData="M268,132H334M268,158H334M286,132c38,0 38,52 0,52h-14l50,48" />
-        <path android:fillColor="#FFFFFFFF" android:strokeColor="#FFFFFFFF" android:strokeWidth="12" android:strokeLineJoin="round"
-            android:pathData="M70,318L140,300L164,392L94,410Z" />
-        <path android:fillColor="#FFFFFFFF" android:strokeColor="#FFFFFFFF" android:strokeWidth="10" android:strokeLineJoin="round"
-            android:pathData="M156,304C200,290 236,280 262,282C290,284 318,300 346,318L404,304C432,297 446,334 420,344L300,382C262,394 226,394 196,384L176,378Z" />
-        <path android:fillColor="#00000000" android:strokeColor="#FF3A807A" android:strokeWidth="12" android:strokeLineCap="round"
-            android:pathData="M286,342C306,356 330,356 352,344" />
+        android:scaleX="0.82"
+        android:scaleY="0.82"
+        android:translateX="-5"
+        android:translateY="-5">
+        <path android:fillColor="#00000000" android:strokeColor="#593A807A" android:strokeWidth="1.6"
+            android:pathData="M11.5,50a38.5,38.5 0,1 0,77 0a38.5,38.5 0,1 0,-77 0" />
+        <path android:fillColor="#00000000" android:strokeColor="#FF66BDB3" android:strokeWidth="7"
+            android:strokeLineCap="round" android:pathData="M37,27H65M37,40H65" />
+        <path android:fillColor="#00000000" android:strokeColor="#FFA9B8FF" android:strokeWidth="7"
+            android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M41,27C62,27 62,53 41,53H38" />
+        <path android:fillColor="#00000000" android:strokeColor="#FF3A807A" android:strokeWidth="7"
+            android:strokeLineCap="round" android:pathData="M41,53L63,73" />
     </group>
 </vector>

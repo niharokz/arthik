@@ -1,23 +1,48 @@
-# arthik — double-entry personal finance (PWA).
-# Every host-specific value comes from .env (gitignored; template: .env.example).
+# Arthik: double-entry personal finance. All personal values come from .env.
 services:
   arthik:
-    build: .
-    image: arthik:latest
+    build: .                                  # version: the VERSION file
+    image: arthik:local
     container_name: arthik
     restart: unless-stopped
-    user: "${PUID:-1000}:${PGID:-1000}"
-    env_file: .env
+    init: true
+    user: "${PUID:-1000}:${PGID:-1000}"       # write data files as your user, not root
+    # Only these variables reach the container, so .env can be shared with other
+    # services without handing their secrets to Arthik.
     environment:
       ARTHIK_DATA: /data/finance
+      ARTHIK_STATE_DIR: /state
       ARTHIK_LISTEN: ":8080"
+      ARTHIK_USER: ${ARTHIK_USER:-}
+      ARTHIK_PASSWORD_HASH: ${ARTHIK_PASSWORD_HASH:-}         # bcrypt, from `arthik hash-password`
+      ARTHIK_PASSWORD: ${ARTHIK_PASSWORD:-}                   # plain-text alternative
+      ARTHIK_SECRET: ${ARTHIK_SECRET:-}
+      ARTHIK_DEVICE_KEY: ${ARTHIK_DEVICE_KEY:-}
+      ARTHIK_SESSION_HOURS: ${ARTHIK_SESSION_HOURS:-12}
+      ARTHIK_LOGIN_MAX_FAILS: ${ARTHIK_LOGIN_MAX_FAILS:-5}
+      ARTHIK_BAN_DAYS: ${ARTHIK_BAN_DAYS:-30}
+      ARTHIK_BAN_EXEMPT: ${ARTHIK_BAN_EXEMPT:-}
+      ARTHIK_TRUSTED_PROXIES: ${ARTHIK_TRUSTED_PROXIES:-}
+      ARTHIK_DEMO_USER: ${ARTHIK_DEMO_USER:-}                 # optional read-only demo login
+      ARTHIK_DEMO_PASSWORD: ${ARTHIK_DEMO_PASSWORD:-}
+      ARTHIK_WATCH_SECONDS: ${ARTHIK_WATCH_SECONDS:-3}
+      ARTHIK_PRIMARY: ${ARTHIK_PRIMARY:-true}                 # false on a second server sharing the folder
+      ARTHIK_INBOX_MAX_AGE_DAYS: ${ARTHIK_INBOX_MAX_AGE_DAYS:-30}
+      ARTHIK_INBOX_KEEP_DAYS: ${ARTHIK_INBOX_KEEP_DAYS:-120}
+      ARTHIK_INBOX_PAIR_DAYS: ${ARTHIK_INBOX_PAIR_DAYS:-2}
+      ARTHIK_INBOX_RESCAN_MINUTES: ${ARTHIK_INBOX_RESCAN_MINUTES:-10}
+      ARTHIK_AI_URL: ${ARTHIK_AI_URL:-}
+      ARTHIK_AI_MODEL: ${ARTHIK_AI_MODEL:-}
+      ARTHIK_AI_TIMEOUT_SECONDS: ${ARTHIK_AI_TIMEOUT_SECONDS:-120}
+      TZ: ${TZ:-UTC}
     volumes:
       - ${FINANCE_PATH:?set FINANCE_PATH in .env}:/data/finance
-      - ${STATE_PATH:-./state}:/state # server-only files (bans.json); never synced
-    init: true
+      - ${STATE_PATH:-./state}:/state         # bans.json; not synced to the phone
     read_only: true
     tmpfs:
       - /tmp
+    cap_drop:
+      - ALL
     security_opt:
       - no-new-privileges:true
     stop_grace_period: 30s
@@ -26,8 +51,12 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    networks: [homelab] # Caddy reaches arthik:8080 on this network
+    networks:
+      - proxy
+    # No published port: the reverse proxy reaches arthik:8080 on the shared network.
+    # For a quick local test instead, add:  ports: ["8080:8080"]
 
 networks:
-  homelab:
+  proxy:
+    name: ${ARTHIK_NETWORK:-homelab}
     external: true

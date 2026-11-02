@@ -296,14 +296,14 @@ func TestNavOrder(t *testing.T) {
 	if code, _ := o.do("PUT", "/api/settings", string(b)); code != 400 {
 		t.Errorf("unknown item = %d", code)
 	}
-	s["nav_order"] = []string{"home", "tx", "calendar", "reports", "accounts", "tx"}
+	s["nav_order"] = []string{"home", "tx", "calendar", "inbox", "reports", "accounts", "tx"} // inbox moved to the top bar
 	b, _ = json.Marshal(s)
 	if code, out := o.do("PUT", "/api/settings", string(b)); code != 200 {
 		t.Fatalf("put %d %v", code, out)
 	}
 	_, st = o.do("GET", "/api/state", "")
 	got, _ := json.Marshal(st["settings"].(map[string]any)["nav_order"])
-	want := `["home","tx","calendar","reports","accounts","inbox","categories","budgets","labels"]`
+	want := `["home","tx","calendar","reports","accounts","categories","budgets","labels"]`
 	if string(got) != want {
 		t.Errorf("nav_order = %s", got)
 	}
@@ -359,5 +359,52 @@ func TestInboxAPI(t *testing.T) {
 	_, st := d.do("GET", "/api/state", "")
 	if st["inbox"].(map[string]any)["pending"].(float64) < 1 {
 		t.Errorf("state inbox = %v", st["inbox"])
+	}
+}
+
+func TestHomeLayout(t *testing.T) {
+	o, _ := setup(t)
+	if code, out := o.do("POST", "/api/accounts", `{"name":"Wallet","type":"cash","opening_balance":"100"}`); code != 200 {
+		t.Fatalf("account %d %v", code, out)
+	}
+	_, st := o.do("GET", "/api/state", "")
+	s := st["settings"].(map[string]any)
+	put := func(home string) (int, map[string]any) {
+		s["home"] = json.RawMessage(home)
+		b, _ := json.Marshal(s)
+		return o.do("PUT", "/api/settings", string(b))
+	}
+	if code, _ := put(`[{"type":"bogus"}]`); code != 400 {
+		t.Errorf("unknown section = %d", code)
+	}
+	if code, _ := put(`[{"type":"account"}]`); code != 400 {
+		t.Errorf("custom section without ref = %d", code)
+	}
+	// repeats are dropped; a section for a missing account is left out
+	if code, out := put(`[{"type":"networth"},{"type":"account","ref":"wallet","title":"Cash"},{"type":"networth"},{"type":"label","ref":"gone"}]`); code != 200 {
+		t.Fatalf("put %d %v", code, out)
+	}
+	_, st = o.do("GET", "/api/state", "")
+	got, _ := json.Marshal(st["settings"].(map[string]any)["home"])
+	if want := `[{"type":"networth"},{"ref":"wallet","title":"Cash","type":"account"}]`; string(got) != want {
+		t.Errorf("home = %s", got)
+	}
+	// a preferences save without "home" keeps the layout
+	delete(s, "home")
+	b, _ := json.Marshal(s)
+	o.do("PUT", "/api/settings", string(b))
+	_, st = o.do("GET", "/api/state", "")
+	if got2, _ := json.Marshal(st["settings"].(map[string]any)["home"]); string(got2) != string(got) {
+		t.Errorf("layout lost: %s", got2)
+	}
+}
+
+func TestLandingPage(t *testing.T) {
+	o, _ := setup(t)
+	code, out := o.do("GET", "/", "")
+	page, _ := out["_raw"].(string)
+	if code != 200 || !strings.Contains(page, "user <code>demouser</code>") || !strings.Contains(page, "/-/releases/permalink/latest/downloads/arthik.apk") ||
+		strings.Contains(page, "{{") {
+		t.Fatalf("start page %d: %.400s", code, page)
 	}
 }

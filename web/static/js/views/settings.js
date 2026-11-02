@@ -1,6 +1,6 @@
-// Settings (and the "More" menu on phones): default category period, week/month/year
-// start, look-ahead, theme, hide amounts, inbox fallback categories and learned
-// rules, CSV import/export, data health, sign out.
+// Settings (the phone's fifth tab): the screens not in the bottom bar, default
+// category period, week/month/year start, look-ahead, theme, hide amounts, inbox
+// fallback categories and learned rules, CSV import/export, data health, sign out.
 
 import { html, raw, qs, debounce, reducedMotion } from "../util.js";
 import { S, toast, formData, ro, sheet, PERIODS, catOptions, catName } from "../ui.js";
@@ -17,10 +17,11 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 export async function render(root, ctx) {
   const st = S.state;
   const s = st.settings;
-  ctx.title(ctx.name === "more" ? "More" : "Settings");
+  ctx.title("Settings");
+  const more = navOrder().slice(BOTTOM_COUNT);
   const dis = ro() ? raw("disabled") : "";
   root.innerHTML = String(html`
-    ${ctx.name === "more" ? html`<div class="card"><ul class="list">${navOrder().slice(BOTTOM_COUNT).map((k) => [k, NAV_ITEMS[k][0], NAV_ITEMS[k][2]]).map(([k, l, i]) => html`<li><a class="item" href="#/${k}"><span class="ic">${i}</span><span class="main-t"><span class="t">${l}</span></span><span class="end faint">›</span></a></li>`)}</ul></div>` : ""}
+    ${more.length ? html`<nav class="card screens only-phone" aria-label="More screens"><ul class="list">${more.map((k) => html`<li><a class="item" href="#/${k}"><span class="ic">${NAV_ITEMS[k][2]}</span><span class="main-t"><span class="t">${NAV_ITEMS[k][0]}</span></span><span class="end faint">›</span></a></li>`)}</ul></nav>` : ""}
     ${isApp ? phoneCard() : ""}
     ${menuCard()}
     <div class="grid two">

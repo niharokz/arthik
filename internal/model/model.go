@@ -64,6 +64,8 @@ type Settings struct {
 	Theme          string   `yaml:"theme" json:"theme"`                       // auto|light|dark
 	HideAmounts    bool     `yaml:"hide_amounts" json:"hide_amounts"`
 	NavOrder       []string `yaml:"nav_order,omitempty,flow" json:"nav_order"` // menu order; first 4 = phone bottom bar
+	// Home screen sections, top to bottom (empty = the default layout).
+	Home []HomeSection `yaml:"home,omitempty" json:"home"`
 
 	// Inbox: category used when nothing better is known (empty = leave it to you).
 	InboxExpenseCategory string `yaml:"inbox_expense_category,omitempty" json:"inbox_expense_category"`
@@ -74,11 +76,26 @@ type Settings struct {
 	Extra map[string]any `yaml:",inline" json:"-"`
 }
 
-// NavItems are the screens that can be ordered in the menu (Settings always stays last).
-var NavItems = []string{"home", "tx", "inbox", "accounts", "reports", "calendar", "categories", "budgets", "labels"}
+// HomeSection is one block of the home screen: a built-in one, or an account,
+// category or label of yours (Ref) with an optional title.
+type HomeSection struct {
+	Type  string `yaml:"type" json:"type"`
+	Ref   string `yaml:"ref,omitempty" json:"ref,omitempty"`
+	Title string `yaml:"title,omitempty" json:"title,omitempty"`
+}
 
-// retiredNav renames menu items from older versions (Scheduled became Inbox in 0.2.1).
-var retiredNav = map[string]string{"scheduled": "inbox"}
+// HomeBuiltins are the built-in home sections, in the default order.
+var HomeBuiltins = []string{"networth", "period", "inbox", "spending", "budgets", "upcoming", "cards", "accounts", "recent", "cashflow"}
+
+// HomeCustom are the section types that show one of your accounts, categories or labels.
+var HomeCustom = []string{"account", "category", "label"}
+
+// NavItems are the screens that can be ordered in the menu (Settings always stays last;
+// the inbox has its own button in the top bar).
+var NavItems = []string{"home", "tx", "accounts", "reports", "calendar", "categories", "budgets", "labels"}
+
+// retiredNav renames or drops ("") menu items from older versions.
+var retiredNav = map[string]string{"scheduled": "", "inbox": ""}
 
 // NormNav cleans a menu order: renames retired items, drops repeats and appends
 // missing items in default order. unknown is the first item it did not recognise
@@ -91,7 +108,9 @@ func NormNav(in []string) (out []string, unknown string) {
 	seen := map[string]bool{}
 	for _, k := range in {
 		if r, ok := retiredNav[k]; ok {
-			k = r
+			if k = r; k == "" {
+				continue
+			}
 		}
 		if !known[k] {
 			if unknown == "" {

@@ -10,8 +10,8 @@ cd /src
 took() { echo "   ($((SECONDS - T0))s)"; T0=$SECONDS; } # time of the step just finished
 T0=$SECONDS
 
-VERSION=$(sed -n 's/^var version = "\(.*\)"$/\1/p' cmd/arthik/main.go)
-[ -n "$VERSION" ] || { echo "can't read the version from cmd/arthik/main.go" >&2; exit 1; }
+VERSION=$(cat VERSION)
+[ -n "$VERSION" ] || { echo "the VERSION file is empty" >&2; exit 1; }
 echo "== arthik $VERSION ($MODE) =="
 
 if [ "$QUICK" = 1 ]; then

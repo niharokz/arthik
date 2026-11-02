@@ -361,7 +361,6 @@ dialog.sheet::backdrop { background: rgba(10, 20, 18, 0.45); }
 @media (min-width: 900px) { .about .feat { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .about .feat .card h2 { margin-bottom: 6px; }
 .about .feat .card p { margin: 0; color: var(--muted); font-size: 0.92rem; }
-.about .ledger { font-family: var(--mono); font-size: 0.82rem; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; overflow-x: auto; white-space: pre; }
 .about footer { margin-top: 40px; color: var(--faint); font-size: 0.85rem; }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -498,8 +497,13 @@ button:active:not(:disabled), .btn:active { transform: scale(.97); }
 .count { font-style: normal; font-size: .68rem; font-weight: 700; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
   background: var(--expense); color: #fff; display: inline-grid; place-items: center; margin-left: auto; line-height: 1; }
 .count[hidden], .count:empty { display: none; }
-.bottom a .ic { position: relative; }
-.bottom a .ic .count { position: absolute; top: -6px; right: -12px; margin: 0; }
+.count.pop { animation: bounce .45s var(--ease); }
+
+/* the inbox button in the top bar */
+.bell { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; color: var(--text); flex: 0 0 auto; }
+.bell:hover { background: var(--surface-2); text-decoration: none; }
+.bell.on { color: var(--teal); background: var(--teal-soft); }
+.bell .count { position: absolute; top: 2px; right: 0; margin: 0; border: 2px solid var(--bg); height: 20px; }
 .tag { display: inline-block; font-size: .72rem; padding: 0 6px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--line); color: var(--muted); margin-right: 4px; }
 .tag.cat { color: var(--text); }
 .tag.learned { background: var(--teal-soft); color: var(--teal-strong); border-color: transparent; }
@@ -526,7 +530,15 @@ button:active:not(:disabled), .btn:active { transform: scale(.97); }
 .drafts.list > li.dcard.conf-low { border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); box-shadow: inset 3px 0 0 var(--warn); }
 .drafts.list > li.dcard.conf-medium { box-shadow: inset 3px 0 0 #3b7bc4; }
 .drafts.list > li.dcard.conf-high { box-shadow: inset 3px 0 0 var(--income-mark); }
-.drafts.list > li.dcard.leaving { height: 0 !important; opacity: 0; transform: translateX(40px); margin-bottom: 0; padding-top: 0; padding-bottom: 0; border-width: 0; }
+/* a reviewed card is tinted, then swipes away: right when accepted, left when rejected */
+.drafts.list > li.dcard.leaving { animation: card-out .38s var(--ease) forwards; pointer-events: none; }
+.drafts.list > li.dcard.leaving.reject { --out: -110%; --tint: var(--expense); }
+.drafts.list > li.dcard.leaving.restore { --out: 0%; --tint: var(--teal); }
+@keyframes card-out {
+  35% { background: color-mix(in srgb, var(--tint, var(--income)) 18%, var(--surface)); transform: none; opacity: 1; }
+  100% { background: color-mix(in srgb, var(--tint, var(--income)) 18%, var(--surface)); transform: translateX(var(--out, 110%)); opacity: 0;
+    height: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; border-width: 0; }
+}
 section.card:has(> .drafts) { background: transparent; border: 0; box-shadow: none; padding: 0; }
 .dc-meta { margin: -2px 0 6px 48px; display: flex; flex-wrap: wrap; gap: 4px 0; align-items: center; }
 .draft .checks { margin: 0 0 6px 48px; padding: 0; list-style: none; font-size: .8rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 12px; }
@@ -722,3 +734,45 @@ button.link:hover { text-decoration: underline; background: none; }
 .timings .thead { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; }
 .timings .thead > button, .timings .thead > small { flex: 0 0 auto; }
 .timings .tstep > .grow { flex: 1 1 220px; min-width: 0; }
+
+/* ---- home: your blocks ---- */
+.home { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+@media (min-width: 900px) { .home { grid-template-columns: repeat(2, minmax(0, 1fr)); } .home-b.wide { grid-column: 1 / -1; } }
+.home-b > .card { margin: 0; }
+.home-b > [data-period] .stat-chips { margin-bottom: 0; }
+.home-foot { display: flex; justify-content: center; margin: 18px 0 6px; }
+.own-big { display: flex; flex-direction: column; font-size: 1.5rem; font-weight: 700; margin: 2px 0 8px; }
+.own-big small { font-size: .8rem; font-weight: 400; }
+.bline { display: block; margin: 8px 0; color: inherit; }
+.bline:hover { text-decoration: none; }
+.chip-btn { border-radius: 999px; padding: 6px 12px; font-size: .85rem; }
+.home-edit .menu-row { padding: 6px 0; }
+.home-edit .menu-row .ic { font-size: 1rem; }
+
+/* the screens that are not in the bottom bar (Settings, phones only) */
+@media (min-width: 900px) { .only-phone { display: none; } }
+
+/* landing: demo login line */
+.about .demo-line { margin: -18px 0 30px; color: var(--muted); }
+.about .demo-line code { font-family: var(--mono); background: var(--surface); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; }
+
+/* ---- action feedback ---- */
+.burst { position: fixed; left: 50%; top: 42%; z-index: 200; width: 96px; height: 96px; margin: -48px 0 0 -48px; pointer-events: none;
+  animation: burst .85s var(--ease) forwards; }
+.burst svg { width: 100%; height: 100%; }
+.burst circle { fill: var(--income); opacity: .95; }
+.burst path { fill: none; stroke: #fff; stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 40; stroke-dashoffset: 40;
+  animation: draw-mark .35s .12s ease-out forwards; }
+.burst.edit circle { fill: var(--teal); }
+.burst.reject circle, .burst.delete circle { fill: var(--expense); }
+@keyframes burst { 0% { opacity: 0; transform: scale(.4); } 25% { opacity: 1; transform: scale(1.06); } 40% { transform: scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: scale(.92); } }
+@keyframes draw-mark { to { stroke-dashoffset: 0; } }
+/* the row of a transaction you just added or saved */
+.list > li.flash > .item { animation: row-flash 1.6s ease; }
+@keyframes row-flash { 0%, 30% { background: color-mix(in srgb, var(--income) 22%, transparent); } 100% { background: transparent; } }
+
+/* account screen: balance strip, then its transactions */
+.acc-head { display: flex; align-items: center; gap: 14px; }
+.acc-head > .ic { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; font-size: 1.5rem; background: var(--surface-2); flex: 0 0 auto; }
+.acc-head .label { font-size: .8rem; color: var(--muted); }
+.acc-head .hero-value { font-size: 1.6rem; }

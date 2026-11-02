@@ -1,6 +1,6 @@
 // Package settings is the Settings feature: default category period, week/month/
-// year start, look-ahead days, theme, amount privacy, menu order and the inbox's
-// fallback categories. Sign-in passwords live in
+// year start, look-ahead days, theme, amount privacy, menu order, home layout and
+// the inbox's fallback categories. Sign-in passwords live in
 // .env and are not editable here.
 package settings
 
@@ -30,6 +30,10 @@ func Register(rt *httpx.Router) {
 			if in.NavOrder == nil {
 				in.NavOrder = d.Settings.NavOrder // a form without the menu order keeps it
 			}
+			if in.Home == nil {
+				in.Home = d.Settings.Home // likewise the home layout
+			}
+			in.Home = homeRefs(d, in.Home)
 			for _, c := range []struct{ id, kind string }{{in.InboxExpenseCategory, model.KindExpense}, {in.InboxIncomeCategory, model.KindIncome}} {
 				if cat, ok := d.Category(c.id); c.id != "" && (!ok || (cat.Kind != c.kind && cat.Kind != model.KindBoth)) {
 					return fmt.Errorf("the inbox fallback category %q is not an %s category", c.id, c.kind)
@@ -83,6 +87,13 @@ func validate(s *model.Settings) error {
 		}
 		s.NavOrder = order
 	}
+	if s.Home != nil {
+		home, err := homeLayout(s.Home)
+		if err != nil {
+			return err
+		}
+		s.Home = home
+	}
 	switch s.Theme {
 	case "auto", "light", "dark":
 	default:
@@ -98,4 +109,67 @@ func navOrder(in []string) ([]string, error) {
 		return nil, fmt.Errorf("unknown menu item %q", unknown)
 	}
 	return out, nil
+}
+
+// homeLayout checks the home sections: known types, each built-in once, a ref on
+// custom sections, at most 40.
+func homeLayout(in []model.HomeSection) ([]model.HomeSection, error) {
+	if len(in) > 40 {
+		return nil, fmt.Errorf("the home screen takes at most 40 sections")
+	}
+	builtin, custom := map[string]bool{}, map[string]bool{}
+	for _, t := range model.HomeBuiltins {
+		builtin[t] = true
+	}
+	for _, t := range model.HomeCustom {
+		custom[t] = true
+	}
+	seen := map[string]bool{}
+	out := []model.HomeSection{}
+	for _, h := range in {
+		h.Type, h.Ref, h.Title = strings.TrimSpace(h.Type), strings.TrimSpace(h.Ref), strings.TrimSpace(h.Title)
+		switch {
+		case builtin[h.Type]:
+			h.Ref = ""
+		case custom[h.Type]:
+			if h.Ref == "" {
+				return nil, fmt.Errorf("a %s section needs a %s", h.Type, h.Type)
+			}
+		default:
+			return nil, fmt.Errorf("unknown home section %q", h.Type)
+		}
+		if len(h.Title) > 60 {
+			return nil, fmt.Errorf("section titles are at most 60 characters")
+		}
+		key := h.Type + "/" + h.Ref
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, h)
+	}
+	return out, nil
+}
+
+// homeRefs drops custom sections whose account, category or label no longer exists.
+func homeRefs(d *book.Data, home []model.HomeSection) []model.HomeSection {
+	if home == nil {
+		return nil
+	}
+	out := []model.HomeSection{}
+	for _, h := range home {
+		ok := true
+		switch h.Type {
+		case "account":
+			_, ok = d.Account(h.Ref)
+		case "category":
+			_, ok = d.Category(h.Ref)
+		case "label":
+			_, ok = d.Label(h.Ref)
+		}
+		if ok {
+			out = append(out, h)
+		}
+	}
+	return out
 }

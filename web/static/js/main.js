@@ -1,6 +1,6 @@
-// App shell: sign-in, navigation (bottom bar on phones, sidebar on desktop), hash
-// router, the "+" button, banners (demo, data problems, offline queue), screen
-// transitions and the service worker. Inside the Android app the sign-in screen is
+// App shell: sign-in, navigation (bottom bar on phones, sidebar on desktop, the inbox
+// button in the top bar), hash router, the "+" button, banners (demo, data problems,
+// offline queue), screen transitions and the service worker. Inside the Android app the sign-in screen is
 // replaced by the app gate (appmode.js) and the back button is handled here.
 
 import { html, raw, countUp, replay } from "./util.js";
@@ -35,16 +35,19 @@ const ROUTES = {
   reports: [reports, "reports", "Reports"],
   labels: [labels, "labels", "Labels"],
   settings: [settings, "settings", "Settings"],
-  more: [settings, "more", "More"],
+  more: [settings, "settings", "Settings"], // old links
 };
 
 // Every screen in the menu: key → [label, short label for the bottom bar, icon].
 export const NAV_ITEMS = {
   home: ["Overview", "Home", "🏠"], tx: ["Transactions", "Transactions", "🧾"], accounts: ["Accounts", "Accounts", "🏦"],
   reports: ["Reports", "Reports", "📊"], calendar: ["Calendar", "Calendar", "📅"], categories: ["Categories", "Categories", "🗂️"],
-  budgets: ["Budgets", "Budgets", "🎯"], inbox: ["Inbox", "Inbox", "📥"], labels: ["Labels", "Labels", "🏷️"],
+  budgets: ["Budgets", "Budgets", "🎯"], labels: ["Labels", "Labels", "🏷️"],
 };
-export const BOTTOM_COUNT = 4; // the first 4 go in the phone's bottom bar, the rest under More
+export const BOTTOM_COUNT = 4; // the first 4 go in the phone's bottom bar, the rest are listed in Settings
+
+// The inbox button's bell.
+const BELL = raw(`<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>`);
 
 /** Menu order from settings (unknown keys dropped, missing ones appended). */
 export function navOrder() {
@@ -67,20 +70,21 @@ function shell() {
   const st = S.state;
   const order = navOrder();
   const NAV = [...order.map((k) => [k, NAV_ITEMS[k][0], NAV_ITEMS[k][2]]), ["settings", "Settings", "⚙️"]];
-  const BOTTOM = [...order.slice(0, BOTTOM_COUNT).map((k) => [k, NAV_ITEMS[k][1], NAV_ITEMS[k][2]]), ["more", "More", "☰"]];
+  const BOTTOM = [...order.slice(0, BOTTOM_COUNT).map((k) => [k, NAV_ITEMS[k][1], NAV_ITEMS[k][2]]), ["settings", "Settings", "⚙️"]];
   root.innerHTML = String(html`<div class="app">
     <nav class="side" aria-label="Main">
       <a class="brand" href="#/home"><img src="/icon.svg" alt="">Arthik</a>
       ${ro() ? "" : html`<button class="primary add" data-add>＋ Add transaction</button>`}
-      ${NAV.map(([k, l, i]) => html`<a class="nav" href="#/${k}" data-nav="${k}"><span>${i}</span>${l}${k === "inbox" ? html`<i class="count" data-inbox-count></i>` : ""}</a>`)}
+      ${NAV.map(([k, l, i]) => html`<a class="nav" href="#/${k}" data-nav="${k}"><span>${i}</span>${l}</a>`)}
       <div class="foot">${st.user}${ro() ? " · read-only demo" : ""}<br>Arthik ${st.version}</div>
     </nav>
     <div class="main">
-      <header class="top"><button class="ghost icon" data-back hidden aria-label="Back">‹</button><h1 data-title>Arthik</h1><span data-qbadge></span><span data-actions class="row"></span></header>
+      <header class="top"><button class="ghost icon" data-back hidden aria-label="Back">‹</button><h1 data-title>Arthik</h1><span data-qbadge></span><span data-actions class="row"></span>
+        <a class="bell" href="#/inbox" data-nav="inbox" aria-label="Inbox">${BELL}<i class="count" data-inbox-count></i></a></header>
       <div data-banners></div>
       <div class="content" data-view></div>
     </div>
-    <nav class="bottom" aria-label="Main">${BOTTOM.map(([k, l, i]) => html`<a href="#/${k}" data-nav="${k}"><span class="ic">${i}${k === "inbox" || (k === "more" && !order.slice(0, BOTTOM_COUNT).includes("inbox")) ? html`<i class="count" data-inbox-count></i>` : ""}</span>${l}</a>`)}</nav>
+    <nav class="bottom" aria-label="Main">${BOTTOM.map(([k, l, i]) => html`<a href="#/${k}" data-nav="${k}"><span class="ic">${i}</span>${l}</a>`)}</nav>
     ${ro() ? "" : html`<button class="fab" data-add aria-label="Add transaction">＋</button>`}
   </div>`);
   root.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => openTx({}, () => refresh())));
@@ -90,9 +94,15 @@ function shell() {
   inboxBadge(st.inbox?.pending || 0);
 }
 
-/** Shows how many drafts wait for review on the Inbox menu item. */
+/** Shows how many drafts wait for review on the inbox button (it pops when the count grows). */
+let lastCount = -1;
 export function inboxBadge(n) {
-  root.querySelectorAll("[data-inbox-count]").forEach((el) => { el.textContent = n > 99 ? "99+" : n || ""; el.hidden = !n; });
+  root.querySelectorAll("[data-inbox-count]").forEach((el) => {
+    el.textContent = n > 99 ? "99+" : n || "";
+    el.hidden = !n;
+    if (n > lastCount && lastCount >= 0) replay(el, "pop");
+  });
+  lastCount = n;
 }
 
 function banners() {
@@ -124,9 +134,9 @@ async function route() {
   const changed = r.name + "/" + r.arg !== lastRoute; // a new screen (not a re-render)
   lastRoute = r.name + "/" + r.arg;
   const [mod, nav, title] = ROUTES[r.name];
-  const inBottom = navOrder().slice(0, BOTTOM_COUNT).includes(nav);
+  const inBottom = nav === "inbox" || navOrder().slice(0, BOTTOM_COUNT).includes(nav);
   root.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === nav ||
-    (a.dataset.nav === "more" && a.closest(".bottom") && (nav === "more" || !inBottom))));
+    (a.dataset.nav === "settings" && a.closest(".bottom") && !inBottom)));
   const view = root.querySelector("[data-view]");
   const titleEl = root.querySelector("[data-title]");
   const actions = root.querySelector("[data-actions]");
@@ -170,6 +180,7 @@ export async function refresh() {
   try {
     await loadState();
     banners();
+    inboxBadge(S.state.inbox?.pending || 0);
   } catch (e) { toast(e.message, true); }
   await route();
 }
@@ -283,4 +294,3 @@ addEventListener("scroll", () => {
 
 watchSegments();
 boot();
-export { raw };

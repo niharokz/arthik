@@ -2,6 +2,39 @@
 
 Versions before 1.0.1 were pre-releases and are numbered 0.x here.
 
+## 1.0.2 — 2026-11-02
+
+- **New logo**: a ₹ drawn in three strokes on a dark tile, in the family of the other apps.
+  New launcher, splash, notification and web icons.
+- **Your home screen.** ✎ on the home screen: show, hide and reorder blocks, and create
+  blocks for any account, category or label (balance or total plus its latest
+  transactions). Saved in `settings.md` (`home:`), so the phone and the web match. Only
+  the data the chosen blocks need is loaded.
+- **Inbox bell.** The inbox moved out of the menu to a 🔔 in the top bar with the number of
+  drafts waiting (the old badge on *More* is gone).
+- **Settings tab.** *More* is now *Settings*; the screens that are not in the bottom bar are
+  listed at its top.
+- **Straight to transactions.** Opening an account shows its balance and then its
+  transactions (with ＋ Add for that account); card details, cleared/projected balances and
+  the chart follow. A category shows its transactions before the chart.
+- **Feedback animations.** Accepted drafts swipe right in green, rejected ones left in red;
+  saving, accepting, editing or deleting shows a short tick, pencil or cross, and the
+  transaction you just saved lights up in the list.
+- **Start page**: shorter, with the demo login, the Android APK download and the version.
+- **Demo login** from `.env`: `ARTHIK_DEMO_USER` and `ARTHIK_DEMO_PASSWORD` (both empty = no
+  demo; `ARTHIK_DEMO` is gone).
+- `ARTHIK_PASSWORD_HASH` (bcrypt) for the password; `ARTHIK_PASSWORD` still works.
+- `docker-compose.yml` passes only the `ARTHIK_*` variables and `TZ` into the container (a
+  shared `.env` no longer hands other services' secrets to Arthik), drops all capabilities,
+  and takes the network name from `ARTHIK_NETWORK`.
+- **Releases on GitLab**: the version lives in `VERSION`; `scripts/release.sh` tags a release,
+  CI tests it, your own runner builds the signed APK and the release gets this changelog
+  section and the APK (`/-/releases/permalink/latest/downloads/arthik.apk`). Issue and merge
+  request templates, `SECURITY.md`, `scripts/check-public.sh` (pre-push hook) and
+  `scripts/dev.sh`.
+- The Android build reads the keystore password from `$KEYS_HOME/.arthik-keys/arthik.env`
+  when `android/.env` has none (the CI runner), and works without a terminal.
+
 ## 1.0.1 — 2026-10-20
 
 First release.

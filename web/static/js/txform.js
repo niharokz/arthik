@@ -3,7 +3,7 @@
 // past/future dates. It also reviews inbox drafts: saving accepts the draft.
 
 import { html, raw, calc, fromPaise, paise, money, todayStr, nowTime, newId, debounce, qs, fmtShort } from "./util.js";
-import { S, sheet, toast, confirmSheet, catOptions, accOptions, ro, today, cat, accName, catName } from "./ui.js";
+import { S, sheet, toast, confirmSheet, catOptions, accOptions, ro, today, cat, accName, catName, celebrate, flashTx } from "./ui.js";
 import { get, post, txWrite } from "./api.js";
 import { haptic } from "./native.js";
 
@@ -278,7 +278,8 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
         else if (editing) r = await txWrite("PUT", "/api/transactions/" + encodeURIComponent(tx.id), e);
         else { e.id = newId(e.date); r = await txWrite("POST", "/api/transactions", e); }
         setLastAcc(st.account);
-        haptic("confirm");
+        flashTx(draft ? r.id : editing ? tx.id : e.id);
+        celebrate(editing ? "edit" : "ok");
         close();
         toast(r.queued ? "Saved offline — it will sync when you are back online" : draft ? "Accepted" : editing ? "Saved" : e.date > today() ? "Scheduled for " + e.date : "Added");
         onSaved(r);
@@ -301,6 +302,7 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
       try {
         const r = await txWrite("DELETE", "/api/transactions/" + encodeURIComponent(tx.id));
         close();
+        celebrate("delete");
         toast(r.queued ? "Deleted offline — will sync" : "Deleted");
         onSaved(r);
       } catch (err) { toast(err.message, true); }

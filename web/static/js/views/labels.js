@@ -1,7 +1,7 @@
 // Labels: free tags on transactions (trip, reimbursable, home …): list with usage,
 // add / rename / recolour / delete (removed from every transaction).
 
-import { html, raw } from "../util.js";
+import { html } from "../util.js";
 import { S, sheet, toast, confirmSheet, formData, ro, colorField, wireColorFields } from "../ui.js";
 import { post, put, del } from "../api.js";
 
@@ -42,4 +42,3 @@ function form(l, ctx) {
     });
 }
 
-export { raw };

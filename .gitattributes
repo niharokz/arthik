@@ -1,0 +1,4 @@
+# keep LF everywhere (shell scripts break with CRLF), even when committed from Windows
+* text=auto eol=lf
+*.png binary
+*.jar binary

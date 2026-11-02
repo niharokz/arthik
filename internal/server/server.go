@@ -3,6 +3,7 @@
 package server
 
 import (
+	"html"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -76,7 +77,7 @@ func New(a *auth.Auth, o Options) http.Handler {
 	if o.Local {
 		mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/app", http.StatusFound) })
 	} else {
-		mux.HandleFunc("GET /{$}", page("about.html"))
+		mux.HandleFunc("GET /{$}", landing(static, a))
 	}
 	mux.HandleFunc("GET /app", page("app.html"))
 	mux.HandleFunc("GET /app/", page("app.html"))
@@ -95,6 +96,30 @@ func New(a *auth.Auth, o Options) http.Handler {
 		return headers(o.Guard.Middleware(o.ClientIP, mux))
 	}
 	return headers(mux)
+}
+
+// Repo is the project's home; the newest APK is attached to its latest release.
+const Repo = "https://gitlab.com/niharokz/arthik"
+
+// landing serves the public start page with the version, the APK link and the demo login.
+func landing(static fs.FS, a *auth.Auth) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		b, err := fs.ReadFile(static, "about.html")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		demo := ""
+		if u, p, ok := a.DemoHint(); ok {
+			demo = `<p class="demo-line">👀 Try the read-only demo: user <code>` + html.EscapeString(u) + `</code> · password <code>` +
+				html.EscapeString(p) + `</code> · <a href="/app">open it</a></p>`
+		}
+		page := strings.NewReplacer("{{VERSION}}", html.EscapeString(state.Version), "{{APK}}", Repo+"/-/releases/permalink/latest/downloads/arthik.apk",
+			"{{REPO}}", Repo, "{{DEMO}}", demo).Replace(string(b))
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Write([]byte(page))
+	}
 }
 
 // headers adds security headers to every response.

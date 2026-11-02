@@ -1,14 +1,17 @@
 # Arthik for Android
 
-The same Arthik you use at `arthik.nihars.com`, running **entirely on your phone**:
+**[Download the newest APK](https://gitlab.com/niharokz/arthik/-/releases/permalink/latest/downloads/arthik.apk)**
+(every release builds one; see the main README → *Releases and the Android APK*).
+
+The same Arthik as the web app, running **entirely on your phone**:
 same screens, same features, works with no internet. It reads and writes the finance
-folder that Syncthing keeps in sync with nimory, so the phone and the server always
+folder that Syncthing keeps in sync with the server, so the phone and the server always
 show the same books.
 
 ## How it works
 
 ```
- ┌──────────────── phone ────────────────┐            ┌──────── nimory ────────┐
+ ┌──────────────── phone ────────────────┐            ┌──────── server ────────┐
  │  arthik app (WebView, same UI)        │            │  arthik server (main)  │
  │        │  http://127.0.0.1:<port>     │            │                        │
  │  arthik engine (Go, libarthik.so)     │            │                        │
@@ -22,18 +25,18 @@ show the same books.
   close it. The only background work is the optional nightly SMS copy (below);
   nothing is sent anywhere except through your Syncthing folder.
 - The phone is a **replica**: it saves what you enter (and your inbox decisions), but
-  leaves writing balances, importing the inbox and merging sync conflicts to nimory
+  leaves writing balances, importing the inbox and merging sync conflicts to the server
   (the **main device**). If you
   ever use the phone without the server, turn on *Settings → Phone → This phone is
   the main device*.
 - **Offline safe.** Every transaction carries an `updated` time and deletions leave a
-  small tombstone. When the phone and nimory both changed the same month file while
-  apart, Syncthing saves a `.sync-conflict-…` copy; nimory merges it by transaction id
+  small tombstone. When the phone and the server both changed the same month file while
+  apart, Syncthing saves a `.sync-conflict-…` copy; the server merges it by transaction id
   (newest change wins) within seconds and deletes the copy. Nothing is lost.
 
 ## What you need
 
-- Docker on the machine that builds the APK (nimory is fine). No Android Studio.
+- Docker on the machine that builds the APK (your server is fine). No Android Studio.
 - No Google account, subscription or Play Store. You install the APK yourself.
 - A phone with Android 8 or newer.
 - The server running the same Arthik version as the app. Redeploy the server first.
@@ -97,12 +100,12 @@ night*, pick the time (default 23:30).
 
 - At that time the app copies **new** messages from named senders (AX-HDFCBK …) that
   mention an amount, skipping OTPs, into `inbox/sms_phone.md` in your finance folder.
-  It never sends anything anywhere; Syncthing carries the file to nimory, where Arthik
+  It never sends anything anywhere; Syncthing carries the file to the server, where Arthik
   turns the messages into drafts (account, category, title) for the **Inbox** screen.
 - **No duplicates, no back-fill.** Each run reads only messages after the last
   *successful* run. Switching it on starts from that day; nothing older is ever read.
   If a night is missed (phone off), the next run picks up the gap — at most *N* days
-  back (Settings: 1–7, default 3). Every message also has a fixed id, and nimory never
+  back (Settings: 1–7, default 3). Every message also has a fixed id, and the server never
   imports an id twice.
 - *Run now* copies immediately (handy the first time). The card shows the last result.
 - The file keeps 45 days of messages; only the phone writes it.
@@ -162,10 +165,10 @@ import/export (saved to *Downloads*) — is the same as on the web.
 |---|---|
 | "Arthik needs file access" | Settings → Phone → File access → Allow (Android: *All files access* → Arthik on). |
 | "The engine couldn't open …" | The folder moved or access was removed. Choose the folder again; the log shows the exact error. |
-| Changes from nimory don't appear | Check Syncthing is running on the phone; Arthik picks up synced files within 2 s. |
-| A conflict notice in Data health | Informational: the phone includes conflict copies in its totals until nimory merges them. |
+| Changes from the server don't appear | Check Syncthing is running on the phone; Arthik picks up synced files within 2 s. |
+| A conflict notice in Data health | Informational: the phone includes conflict copies in its totals until the server merges them. |
 | SMS “Allow” does nothing | Android 13+: App info → ⋮ → Allow restricted settings, then Permissions → SMS → Allow. |
-| No SMS drafts appear | Settings → Phone → Bank SMS: check *Last run*. Then check `inbox/sms_phone.md` synced to nimory, and `docker exec arthik arthik parse-sms "<the message>"` on nimory. |
+| No SMS drafts appear | Settings → Phone → Bank SMS: check *Last run*. Then check `inbox/sms_phone.md` synced to the server, and `docker exec arthik arthik parse-sms "<the message>"` on the server. |
 | The nightly run is late or skipped | Allow exact time; set Battery → Unrestricted. |
 | No morning notice | Settings → Phone → Inbox notice: check *Last notice*; allow notifications in App info; set Battery → Unrestricted. |
 | Widget says "choose your finance folder" | Open the app once with your folder; the widget then updates. |

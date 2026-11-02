@@ -1,15 +1,18 @@
 # Arthik
 
-Self-hosted, **double-entry** personal finance — the everyday feel of a phone money
-tracker (accounts, categories, budgets, reports) with every transaction balanced:
-debited somewhere, credited somewhere else — plus an **inbox** that turns bank SMS
-and due subscriptions into drafts you accept with one tap.
+[![pipeline](https://gitlab.com/niharokz/arthik/badges/main/pipeline.svg)](https://gitlab.com/niharokz/arthik/-/pipelines)
+[![release](https://gitlab.com/niharokz/arthik/-/badges/release.svg)](https://gitlab.com/niharokz/arthik/-/releases)
+[![Android APK](https://img.shields.io/badge/Android-APK-3a807a)](https://gitlab.com/niharokz/arthik/-/releases/permalink/latest/downloads/arthik.apk)
 
-- Mobile-first **PWA**: install it on your phone, add transactions **offline**, they sync when you are back.
-- Data is plain **YAML in `.md` files** — readable in Obsidian or any editor, and edits made there are picked up automatically.
-- One static Go binary, one container, no database, no third-party services, no tracking.
-- A built-in, read-only **demo user** with generated data.
-- An **Android app** with the same screens, running fully offline on the phone against the Syncthing-synced folder, which also copies new bank SMS into the inbox every night — see [android/README.md](android/README.md).
+**Self-hosted, double-entry personal finance over plain YAML files.** The everyday feel of a
+phone money tracker (accounts, categories, budgets, reports) with every transaction balanced,
+plus an **inbox** that turns bank SMS and due subscriptions into drafts you accept with one tap.
+
+- **Web app (PWA)** with offline adds, and an **Android app** that runs fully offline over the folder Syncthing keeps in sync ([android/README.md](android/README.md), [download the APK](https://gitlab.com/niharokz/arthik/-/releases/permalink/latest/downloads/arthik.apk)).
+- **Plain files.** Data is YAML in `.md` files, readable in Obsidian or any editor; edits made there are picked up within seconds.
+- **One small Go binary**, one container, no database, no third-party services, no tracking.
+- **Your home screen**: choose, order and create the blocks you see.
+- **Private by default**: one user, IP bans after failed sign-ins, signed sessions, an optional read-only demo login.
 
 ## Features
 
@@ -22,28 +25,23 @@ and due subscriptions into drafts you accept with one tap.
 | Inbox | Drafts from bank SMS (the phone app) and due subscriptions (Kronos). Accept, edit, “same as” an entry you already made, or reject. Accounts are found from the card/account digits in the SMS; the category from what you taught it (🧠), a past transaction with that name (↺), the category Kronos named (📋), the local AI (✨, optional) or your fallback. A debit plus a matching card payment become one transfer. The bank's reported balance is checked against yours. Accepting teaches the merchant. |
 | Reports | Cash flow, spending and income by category with drill-down, category trend, net worth over time, balance sheet at any date, account flow, labels, calendar. Every chart has a table. |
 | Search & data | Full-text search plus filters (dates, type, accounts, categories, labels, status, amount, posted/future); totals of the filtered list; CSV export of exactly what you filtered; CSV import with a dry-run preview. |
+| Home | Your blocks, in your order: net worth with its trend, the period's income/expense/savings, inbox, spending, budgets, upcoming, credit cards, accounts, recent, cash flow, plus blocks you create for any account, category or label. ✎ on the home screen. |
 | Settings | Default period, week start, month start day (salary cycles), year start month (e.g. April for the Indian FY), look-ahead days, light/dark/auto, hide amounts, menu order (which four screens sit in the phone's bottom bar), inbox fallback categories, learned rules. |
 
 ## Quick start (Docker)
 
 ```sh
 git clone https://gitlab.com/niharokz/arthik.git && cd arthik
-cp .env.example .env        # set FINANCE_PATH, STATE_PATH, PUID/PGID, ARTHIK_USER, ARTHIK_PASSWORD, ARTHIK_SECRET, ARTHIK_DEVICE_KEY
-mkdir -p state              # or your STATE_PATH; must be writable by PUID:PGID
-docker compose up -d --build
+cp .env.example .env                       # fill in FINANCE_PATH, PUID/PGID, ARTHIK_USER, ARTHIK_SECRET …
+mkdir -p state                             # STATE_PATH, writable by PUID:PGID
+docker compose build
+docker compose run --rm -it arthik hash-password   # → ARTHIK_PASSWORD_HASH='$2a$12$…' in .env (single quotes)
+docker compose up -d
 ```
 
-The container joins the external Docker network `homelab`, where the reverse proxy
-reaches it as `arthik:8080` (`/` is the public about page, `/app` is the app). Use another
-network name in `docker-compose.yml` if yours differs, or add a `ports:` entry to reach
-it directly. The demo user and password are shown on the sign-in screen.
-
-To store a bcrypt hash instead of a plain password:
-
-```sh
-docker compose run --rm -it arthik hash-password
-# paste the result into .env in single quotes: ARTHIK_PASSWORD='$2a$12$…'
-```
+The container joins the Docker network `ARTHIK_NETWORK` (`homelab`), where your reverse proxy
+reaches it as `arthik:8080`: `/` is the start page (demo login and APK link), `/app` the app.
+For a quick local test add `ports: ["8080:8080"]`, or run `sh scripts/dev.sh` (needs Go).
 
 ## Configuration (`.env`)
 
@@ -52,22 +50,23 @@ docker compose run --rm -it arthik hash-password
 | `FINANCE_PATH` | compose | Host folder with the data files (mounted at `/data/finance`). |
 | `STATE_PATH` | compose | Host folder for server-only files (`bans.json`), mounted at `/state`. Not synced. |
 | `PUID`, `PGID` | compose | User the container runs as (must own `FINANCE_PATH` and `STATE_PATH`). |
+| `ARTHIK_NETWORK` | compose | Docker network of your reverse proxy (`homelab`). |
 | `TZ` | app | Time zone that decides “today”. |
-| `ARTHIK_USER`, `ARTHIK_PASSWORD` | app | Your sign-in; the password may be a bcrypt hash. |
+| `ARTHIK_USER`, `ARTHIK_PASSWORD_HASH` | app | Your sign-in; the hash comes from `arthik hash-password`. `ARTHIK_PASSWORD` (plain text) also works. |
 | `ARTHIK_SECRET` | app | Signs session cookies; set it so you stay signed in across restarts. |
 | `ARTHIK_SESSION_HOURS` | app | How long a sign-in lasts without the device key (12). |
 | `ARTHIK_DEVICE_KEY` | app | Typed once on a device (sign-in screen or Settings → This device): that device stays signed in until it signs out. Change it to sign all such devices out. ≥ 24 characters, e.g. `openssl rand -hex 32`. |
 | `ARTHIK_LOGIN_MAX_FAILS`, `ARTHIK_BAN_DAYS` | app | Failed sign-ins (or wrong device keys) within a day before an address is banned from the whole site (5), and for how long (30 days). |
 | `ARTHIK_BAN_EXEMPT` | app | Comma-separated CIDRs never banned (empty). |
 | `ARTHIK_TRUSTED_PROXIES` | app | Proxies whose `CF-Connecting-IP` / `X-Forwarded-For` name the client (private ranges). |
-| `ARTHIK_DEMO`, `ARTHIK_DEMO_USER`, `ARTHIK_DEMO_PASSWORD` | app | Read-only demo user (data in `<FINANCE_PATH>/demouser`, regenerated monthly). |
+| `ARTHIK_DEMO_USER`, `ARTHIK_DEMO_PASSWORD` | app | Optional read-only demo login, shown on the start page (data in `<FINANCE_PATH>/demouser`, regenerated monthly). Both empty = no demo. |
 | `ARTHIK_WATCH_SECONDS` | app | How often to look for edits made by other apps (default 3). |
 | `ARTHIK_PRIMARY` | app | `true` (default): this instance writes computed files, imports the inbox and merges Syncthing conflict copies. Set `false` on any second instance sharing the folder. |
 | `ARTHIK_INBOX_MAX_AGE_DAYS`, `ARTHIK_INBOX_KEEP_DAYS`, `ARTHIK_INBOX_PAIR_DAYS` | app | Inbox: ignore older source items (30), forget reviewed drafts (120), pair a debit with a matching credit within N days (2). |
 | `ARTHIK_INBOX_RESCAN_MINUTES` | app | Re-read the inbox files at least this often, even when no file change was noticed (10). |
 | `ARTHIK_AI_URL`, `ARTHIK_AI_MODEL`, `ARTHIK_AI_TIMEOUT_SECONDS` | app | Optional Ollama that suggests categories for new merchants, e.g. `http://ollama:11434` and `qwen2.5:7b-instruct-q4_K_M`. Empty = off. |
 
-The phone app runs the same engine with `ARTHIK_MODE=local` (set by the app; not used on the server).
+`docker-compose.yml` passes only these variables (and `TZ`) into the container, so `.env` can be shared with other services. The phone app runs the same engine with `ARTHIK_MODE=local` (set by the app).
 
 ## Sign-in and lock-out
 
@@ -83,7 +82,7 @@ The phone app runs the same engine with `ARTHIK_MODE=local` (set by the app; not
 
 ## Several devices on one folder
 
-nimory and the phone share the folder through Syncthing. Each transaction records when
+The server and the phone share the folder through Syncthing. Each transaction records when
 it last changed (`updated`) and a deletion leaves a tombstone (`deleted:`), so when both
 sides changed the same month file while apart, the main instance merges Syncthing's
 `.sync-conflict-…` copy by id — newest change wins — and removes the copy. Definition
@@ -152,7 +151,7 @@ drafted twice; items older than `ARTHIK_INBOX_MAX_AGE_DAYS` are ignored):
 missed while the server was down runs once when it is back. Review drafts on the **Inbox** screen:
 
 - **Accept** creates the transaction (id `d-<draft>`, so accepting on the phone and
-  on nimory still makes one) and remembers the merchant in `inbox/learned.md`.
+  on the server still makes one) and remembers the merchant in `inbox/learned.md`.
 - **Edit** opens the normal form (with the original SMS above it); saving accepts.
   Tick *Remember …4111* and the account keeps those SMS digits.
 - **Same — don't add** links the draft to a transaction you already entered.
@@ -186,15 +185,55 @@ arthik version
 
 In Docker: `docker exec arthik arthik check`.
 
+## Releases and the Android APK
+
+A release is a tag. Write the `## X.Y.Z` section of [CHANGELOG.md](CHANGELOG.md) first, then:
+
+```sh
+sh scripts/release.sh "v1.0.2 customizable home, inbox bell"
+```
+
+It sets `VERSION`, adds a changelog section if there is none, runs the tests and
+`scripts/check-public.sh`, commits, tags and pushes. GitLab CI ([.gitlab-ci.yml](.gitlab-ci.yml))
+then tests on a shared runner, builds the **signed APK on your own runner** (no CI minutes
+used, the key never leaves your server), uploads it to the package registry and creates the
+release with that version's notes. The newest APK is always at
+`/-/releases/permalink/latest/downloads/arthik.apk`, linked from the start page.
+
+Set up the runner once, on the machine with Docker and the signing key:
+
+1. Install [GitLab Runner](https://docs.gitlab.com/runner/install/linux-repository/) to run as **your user** (it needs Docker and `$KEYS_HOME/.arthik-keys`):
+   `sudo gitlab-runner uninstall && sudo gitlab-runner install --user "$USER" --working-directory "$HOME/.gitlab-runner" && sudo gitlab-runner start`
+2. GitLab → the project → **Settings → CI/CD → Runners → New project runner**: tag `arthik-apk`, untick *Run untagged jobs*. Then `sudo gitlab-runner register --url https://gitlab.com --token <token> --executor shell`.
+3. Put the keystore password next to the key:
+   `printf 'ARTHIK_KEYSTORE_PASSWORD=%s\n' '<password>' > "$KEYS_HOME/.arthik-keys/arthik.env" && chmod 600 "$KEYS_HOME/.arthik-keys/arthik.env"`
+
+A local build works the same way: `./android/build.sh` (all phones) or `./android/build.sh quick`
+(64-bit phones, no tests). Install `scripts/check-public.sh` as a pre-push hook to keep `.env`,
+keys, patch zips and words listed in `.private-words` out of the public repo:
+`ln -s ../../scripts/check-public.sh .git/hooks/pre-push`.
+
 ## Development
 
 ```sh
-go test ./...
-ARTHIK_DATA=./data ARTHIK_PASSWORD=dev go run ./cmd/arthik serve   # http://localhost:8080
+go vet ./... && go test ./...
+sh scripts/dev.sh            # http://localhost:8080 — sign in as me / dev, or the demo
 ```
 
 Go 1.23+, dependencies: `gopkg.in/yaml.v3`, `golang.org/x/crypto/bcrypt`. The front end
 is plain ES modules and CSS embedded in the binary — no build step, no CDN.
+
+```
+cmd/arthik/          the binary: serve, CLI commands
+internal/book/       data files: load, validate, compute, write, merge Syncthing conflicts
+internal/feature/…   one package per screen's API (accounts, transactions, review = inbox, …)
+internal/inbox/      SMS + Kronos drafts, learned rules, confidence
+internal/auth/       users, sessions, device key       internal/guard/  IP bans
+web/static/          the app (ES modules, CSS) and the start page
+android/             the Android app (Kotlin WebView shell + the same engine)
+```
+
+Issues and merge requests use the templates in `.gitlab/`. Security reports: [SECURITY.md](SECURITY.md).
 
 ## Licence
 

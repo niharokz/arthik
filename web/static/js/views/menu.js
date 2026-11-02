@@ -1,5 +1,6 @@
 // Settings → Menu order: move screens up or down. The first four become the phone's
-// bottom bar; the order is saved in settings.md, so the web app and the phone match.
+// bottom bar (Settings is always the fifth); the order is saved in settings.md, so the
+// web app and the phone match.
 
 import { html } from "../util.js";
 import { S, toast, ro } from "../ui.js";
@@ -21,10 +22,10 @@ export function menuCard() {
   </li>`;
   return html`<section class="card" data-menu>
     <header><h2>Menu order</h2>${ro() ? "" : html`<button class="ghost" data-reset>Reset</button>`}</header>
-    <p class="muted" style="margin-top:0;font-size:.85rem">The first ${BOTTOM_COUNT} are the phone's bottom bar; the rest are under <b>More</b>. Settings always stays last.${ro() ? " (Read-only in the demo.)" : ""}</p>
+    <p class="muted" style="margin-top:0;font-size:.85rem">The first ${BOTTOM_COUNT} are the phone's bottom bar; the rest are listed at the top of <b>Settings</b>. The inbox is the 🔔 in the top bar.${ro() ? " (Read-only in the demo.)" : ""}</p>
     <ol class="list menu-list">
       ${order.slice(0, BOTTOM_COUNT).map(row)}
-      <li class="menu-split"><span>More ▾</span></li>
+      <li class="menu-split"><span>In Settings ▾</span></li>
       ${order.slice(BOTTOM_COUNT).map((k, i) => row(k, i + BOTTOM_COUNT))}
     </ol>
   </section>`;

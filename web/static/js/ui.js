@@ -1,7 +1,7 @@
 // Shared UI pieces: the app store, lookups, toasts, sheets (dialogs), confirm and
 // the period switcher used by categories, budgets and reports.
 
-import { html, raw, todayStr } from "./util.js";
+import { html, raw, todayStr, reducedMotion } from "./util.js";
 import { get } from "./api.js";
 import { syncBars, haptic, applyAccent } from "./native.js";
 
@@ -10,6 +10,7 @@ export const S = {
   state: null,
   me: null,
   view: {}, // per-view remembered settings (period kind etc.)
+  flash: null, // id of the transaction just added or saved: its row lights up once
 };
 
 export async function loadState() {
@@ -56,6 +57,28 @@ export function accOptions(selected, { includeArchived = false } = {}) {
     if (!list.length) return "";
     return html`<optgroup label="${t.label}">${list.map((a) => html`<option value="${a.id}" ${a.id === selected ? raw("selected") : ""}>${a.name}</option>`)}</optgroup>`;
   });
+}
+
+// ---- action feedback ----
+
+const BURST = { ok: "M15 27l7 7 15-16", edit: "M17 35l2.5-7.5L31 16l5 5-11.5 11.5z", reject: "M18 18l16 16M34 18L18 34", delete: "M18 18l16 16M34 18L18 34" };
+
+/** A short tick (ok), pencil (edit) or cross (reject/delete) burst after an action. */
+export function celebrate(kind = "ok") {
+  haptic(kind === "ok" || kind === "edit" ? "confirm" : "tick");
+  if (reducedMotion()) return;
+  const el = document.createElement("div");
+  el.className = "burst " + kind;
+  el.setAttribute("aria-hidden", "true");
+  el.innerHTML = `<svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="${BURST[kind] || BURST.ok}"/></svg>`;
+  document.body.append(el);
+  setTimeout(() => el.remove(), 900);
+}
+
+/** Lights up a transaction's row the next time a list shows it. */
+export function flashTx(id) {
+  S.flash = id;
+  setTimeout(() => { if (S.flash === id) S.flash = null; }, 2500);
 }
 
 // ---- toast ----

@@ -53,14 +53,21 @@ async function detail(root, ctx, id) {
   ]);
   if (!ctx.alive()) return;
   const liab = a.class === "liability";
+  const sub = [a.type_label, paise(a.cleared_balance) !== paise(a.balance) ? `cleared ${money(a.cleared_balance)}` : "",
+    paise(a.projected_balance) !== paise(a.balance) ? `after scheduled ${money(a.projected_balance)}` : "",
+    a.card && a.credit_limit ? `available ${money(a.card.available)}` : "", a.card?.due_date ? `due ${fmtShort(a.card.due_date)}` : ""].filter(Boolean);
+  // The transactions come first; balance details and the chart follow.
   root.innerHTML = String(html`
-    <div class="grid three">
-      <div class="card stat"><div class="label">${liab ? "Balance (owed is negative)" : "Balance"} · today</div><div class="value">${amt(a.balance, { cls: paise(a.balance) < 0 ? "neg" : "" })}</div>
-        <div class="sub">${a.type_label}${a.opening_date ? ` · opened ${fmtDate(a.opening_date)}` : ""}</div></div>
-      <div class="card stat"><div class="label">Cleared balance</div><div class="value">${amt(a.cleared_balance)}</div><div class="sub">cleared + reconciled only</div></div>
-      <div class="card stat"><div class="label">Projected</div><div class="value">${amt(a.projected_balance)}</div><div class="sub">incl. future-dated</div></div>
-    </div>
-    ${a.card ? html`<div class="card" style="margin-top:14px"><header><h2>Card</h2></header>
+    <section class="card acc-head" style="${a.color ? `border-top:3px solid ${a.color}` : ""}">
+      <span class="ic">${a.icon}</span>
+      <div class="grow"><div class="label">${liab ? "Owed (negative)" : "Balance"} · today</div>
+        <div class="hero-value">${amt(a.balance, { cls: paise(a.balance) < 0 ? "neg" : "" })}</div>
+        <div class="muted" style="font-size:.85rem">${sub.join(" · ")}</div></div>
+      ${ro() ? "" : html`<button class="primary" data-addhere>＋ Add</button>`}
+    </section>
+    <section class="card"><header><h2>Transactions</h2><a href="#/tx?account=${encodeURIComponent(id)}">Filter & export</a></header>
+      <div data-list>${grouped(tx.items, { account: id, empty: "No transactions yet" })}</div></section>
+    ${a.card ? html`<div class="card"><header><h2>Card</h2></header>
       <div class="grid four">
         <div class="stat"><div class="label">Credit limit</div><div class="value" style="font-size:1.05rem">${a.credit_limit ? amt(a.credit_limit) : "—"}</div></div>
         <div class="stat"><div class="label">Available</div><div class="value" style="font-size:1.05rem">${a.credit_limit ? amt(a.card.available) : "—"}</div>
@@ -70,10 +77,14 @@ async function detail(root, ctx, id) {
         <div class="stat"><div class="label">Unbilled</div><div class="value" style="font-size:1.05rem">${amt(a.card.unbilled)}</div>
           <div class="sub">${a.card.next_statement ? `next statement ${fmtShort(a.card.next_statement)}` : ""}</div></div>
       </div></div>` : ""}
-    <div class="card" style="margin-top:14px"><header><h2>Balance · 12 months</h2></header>${line(hist.map((h) => ({ label: h.label, value: h.balance })))}</div>
-    ${a.notes ? html`<div class="card"><p style="margin:0;white-space:pre-wrap">${a.notes}</p></div>` : ""}
-    <div class="card"><header><h2>Transactions</h2><a href="#/tx?account=${encodeURIComponent(id)}">Filter & export</a></header>
-      <div data-list>${grouped(tx.items, { account: id })}</div></div>`);
+    <div class="grid three">
+      <div class="card stat"><div class="label">Cleared balance</div><div class="value">${amt(a.cleared_balance)}</div><div class="sub">cleared + reconciled only</div></div>
+      <div class="card stat"><div class="label">Projected</div><div class="value">${amt(a.projected_balance)}</div><div class="sub">incl. future-dated</div></div>
+      <div class="card stat"><div class="label">Opened</div><div class="value" style="font-size:1.05rem">${a.opening_date ? fmtDate(a.opening_date) : "—"}</div><div class="sub">opening ${money(a.opening_balance)}</div></div>
+    </div>
+    <div class="card"><header><h2>Balance · 12 months</h2></header>${line(hist.map((h) => ({ label: h.label, value: h.balance })))}</div>
+    ${a.notes ? html`<div class="card"><p style="margin:0;white-space:pre-wrap">${a.notes}</p></div>` : ""}`);
+  root.querySelector("[data-addhere]")?.addEventListener("click", () => openTx({ account: id }, () => ctx.refresh()));
   wireTips(root);
   wireRows(root.querySelector("[data-list]"), tx.items, (t) => openTx(t, () => ctx.refresh()));
   ctx.actionsEl.querySelector("[data-edit]")?.addEventListener("click", () => accountForm(a, ctx));

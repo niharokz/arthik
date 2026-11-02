@@ -2,7 +2,7 @@
 
 > Internal reference for the Nimory homelab. Share this file (plus only the files being
 > changed) instead of the full source. No secret values — only names and paths.
-> Last reviewed: 2026-10-20 (v1.0.1: IP ban after failed sign-ins, 12-hour sessions + device key, phone settings file).
+> Last reviewed: 2026-11-02 (v1.0.2: customizable home, inbox bell, Settings tab, new logo, GitLab releases with the APK).
 
 ---
 
@@ -14,7 +14,7 @@ nothing with Omnimo/Kronos/Natlas except the vault: its files live in
 
 | URL | What |
 |---|---|
-| `arthik.nihars.com/` | public about page (static, no JS) |
+| `arthik.nihars.com/` | public start page (no JS): sign in, demo login, APK link, version |
 | `arthik.nihars.com/app` | the PWA (sign-in: owner from `.env`, or the read-only demo user) |
 | `demoarthik.nihars.com` | retired — the demo is a user now |
 
@@ -28,10 +28,10 @@ No locks on data files (Nimory rule): any app may edit them; arthik re-reads on 
 |---|---|
 | Image | `golang:1.23-alpine` (runs `go vet` + `go test`) → `alpine:3.20`, binary `/usr/local/bin/arthik` |
 | Command | `arthik serve`, listens on `:8080` |
-| User | `.env` `PUID:PGID`, `init`, `read_only` root fs, `no-new-privileges` |
+| User | `.env` `PUID:PGID`, `init`, `read_only` root fs, all capabilities dropped, `no-new-privileges` |
 | Volume | `$FINANCE_PATH → /data/finance` (rw) · `$STATE_PATH → /state` (rw, `bans.json`; not synced) |
 | Network | external `homelab`; Caddy proxies `arthik.nihars.com` / `arthik.nimory` → `arthik:8080` (no host port) |
-| `.env` | compose: `FINANCE_PATH STATE_PATH PUID PGID TZ` · app: `ARTHIK_USER ARTHIK_PASSWORD ARTHIK_SECRET ARTHIK_SESSION_HOURS ARTHIK_DEVICE_KEY ARTHIK_LOGIN_MAX_FAILS ARTHIK_BAN_DAYS ARTHIK_BAN_EXEMPT ARTHIK_TRUSTED_PROXIES ARTHIK_DEMO ARTHIK_DEMO_USER ARTHIK_DEMO_PASSWORD ARTHIK_WATCH_SECONDS ARTHIK_PRIMARY` |
+| `.env` | compose: `FINANCE_PATH STATE_PATH PUID PGID ARTHIK_NETWORK TZ` · app (only these reach the container): `ARTHIK_USER ARTHIK_PASSWORD_HASH ARTHIK_PASSWORD ARTHIK_SECRET ARTHIK_SESSION_HOURS ARTHIK_DEVICE_KEY ARTHIK_LOGIN_MAX_FAILS ARTHIK_BAN_DAYS ARTHIK_BAN_EXEMPT ARTHIK_TRUSTED_PROXIES ARTHIK_DEMO_USER ARTHIK_DEMO_PASSWORD ARTHIK_WATCH_SECONDS ARTHIK_INBOX_* ARTHIK_AI_*` |
 | Health | `GET /healthz`; `arthik health` is the Docker healthcheck |
 | Logs | stdout (json-file 10 MB × 3) |
 
@@ -44,7 +44,7 @@ only if you want installed PWAs to drop their offline cache.
 ## 3. Code map
 
 ```
-cmd/arthik/main.go          CLI: serve | hash-password | check [--demo] | rebuild | demo-seed | health | summary | parse-sms | version
+cmd/arthik/main.go          CLI: serve | hash-password | check [--demo] | rebuild | demo-seed | health | summary | parse-sms | bans | unban | version (version from the VERSION file)
 internal/config/            .env loader + Config (container-side values only)
 internal/money/             Amount = int64 paise; Parse/String/Format(₹ Indian grouping)/MulDiv; YAML+JSON as "123.45"
 internal/dates/             Date (calendar day), AddMonths with anchor day
@@ -218,13 +218,22 @@ cookie, secret random per start so every launch needs the app). `/` redirects to
 ## 6. Front end
 
 - Hash router (`#/home`, `#/tx`, `#/account/<id>`, `#/category/<id>`, `#/reports/<tab>` …).
-  Mobile: bottom bar + ＋ button; ≥ 900 px: sidebar. Screen order comes from
-  `settings.nav_order` (`main.js` `navOrder()`; edited in `views/menu.js`): first 4 = bottom
-  bar, rest under More, Settings always last. Server validates keys against `model.NavItems`.
+  Mobile: bottom bar (first 4 of `settings.nav_order` + Settings) and the ＋ button; ≥ 900 px:
+  sidebar. The inbox is the 🔔 in the top bar with the pending count (`state.inbox.pending`).
+  Screens not in the bottom bar are listed at the top of Settings. Server validates keys
+  against `model.NavItems`.
+- Home (`views/dashboard.js`): `settings.home` is a list of blocks `{type, ref?, title?}`:
+  built-ins (`model.HomeBuiltins`) or `account`/`category`/`label` with a `ref`; empty =
+  default layout. Edited with ✎ (show, hide, order, create). Only the data the chosen blocks
+  need is fetched. Sections pointing at a deleted item are dropped on the next save.
 - Inbox (`views/inbox.js`): pending drafts with Accept / Edit (the transaction form in
   draft mode: `openTx({}, done, {draft})` posts to `/accept`) / Same / Reject / Not a
-  transfer; *Done* tab with Restore. Menu badge = `state.inbox.pending`. Dashboard shows
-  the newest drafts and future-dated transactions (the old "Upcoming reminders" card).
+  transfer; *Done* tab with Restore. Reviewed cards swipe away (right + green when
+  accepted, left + red when rejected).
+- Feedback: `celebrate(kind)` (ui.js) draws a tick / pencil / cross burst after saves,
+  accepts, rejects and deletes; the saved transaction's row flashes once (`S.flash`).
+- Account screen: balance strip, then its transactions; card details, cleared/projected
+  balances and the 12-month chart below.
 - Remembered transactions: the add form's title field asks `GET /api/suggest?q=&type=`
   (latest valid non-journal transaction per title, ranked prefix → same type → uses →
   recent). Picking fills all fields except date/time. Not shown when editing or offline.

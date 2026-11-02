@@ -2,7 +2,7 @@
 // and category detail, search and calendar views).
 
 import { html, money, paise, fmtDay, relDay } from "./util.js";
-import { accName, catName, catIcon, labelName, today } from "./ui.js";
+import { S, accName, catName, catIcon, labelName, today } from "./ui.js";
 import { queue } from "./api.js";
 
 /** The signed effect of a transaction: on one account when given, else natural. */
@@ -33,7 +33,7 @@ export function row(t, { account, showDate = false } = {}) {
   const icon = t.type === "transfer" ? "⇄" : t.splits?.length ? "✂️" : catIcon(t.category);
   const cls = t.type === "transfer" && !account ? "" : e > 0 ? "pos" : e < 0 ? "neg" : "";
   const shown = t.type === "transfer" && !account ? money(t.amount) : (e > 0 ? "+" : "") + money(e / 100);
-  return html`<li><button class="item" data-tx="${t.id}">
+  return html`<li class="${S.flash && S.flash === t.id ? "flash" : ""}"><button class="item" data-tx="${t.id}">
     <span class="ic">${icon}</span>
     <span class="main-t"><span class="t">${t.title}</span>
       <span class="s">${showDate ? fmtDay(t.date) + " · " : ""}${subtitle(t, account)}${(t.labels || []).length ? " · " + t.labels.map(labelName).join(", ") : ""}</span></span>
