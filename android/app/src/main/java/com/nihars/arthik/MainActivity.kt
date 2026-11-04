@@ -558,7 +558,7 @@ class MainActivity : Activity() {
         }
     }
 
-    /** "1.0.2 (30002)". */
+    /** "1.0.3 (30003)". */
     fun versionLabel(): String {
         val info = packageManager.getPackageInfo(packageName, 0)
         val code = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()

@@ -20,7 +20,6 @@ type Computed struct {
 	Valid map[string]bool // transaction id → passes validation (others are excluded)
 
 	Balance   map[string]money.Amount // account id → balance as of today
-	Cleared   map[string]money.Amount // account id → cleared/reconciled balance
 	Projected map[string]money.Amount // account id → balance incl. future-dated
 
 	OpeningEquity money.Amount // sum of opening balances (the equity side)
@@ -132,12 +131,11 @@ func (b *Book) recomputeLocked(write bool) {
 	}
 	c := &Computed{
 		Today: b.Today(), Valid: map[string]bool{},
-		Balance: map[string]money.Amount{}, Cleared: map[string]money.Amount{}, Projected: map[string]money.Amount{},
+		Balance: map[string]money.Amount{}, Projected: map[string]money.Amount{},
 		LabelCount: map[string]int{},
 	}
 	for _, a := range d.Accounts {
 		c.Balance[a.ID] = a.OpeningBalance
-		c.Cleared[a.ID] = a.OpeningBalance
 		c.Projected[a.ID] = a.OpeningBalance
 		c.OpeningEquity -= a.OpeningBalance
 	}
@@ -150,7 +148,6 @@ func (b *Book) recomputeLocked(write bool) {
 		c.Valid[t.ID] = true
 		td, _ := dates.Parse(t.Date)
 		future := td.After(c.Today)
-		cleared := t.Status == model.StatusCleared || t.Status == model.StatusReconciled
 		for _, p := range t.Postings {
 			if p.Account == "" {
 				continue
@@ -158,9 +155,6 @@ func (b *Book) recomputeLocked(write bool) {
 			c.Projected[p.Account] += p.Amount
 			if !future {
 				c.Balance[p.Account] += p.Amount
-				if cleared {
-					c.Cleared[p.Account] += p.Amount
-				}
 			}
 		}
 		if !future {
@@ -204,7 +198,7 @@ func (b *Book) recomputeLocked(write bool) {
 	// Mirror computed values onto the records (served by the API and written to disk).
 	for i := range d.Accounts {
 		a := &d.Accounts[i]
-		a.Balance, a.Cleared, a.Projected = c.Balance[a.ID], c.Cleared[a.ID], c.Projected[a.ID]
+		a.Balance, a.Projected = c.Balance[a.ID], c.Projected[a.ID]
 	}
 	for i := range d.Categories {
 		d.Categories[i].Period = c.Period.Label

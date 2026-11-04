@@ -4,7 +4,7 @@
 // and blocks of your own for any account, category or label.
 
 import { html, raw, money, money0, amt, paise, qs, fmtShort, relDay, parseDate, ymd, addDays, replay, countUp } from "../util.js";
-import { S, periodState, periodQuery, periodBar, wirePeriod, catName, catIcon, today, loading, ro, acc, cat, label, sheet, toast, celebrate } from "../ui.js";
+import { S, periodState, periodQuery, periodBar, wirePeriod, catName, catIcon, today, loading, ro, acc, accName, cat, label, sheet, toast, celebrate } from "../ui.js";
 import { get, put } from "../api.js";
 import { haptic } from "../native.js";
 import { incomeExpense, ranked, spark, wireTips } from "../charts.js";
@@ -77,7 +77,9 @@ const BUILT = {
           html`<button data-span="${k}" class="${k === span() ? "on" : ""}" aria-pressed="${k === span()}">${v.label}</button>`)}</div>
       </div>
       <div class="hero-spark" data-spark><div class="sk spark-sk"></div></div>
-      <div class="hero-foot"><span>Assets ${amt(st.summary.assets)}</span><span>Owed ${amt(String(-paise(st.summary.liabilities) / 100))}</span></div>
+      <div class="hero-foot"><span>Assets ${amt(st.summary.assets)}</span><span>Owed ${amt(String(-paise(st.summary.liabilities) / 100))}</span>
+        ${st.summary.excluded_ids?.length ? html`<span title="${st.summary.excluded_ids.map(accName).join(", ")}">Not counted ${amt(st.summary.excluded, { signed: true })}</span>` : ""}</div>
+      ${st.summary.checks_off || st.summary.unchecked ? html`<a class="hero-check" href="#/accounts">${st.summary.checks_off ? `⚠️ ${st.summary.checks_off} don't match the bank` : ""}${st.summary.checks_off && st.summary.unchecked ? " · " : ""}${st.summary.unchecked ? `${st.summary.unchecked} not checked in ${st.settings.balance_check_days} days` : ""}</a>` : ""}
     </section>`,
   period: (b, { p, tot }) => html`<div data-period>${periodBar(p, tot.range)}
     <div class="stat-chips">

@@ -198,10 +198,10 @@ func TestEntryRoundTrip(t *testing.T) {
 	b := newBook(t)
 	_ = b.View(func(d *Data, c *Computed) error {
 		for _, e := range []Entry{
-			{ID: "a", Type: model.TxExpense, Date: today, Title: "x", Amount: 1234, Account: "bank", Category: "food", Status: "uncleared"},
-			{ID: "b", Type: model.TxIncome, Date: today, Title: "x", Amount: 99, Account: "bank", Category: "salary", Status: "cleared"},
-			{ID: "c", Type: model.TxTransfer, Date: today, Title: "x", Amount: 500, Account: "bank", ToAccount: "card", Status: "uncleared"},
-			{ID: "d", Type: model.TxExpense, Date: today, Title: "refund", Amount: -300, Account: "card", Category: "food", Status: "uncleared"},
+			{ID: "a", Type: model.TxExpense, Date: today, Title: "x", Amount: 1234, Account: "bank", Category: "food"},
+			{ID: "b", Type: model.TxIncome, Date: today, Title: "x", Amount: 99, Account: "bank", Category: "salary"},
+			{ID: "c", Type: model.TxTransfer, Date: today, Title: "x", Amount: 500, Account: "bank", ToAccount: "card"},
+			{ID: "d", Type: model.TxExpense, Date: today, Title: "refund", Amount: -300, Account: "card", Category: "food"},
 		} {
 			tx, err := d.BuildTx(e)
 			if err != nil {
@@ -221,5 +221,58 @@ func TestReadOnly(t *testing.T) {
 	ro, _ := Open(b.Dir, "ro", true)
 	if err := ro.Mutate(func(d *Data, ch *Change) error { return nil }); err != ErrReadOnly {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestSplitIntoAccount(t *testing.T) {
+	b := newBook(t)
+	// An EMI: 1,000 leaves the bank; 600 is interest, 400 pays the card down.
+	e := Entry{Type: model.TxExpense, Date: today, Title: "EMI", Account: "bank",
+		Splits: []Split{{Category: "food", Amount: money.FromRupees(600)}, {Account: "card", Amount: money.FromRupees(400)}}}
+	id := add(t, b, e)
+	if now, _ := bal(b, "bank"); now != money.FromRupees(9000) {
+		t.Errorf("bank = %s", now)
+	}
+	if now, _ := bal(b, "card"); now != money.FromRupees(-600) {
+		t.Errorf("card = %s", now)
+	}
+	_ = b.View(func(d *Data, c *Computed) error {
+		tx, _ := d.Tx(id)
+		back := EntryOf(tx)
+		if back.Type != model.TxExpense || back.Account != "bank" || back.Amount != money.FromRupees(1000) || len(back.Splits) != 2 || back.Splits[1].Account != "card" {
+			t.Errorf("round trip %+v", back)
+		}
+		if got := d.CategoryTotals(c, dates.MustParse(today), dates.MustParse(today), nil)["food"]; got != money.FromRupees(600) {
+			t.Errorf("only the interest is spending, got %s", got)
+		}
+		_, err := d.BuildTx(Entry{Type: model.TxExpense, Date: today, Title: "x", Account: "bank",
+			Splits: []Split{{Account: "card", Amount: 100}, {Account: "card", Amount: 100}}})
+		if err == nil {
+			t.Error("a split without a category must be refused")
+		}
+		return nil
+	})
+}
+
+func TestRetiredStatusDropped(t *testing.T) {
+	b := newBook(t)
+	p := filepath.Join(b.Dir, TxDir, "transaction_202610.md")
+	old := "transactions:\n  - id: t-20261002-aaaaaa\n    date: '2026-10-02'\n    type: expense\n    title: Old\n    status: uncleared\n    postings:\n      - account: bank\n        amount: '-250.00'\n      - category: food\n        amount: '250.00'\n"
+	if err := os.WriteFile(p, []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	acc := strings.Replace(read(t, b, AccountsFile), "    balance:", "    cleared_balance: '1.00'\n    balance:", 1)
+	if err := os.WriteFile(filepath.Join(b.Dir, AccountsFile), []byte(acc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.Reload(); err != nil {
+		t.Fatal(err)
+	}
+	add(t, b, Entry{Type: model.TxExpense, Date: today, Title: "Tea", Amount: money.FromRupees(20), Account: "bank", Category: "food"})
+	if s := read(t, b, filepath.Join(TxDir, "transaction_202610.md")); strings.Contains(s, "status:") || !strings.Contains(s, "title: Old") {
+		t.Errorf("status kept or record lost:\n%s", s)
+	}
+	if s := read(t, b, AccountsFile); strings.Contains(s, "cleared_balance") {
+		t.Errorf("cleared_balance kept:\n%s", s)
 	}
 }

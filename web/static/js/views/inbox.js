@@ -1,5 +1,5 @@
-// Inbox: transactions proposed by bank SMS (Arthik on the phone) and Kronos
-// (subscriptions due), waiting for review. Accept as-is, edit then accept, mark as
+// Inbox: transactions proposed by bank SMS (Arthik on the phone), waiting for
+// review (Kronos bills are reminders on the Notifications screen). Accept as-is, edit then accept, mark as
 // "same as" a transaction you already entered, or reject. Accepting teaches Arthik
 // what that merchant is, so the next draft fills itself in.
 
@@ -106,7 +106,7 @@ export function timingsCard(res) {
           <input type="time" data-smstime value="${at || "23:45"}" ${at ? "" : raw("hidden")} aria-label="Time">
           <button data-savetime hidden>Save</button></div>`}</div></div>
     <div class="tstep"><span class="tn">↻</span>
-      <div class="grow"><b>Subscriptions from Kronos</b><div class="muted">As soon as Kronos writes them${stamp(st.last_import) ? ` · checked ${stamp(st.last_import)}` : ""}</div></div></div>
+      <div class="grow"><b>Reminders from Kronos</b><div class="muted">Shown under <a href="#/notifications">🔔 Notifications</a>, not here${stamp(st.last_import) ? ` · checked ${stamp(st.last_import)}` : ""}</div></div></div>
   </section>`;
 }
 
@@ -168,7 +168,7 @@ export async function render(root, ctx) {
     ${st.ai_error ? html`<div class="banner warn">✨ The local AI could not be reached — drafts keep their fallback category. <small>${st.ai_error}</small></div>` : ""}
     <section class="card">
       ${items.length ? html`<ul class="list drafts" data-list>${items.map((x) => draftRow(x))}</ul>`
-      : html`<div class="empty">${tab === "pending" ? html`Nothing to review.<br><small>Bank SMS from the phone app and subscriptions from Kronos show up here.</small>` : "No reviewed drafts yet."}</div>`}
+      : html`<div class="empty">${tab === "pending" ? html`Nothing to review.<br><small>Bank SMS from the phone app show up here.</small>` : "No reviewed drafts yet."}</div>`}
     </section>
     ${timingsCard(res)}
     <p class="inbox-foot faint">${st.ai ? "✨ AI suggests categories for new merchants · " : ""}🧠 Accepting teaches Arthik the merchant's category.</p>`);

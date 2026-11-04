@@ -289,6 +289,9 @@ func (b *Book) reloadLocked() error {
 	var ad accountsDoc
 	read(AccountsFile, &ad)
 	d.Accounts = ad.Accounts
+	for i := range d.Accounts {
+		model.DropKeys(d.Accounts[i].Extra, model.RetiredAccountKeys)
+	}
 	var cd categoriesDoc
 	read(CategoriesFile, &cd)
 	d.Categories = cd.Categories
@@ -325,6 +328,7 @@ func (b *Book) reloadLocked() error {
 			continue
 		}
 		for _, t := range td.Transactions {
+			model.DropKeys(t.Extra, model.RetiredTxKeys)
 			all = append(all, loadedTx{t: t, month: m[1], conflict: conflict})
 		}
 	}
@@ -369,6 +373,8 @@ func (b *Book) reloadLocked() error {
 			log.Printf("[%s] repaired data files (ids / months / labels / merges)", b.Name)
 			b.removeConflicts(merged)
 		}
+	} else if len(merged) > 0 && b.autoWrite() {
+		b.removeConflicts(merged) // nothing new in them: the main files already hold it all
 	} else if len(merged) > 0 && b.Replica {
 		problems = append(problems, Problem{File: TxDir, Level: LevelInfo, Msg: fmt.Sprintf("%d conflict copy(s) included in totals — the main device will merge them", len(merged))})
 	}
@@ -395,6 +401,9 @@ func normSettings(s model.Settings) model.Settings {
 	}
 	if s.UpcomingDays <= 0 {
 		s.UpcomingDays = def.UpcomingDays
+	}
+	if s.CheckDays <= 0 {
+		s.CheckDays = def.CheckDays
 	}
 	if s.Theme == "" {
 		s.Theme = def.Theme
@@ -464,7 +473,7 @@ func (c *Change) merge(o Change) {
 
 const (
 	hdrSettings   = "arthik settings — safe to edit."
-	hdrAccounts   = "arthik accounts — edit freely; balance, cleared_balance and projected_balance are computed from the transactions and rewritten by arthik.\nopening_balance is signed: money you owe (credit cards, loans) is negative."
+	hdrAccounts   = "arthik accounts — edit freely; balance and projected_balance are computed from the transactions and rewritten by arthik.\nopening_balance is signed: money you owe (credit cards, loans) is negative."
 	hdrCategories = "arthik categories — edit freely; period and total are computed for the default period in settings.md and rewritten by arthik.\nkind: expense | income | both.  parent: id of the parent category (two levels)."
 	hdrLabels     = "arthik labels — count is computed."
 	hdrDrafts     = "arthik inbox — transactions waiting for review (from SMS, Kronos …). Managed by arthik; accept or reject them in the app."

@@ -1,6 +1,6 @@
-// Package review is the Inbox feature: transactions proposed by SMS and Kronos,
-// waiting for you to accept, edit, match or reject them, plus the rules Arthik
-// learned from your decisions.
+// Package review is the Inbox feature: transactions proposed by bank SMS, waiting
+// for you to accept, edit, match or reject them, the rules Arthik learned from your
+// decisions, and the reminders (Kronos bills) shown as notifications.
 package review
 
 import (
@@ -24,6 +24,22 @@ func Register(rt *httpx.Router) {
 	rt.Handle("POST /api/inbox/import", importNow)
 	rt.Handle("GET /api/inbox/rules", rules)
 	rt.Handle("DELETE /api/inbox/rules/{id}", deleteRule)
+	rt.Handle("GET /api/notices", notices)
+	rt.Handle("POST /api/notices/{id}/dismiss", decide(inbox.Dismiss))
+	rt.Handle("POST /api/notices/{id}/reopen", decide(inbox.Reopen))
+}
+
+// notices lists reminders: ?all=1 includes dismissed ones.
+func notices(c *httpx.Ctx) error {
+	var out map[string]any
+	err := c.Book.View(func(d *book.Data, comp *book.Computed) error {
+		out = map[string]any{"items": inbox.Notices(d, comp, c.Q("all") == "1"), "active": inbox.ActiveNotices(d, comp)}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return c.OK(out)
 }
 
 // list: ?status=pending (default) | done | all

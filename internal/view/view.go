@@ -46,12 +46,23 @@ type Card struct {
 	Utilised      int          `json:"utilised"` // % of limit used (0 when no limit)
 }
 
+// Check compares the bank's balance with Arthik's on the same day.
+type Check struct {
+	Date   string       `json:"date"`
+	Bank   money.Amount `json:"bank"`
+	Arthik money.Amount `json:"arthik"` // balance at the end of Date
+	Diff   money.Amount `json:"diff"`   // bank − arthik (0 = matches)
+	Age    int          `json:"age"`    // days since the check
+	Stale  bool         `json:"stale"`  // older than settings.balance_check_days
+}
+
 // Account is an account plus derived details.
 type Account struct {
 	model.Account
 	Class     string `json:"class"`
 	TypeLabel string `json:"type_label"`
 	Card      *Card  `json:"card,omitempty"`
+	Check     *Check `json:"check,omitempty"`
 }
 
 // AccountOf builds an Account.
@@ -67,7 +78,71 @@ func AccountOf(a model.Account, d *book.Data, c *book.Computed) Account {
 	if a.Type == "credit_card" {
 		v.Card = cardOf(a, d, c)
 	}
+	v.Check = checkOf(a, d, c)
 	return v
+}
+
+// checkOf is the latest bank balance check of a (nil when never checked).
+func checkOf(a model.Account, d *book.Data, c *book.Computed) *Check {
+	if a.BankBalance == nil {
+		return nil
+	}
+	day, err := dates.Parse(a.BankDate)
+	if err != nil {
+		return nil
+	}
+	ours := BalanceAt(a, d, c, day)
+	age := day.DaysUntil(c.Today)
+	bank := money.Amount(*a.BankBalance)
+	return &Check{Date: day.String(), Bank: bank, Arthik: ours, Diff: bank - ours, Age: age, Stale: age > d.Settings.CheckDays}
+}
+
+// BalanceAt is a's balance at the end of day.
+func BalanceAt(a model.Account, d *book.Data, c *book.Computed, day dates.Date) money.Amount {
+	bal := a.OpeningBalance
+	for _, t := range d.Txns {
+		td, err := dates.Parse(t.Date)
+		if err != nil || !c.Valid[t.ID] || td.After(day) {
+			continue
+		}
+		for _, p := range t.Postings {
+			if p.Account == a.ID {
+				bal += p.Amount
+			}
+		}
+	}
+	return bal
+}
+
+// Checks counts visible accounts whose bank check does not match, and those never
+// checked or checked too long ago.
+func Checks(d *book.Data, c *book.Computed) (off, unchecked int) {
+	for _, a := range d.Accounts {
+		if a.Hidden || a.Archived {
+			continue
+		}
+		switch ck := checkOf(a, d, c); {
+		case ck == nil || ck.Stale:
+			unchecked++
+		case ck.Diff != 0:
+			off++
+		}
+	}
+	return
+}
+
+// Excluded is what the accounts left out of net worth add up to (hidden and
+// archived ones aside), with their ids.
+func Excluded(d *book.Data, c *book.Computed) (money.Amount, []string) {
+	var sum money.Amount
+	ids := []string{}
+	for _, a := range d.Accounts {
+		if a.ExcludeNetWorth && !a.Hidden && !a.Archived {
+			sum += c.Balance[a.ID]
+			ids = append(ids, a.ID)
+		}
+	}
+	return sum, ids
 }
 
 func cardOf(a model.Account, d *book.Data, c *book.Computed) *Card {

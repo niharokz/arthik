@@ -23,6 +23,8 @@ import (
 	"gitlab.com/niharokz/arthik/internal/feature/transactions"
 	"gitlab.com/niharokz/arthik/internal/guard"
 	"gitlab.com/niharokz/arthik/internal/httpx"
+	"gitlab.com/niharokz/arthik/internal/plugin"
+	_ "gitlab.com/niharokz/arthik/internal/plugin/loans" // personal plugins register themselves
 	"gitlab.com/niharokz/arthik/web"
 )
 
@@ -54,6 +56,7 @@ func New(a *auth.Auth, o Options) http.Handler {
 	summary.Register(rt)
 	settings.Register(rt)
 	importexport.Register(rt)
+	plugin.Install(rt)
 
 	mux.HandleFunc("GET /api/", func(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusNotFound, "no such API endpoint")

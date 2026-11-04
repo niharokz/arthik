@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"gitlab.com/niharokz/arthik/internal/auth"
 	"gitlab.com/niharokz/arthik/internal/book"
@@ -406,5 +407,47 @@ func TestLandingPage(t *testing.T) {
 	if code != 200 || !strings.Contains(page, "user <code>demouser</code>") || !strings.Contains(page, "/-/releases/permalink/latest/downloads/arthik.apk") ||
 		strings.Contains(page, "{{") {
 		t.Fatalf("start page %d: %.400s", code, page)
+	}
+}
+
+// A bank balance check shows whether Arthik matches the bank; accounts left out of
+// net worth are totalled separately.
+func TestBalanceCheck(t *testing.T) {
+	o, _ := setup(t)
+	o.do("POST", "/api/accounts", `{"name":"Wallet","type":"cash","opening_balance":"100"}`)
+	o.do("POST", "/api/accounts", `{"name":"PF","type":"deposit","opening_balance":"5000","exclude_net_worth":true}`)
+	acc := func(id string) map[string]any {
+		_, st := o.do("GET", "/api/state", "")
+		for _, a := range st["accounts"].([]any) {
+			if m := a.(map[string]any); m["id"] == id {
+				return m
+			}
+		}
+		t.Fatalf("no account %s", id)
+		return nil
+	}
+	if code, _ := o.do("POST", "/api/accounts/wallet/check", `{"balance":"100","date":"2099-01-01"}`); code != 400 {
+		t.Errorf("future check = %d", code)
+	}
+	today := time.Now().Format("2006-01-02")
+	o.do("POST", "/api/accounts/wallet/check", `{"balance":"90","date":"`+today+`"}`)
+	if ck := acc("wallet")["check"].(map[string]any); ck["diff"] != "-10.00" || ck["arthik"] != "100.00" {
+		t.Errorf("check %v", ck)
+	}
+	_, st := o.do("GET", "/api/state", "")
+	s := st["summary"].(map[string]any)
+	if s["checks_off"].(float64) != 1 || s["excluded"] != "5000.00" {
+		t.Errorf("summary %v", s)
+	}
+}
+
+// A bank balance of ₹0 (a paid-off card) is a real check, kept in the file.
+func TestBalanceCheckZero(t *testing.T) {
+	o, _ := setup(t)
+	o.do("POST", "/api/accounts", `{"name":"Card","type":"credit_card","opening_balance":"0"}`)
+	o.do("POST", "/api/accounts/card/check", `{"balance":"0","date":"`+time.Now().Format("2006-01-02")+`"}`)
+	_, st := o.do("GET", "/api/state", "")
+	if s := st["summary"].(map[string]any); s["unchecked"].(float64) != 0 || s["checks_off"].(float64) != 0 {
+		t.Errorf("a ₹0 check must count as checked: %v", s)
 	}
 }

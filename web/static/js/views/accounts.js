@@ -1,12 +1,12 @@
-// Accounts: grouped list with net worth, account detail (balance, cleared and
-// projected balance, credit-card statement info, balance chart, transactions),
-// add/edit/archive/delete, and reconciliation against a statement.
+// Accounts: grouped list with net worth, account detail (balance, the bank balance
+// check, projected balance, credit-card statement info, balance chart,
+// transactions) and add/edit/archive/delete.
 
 import { html, raw, qs, money, amt, paise, fromPaise, calc, fmtShort, fmtDate } from "../util.js";
 import { S, sheet, toast, confirmSheet, formData, ro, today, loading, colorField, wireColorFields } from "../ui.js";
 import { get, post, put, del } from "../api.js";
 import { line, wireTips } from "../charts.js";
-import { grouped, wireRows, effect } from "../txlist.js";
+import { grouped, wireRows } from "../txlist.js";
 import { openTx } from "../txform.js";
 
 export async function render(root, ctx) {
@@ -17,8 +17,10 @@ export async function render(root, ctx) {
   const list = st.accounts.filter((a) => showAll || (!a.archived && !a.hidden));
   const s = st.summary;
   root.innerHTML = String(html`
+    ${s.checks_off ? html`<div class="banner warn" style="margin:0 0 12px">⚠️ ${s.checks_off} account(s) don't match the bank — open them to see the difference.</div>` : ""}
     <div class="grid three">
-      <div class="card stat"><div class="label">Net worth</div><div class="value">${amt(s.net_worth)}</div></div>
+      <div class="card stat"><div class="label">Net worth</div><div class="value">${amt(s.net_worth)}</div>
+        ${s.excluded_ids?.length ? html`<div class="sub">not counted: ${money(s.excluded)}</div>` : ""}</div>
       <div class="card stat"><div class="label">Assets</div><div class="value pos">${amt(s.assets)}</div></div>
       <div class="card stat"><div class="label">Liabilities</div><div class="value neg">${amt(s.liabilities)}</div></div>
     </div>
@@ -30,7 +32,7 @@ export async function render(root, ctx) {
         return html`<div class="group-h"><span>${t.icon} ${t.label}</span><span class="amt">${money(total / 100)}</span></div>
           <ul class="list">${group.map((a) => html`<li><a class="item" href="#/account/${encodeURIComponent(a.id)}">
             <span class="ic" style="${a.color ? `background:${a.color}22` : ""}">${a.icon}</span>
-            <span class="main-t"><span class="t">${a.name} ${a.archived ? html`<span class="badge">archived</span>` : a.hidden ? html`<span class="badge">hidden</span>` : ""}${a.exclude_net_worth ? html` <span class="badge">not in net worth</span>` : ""}</span>
+            <span class="main-t"><span class="t">${a.name} ${checkMark(a)}${a.archived ? html`<span class="badge">archived</span>` : a.hidden ? html`<span class="badge">hidden</span>` : ""}${a.exclude_net_worth ? html` <span class="badge">not in net worth</span>` : ""}</span>
               <span class="s">${a.card ? (a.credit_limit ? `Available ${money(a.card.available)}` : "Credit card") + (a.card.due_date ? ` · due ${fmtShort(a.card.due_date)}` : "") : paise(a.projected_balance) !== paise(a.balance) ? `After scheduled: ${money(a.projected_balance)}` : t.label}</span></span>
             <span class="end">${amt(a.balance, { cls: paise(a.balance) < 0 ? "neg" : "" })}</span></a></li>`)}</ul>`;
       }) : html`<div class="empty">No accounts yet${ro() ? "" : html` — <button class="primary" data-new2>Add your first account</button>`}</div>`}
@@ -45,7 +47,7 @@ async function detail(root, ctx, id) {
   const a = S.state.accounts.find((x) => x.id === id);
   if (!a) { root.innerHTML = String(html`<div class="empty">Account not found. <a href="#/accounts">Back</a></div>`); return; }
   ctx.title(a.name);
-  ctx.actions(ro() ? "" : html`<button class="ghost" data-rec>Reconcile</button><button data-edit>Edit</button>`);
+  ctx.actions(ro() ? "" : html`<button data-edit>Edit</button>`);
   root.innerHTML = String(loading());
   const [hist, tx] = await Promise.all([
     get(`/api/accounts/${encodeURIComponent(id)}/history`),
@@ -53,7 +55,7 @@ async function detail(root, ctx, id) {
   ]);
   if (!ctx.alive()) return;
   const liab = a.class === "liability";
-  const sub = [a.type_label, paise(a.cleared_balance) !== paise(a.balance) ? `cleared ${money(a.cleared_balance)}` : "",
+  const sub = [a.type_label,
     paise(a.projected_balance) !== paise(a.balance) ? `after scheduled ${money(a.projected_balance)}` : "",
     a.card && a.credit_limit ? `available ${money(a.card.available)}` : "", a.card?.due_date ? `due ${fmtShort(a.card.due_date)}` : ""].filter(Boolean);
   // The transactions come first; balance details and the chart follow.
@@ -65,6 +67,7 @@ async function detail(root, ctx, id) {
         <div class="muted" style="font-size:.85rem">${sub.join(" · ")}</div></div>
       ${ro() ? "" : html`<button class="primary" data-addhere>＋ Add</button>`}
     </section>
+    ${checkCard(a)}
     <section class="card"><header><h2>Transactions</h2><a href="#/tx?account=${encodeURIComponent(id)}">Filter & export</a></header>
       <div data-list>${grouped(tx.items, { account: id, empty: "No transactions yet" })}</div></section>
     ${a.card ? html`<div class="card"><header><h2>Card</h2></header>
@@ -77,18 +80,17 @@ async function detail(root, ctx, id) {
         <div class="stat"><div class="label">Unbilled</div><div class="value" style="font-size:1.05rem">${amt(a.card.unbilled)}</div>
           <div class="sub">${a.card.next_statement ? `next statement ${fmtShort(a.card.next_statement)}` : ""}</div></div>
       </div></div>` : ""}
-    <div class="grid three">
-      <div class="card stat"><div class="label">Cleared balance</div><div class="value">${amt(a.cleared_balance)}</div><div class="sub">cleared + reconciled only</div></div>
+    <div class="grid two">
       <div class="card stat"><div class="label">Projected</div><div class="value">${amt(a.projected_balance)}</div><div class="sub">incl. future-dated</div></div>
       <div class="card stat"><div class="label">Opened</div><div class="value" style="font-size:1.05rem">${a.opening_date ? fmtDate(a.opening_date) : "—"}</div><div class="sub">opening ${money(a.opening_balance)}</div></div>
     </div>
     <div class="card"><header><h2>Balance · 12 months</h2></header>${line(hist.map((h) => ({ label: h.label, value: h.balance })))}</div>
     ${a.notes ? html`<div class="card"><p style="margin:0;white-space:pre-wrap">${a.notes}</p></div>` : ""}`);
   root.querySelector("[data-addhere]")?.addEventListener("click", () => openTx({ account: id }, () => ctx.refresh()));
+  root.querySelector("[data-check]")?.addEventListener("click", () => checkSheet(a, ctx));
   wireTips(root);
   wireRows(root.querySelector("[data-list]"), tx.items, (t) => openTx(t, () => ctx.refresh()));
   ctx.actionsEl.querySelector("[data-edit]")?.addEventListener("click", () => accountForm(a, ctx));
-  ctx.actionsEl.querySelector("[data-rec]")?.addEventListener("click", () => reconcile(a, tx.items.filter((t) => !t.scheduled), ctx));
 }
 
 // "4111, 9001" → ["4111", "9001"]
@@ -161,45 +163,43 @@ function accountForm(a, ctx) {
     });
 }
 
-function reconcile(a, items, ctx) {
-  const open = items.filter((t) => t.status !== "reconciled");
-  const reconciledBase = paise(a.opening_balance) + items.filter((t) => t.status === "reconciled").reduce((n, t) => n + effect(t, a.id), 0);
-  const chosen = new Set(open.filter((t) => t.status === "cleared").map((t) => t.id));
-  const body = html`
-    <p class="muted" style="margin-top:0">Tick the transactions that appear on your statement, enter its closing balance, and reconcile when the difference is zero.</p>
-    <label class="f"><span>Statement closing balance${a.class === "liability" ? " (owed is negative)" : ""}</span><input name="stmt" inputmode="decimal" placeholder="${fromPaise(paise(a.cleared_balance))}"></label>
-    <div class="row between" style="margin-bottom:10px"><span>Ticked balance <b data-tb class="amt"></b></span><span>Difference <b data-diff class="amt"></b></span></div>
-    ${open.length ? html`<ul class="list">${open.map((t) => html`<li><label class="item" style="cursor:pointer">
-      <input type="checkbox" data-r="${t.id}" ${chosen.has(t.id) ? raw("checked") : ""}>
-      <span class="main-t"><span class="t">${t.title}</span><span class="s">${fmtShort(t.date)} · ${t.status}</span></span>
-      <span class="end">${amt(fromPaise(effect(t, a.id)), { signed: true })}</span></label></li>`)}</ul>` : html`<div class="empty">Everything is reconciled.</div>`}`;
-  sheet("Reconcile " + a.name, body, html`<button data-cleared>Save as cleared</button><span class="grow"></span><button class="primary" data-ok>Reconcile ticked</button>`, (d, close) => {
-    const upd = () => {
-      const tb = reconciledBase + open.filter((t) => chosen.has(t.id)).reduce((n, t) => n + effect(t, a.id), 0);
-      d.querySelector("[data-tb]").textContent = money(tb / 100);
-      const sv = calc(d.querySelector('[name="stmt"]').value);
-      const el = d.querySelector("[data-diff]");
-      el.textContent = Number.isNaN(sv) ? "—" : money((sv - tb) / 100);
-      el.className = "amt " + (!Number.isNaN(sv) && sv !== tb ? "neg" : "pos");
-    };
-    d.querySelectorAll("[data-r]").forEach((c) => c.addEventListener("change", () => { c.checked ? chosen.add(c.dataset.r) : chosen.delete(c.dataset.r); upd(); }));
-    d.querySelector('[name="stmt"]').addEventListener("input", upd);
-    upd();
-    const send = async (status) => {
+// ---- bank balance check ----
+
+/** ✅ / ⚠️ / ○ after an account's name. */
+function checkMark(a) {
+  const c = a.check;
+  if (!c || c.stale) return html`<span class="ck none" title="${c ? `Checked ${c.age} days ago` : "Never checked against the bank"}">○</span>`;
+  return paise(c.diff) ? html`<span class="ck off" title="Off by ${money(c.diff)}">⚠️</span>` : html`<span class="ck ok" title="Matches the bank">✅</span>`;
+}
+
+// What the bank shows vs Arthik on the same day; owed amounts read positive for cards and loans.
+function checkCard(a) {
+  const liab = a.class === "liability";
+  const shown = (v) => money(liab ? -paise(v) / 100 : v);
+  const c = a.check;
+  const btn = ro() ? "" : html`<button data-check>${c ? "Check again" : "Check balance"}</button>`;
+  if (!c) return html`<section class="card check none"><div class="row between"><span>○ Not checked against the bank yet.</span>${btn}</div></section>`;
+  const ok = !paise(c.diff);
+  return html`<section class="card check ${ok ? "ok" : "off"}"><div class="row between wrap">
+      <span>${ok ? html`✅ Matches the bank` : html`⚠️ Bank ${shown(c.bank)} · Arthik ${shown(c.arthik)} · off by <b>${money(Math.abs(paise(c.diff)) / 100)}</b>`}
+        <span class="muted"> · ${liab ? "owed " : ""}on ${fmtDate(c.date)}${c.stale ? " — checked a while ago" : ""}</span></span>${btn}</div></section>`;
+}
+
+function checkSheet(a, ctx) {
+  const liab = a.class === "liability";
+  const body = html`<p class="muted" style="margin-top:0">Enter what your bank app shows${liab ? " you owe" : ""} for <b>${a.name}</b>. Arthik compares it with its own balance at the end of that day.</p>
+    <label class="f"><span>${liab ? "Amount owed" : "Balance"} (₹)</span><input name="bal" inputmode="decimal" autofocus></label>
+    <label class="f"><span>As of</span><input type="date" name="date" value="${today()}" max="${today()}"></label>`;
+  sheet("Check " + a.name, body, html`<span class="grow"></span><button data-close>Cancel</button><button class="primary" data-ok>Check</button>`, (d, close) => {
+    d.querySelector("[data-ok]").addEventListener("click", async () => {
+      const v = calc(d.querySelector("[name=bal]").value);
+      if (Number.isNaN(v)) return toast("Enter the balance", true);
       try {
-        const ids = [...chosen];
-        const r = await post(`/api/accounts/${encodeURIComponent(a.id)}/reconcile`, { ids, status });
-        // un-ticked "cleared" ones go back to uncleared when saving as cleared
-        if (status === "cleared") {
-          const back = open.filter((t) => t.status === "cleared" && !chosen.has(t.id)).map((t) => t.id);
-          if (back.length) await post(`/api/accounts/${encodeURIComponent(a.id)}/reconcile`, { ids: back, status: "uncleared" });
-        }
+        await post(`/api/accounts/${encodeURIComponent(a.id)}/check`, { balance: fromPaise(liab ? -Math.abs(v) : v), date: d.querySelector("[name=date]").value });
         close();
-        toast(`${r.updated} transaction(s) ${status}`);
+        toast("Saved");
         ctx.refresh();
       } catch (e) { toast(e.message, true); }
-    };
-    d.querySelector("[data-ok]").addEventListener("click", () => send("reconciled"));
-    d.querySelector("[data-cleared]").addEventListener("click", () => send("cleared"));
+    });
   });
 }

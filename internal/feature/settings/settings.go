@@ -33,6 +33,9 @@ func Register(rt *httpx.Router) {
 			if in.Home == nil {
 				in.Home = d.Settings.Home // likewise the home layout
 			}
+			if in.CheckDays == 0 {
+				in.CheckDays = d.Settings.CheckDays
+			}
 			in.Home = homeRefs(d, in.Home)
 			for _, c := range []struct{ id, kind string }{{in.InboxExpenseCategory, model.KindExpense}, {in.InboxIncomeCategory, model.KindIncome}} {
 				if cat, ok := d.Category(c.id); c.id != "" && (!ok || (cat.Kind != c.kind && cat.Kind != model.KindBoth)) {
@@ -79,6 +82,9 @@ func validate(s *model.Settings) error {
 	}
 	if s.UpcomingDays < 1 || s.UpcomingDays > 365 {
 		return fmt.Errorf("upcoming days must be 1–365")
+	}
+	if s.CheckDays < 0 || s.CheckDays > 365 {
+		return fmt.Errorf("balance check days must be 1–365")
 	}
 	if s.NavOrder != nil {
 		order, err := navOrder(s.NavOrder)

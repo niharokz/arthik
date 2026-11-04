@@ -184,7 +184,7 @@ func monthly(d *book.Data, ch *book.Change, start, today dates.Date) error {
 				continue
 			}
 			e := b.e
-			e.Date, e.Status, e.ID = day.String(), model.StatusCleared, d.NewTxID(day.String())
+			e.Date, e.ID = day.String(), d.NewTxID(day.String())
 			t, err := d.BuildTx(e)
 			if err != nil {
 				return fmt.Errorf("%s %s: %w", e.Date, e.Title, err)
@@ -271,19 +271,10 @@ func daily(d *book.Data, ch *book.Change, rng *rand.Rand, start, today dates.Dat
 		{"Birthday gift", "gifts", 800, 3500, []string{"savings", "rewards-card"}, nil},
 		{"House cleaning supplies", "housing-maintenance", 300, 1100, []string{"cash"}, []string{"home"}},
 	}
-	status := func(day dates.Date) string {
-		switch {
-		case today.DaysUntil(day) < -45:
-			return model.StatusReconciled
-		case today.DaysUntil(day) < -5:
-			return model.StatusCleared
-		}
-		return model.StatusUncleared
-	}
 	use := func(p pick, day dates.Date) error {
 		return add(book.Entry{Type: model.TxExpense, Date: day.String(), Time: fmt.Sprintf("%02d:%02d", 8+rng.Intn(13), rng.Intn(60)),
 			Title: p.title, Amount: between(p.min, p.max), Account: p.accounts[rng.Intn(len(p.accounts))],
-			Category: p.category, Labels: p.labels, Status: status(day)})
+			Category: p.category, Labels: p.labels})
 	}
 	for day := start; !day.After(today); day = day.AddDays(1) {
 		wd := int(day.Weekday())
@@ -310,7 +301,7 @@ func daily(d *book.Data, ch *book.Change, rng *rand.Rand, start, today dates.Dat
 		switch day.Day() {
 		case 6:
 			if err := add(book.Entry{Type: model.TxExpense, Date: day.String(), Title: "Electricity bill", Amount: between(1100, 2400),
-				Account: "savings", Category: "housing-electricity", Labels: []string{"home"}, Status: status(day)}); err != nil {
+				Account: "savings", Category: "housing-electricity", Labels: []string{"home"}}); err != nil {
 				return err
 			}
 		case 7, 22:
@@ -320,25 +311,25 @@ func daily(d *book.Data, ch *book.Change, rng *rand.Rand, start, today dates.Dat
 			}
 			if owed := -balanceAt(d, card, day.AddDays(-15)); owed > 0 {
 				if err := add(book.Entry{Type: model.TxTransfer, Date: day.String(), Title: "Card bill payment", Amount: owed,
-					Account: "savings", ToAccount: card, Status: status(day)}); err != nil {
+					Account: "savings", ToAccount: card}); err != nil {
 					return err
 				}
 			}
 		case 1, 11, 21:
 			if err := add(book.Entry{Type: model.TxTransfer, Date: day.String(), Title: "Wallet top-up", Amount: amt(4000),
-				Account: "salary", ToAccount: "wallet", Status: status(day)}); err != nil {
+				Account: "salary", ToAccount: "wallet"}); err != nil {
 				return err
 			}
 		case 14, 28:
 			if err := add(book.Entry{Type: model.TxTransfer, Date: day.String(), Title: "ATM withdrawal", Amount: amt(2000),
-				Account: "savings", ToAccount: "cash", Status: status(day)}); err != nil {
+				Account: "savings", ToAccount: "cash"}); err != nil {
 				return err
 			}
 		}
 		// Month end: mutual funds marked to market (gain or loss → the "Market" category).
 		if day.AddDays(1).Day() == 1 {
 			move := amt(rng.Int63n(19000) - 6000)
-			e := book.Entry{Date: day.String(), Title: "Mutual funds — market value", Account: "mutual-funds", Category: "market", Amount: move, Type: model.TxIncome, Status: model.StatusReconciled}
+			e := book.Entry{Date: day.String(), Title: "Mutual funds — market value", Account: "mutual-funds", Category: "market", Amount: move, Type: model.TxIncome}
 			if move < 0 {
 				e.Type, e.Amount = model.TxExpense, -move
 			}
@@ -348,7 +339,7 @@ func daily(d *book.Data, ch *book.Change, rng *rand.Rand, start, today dates.Dat
 				}
 			}
 			if err := add(book.Entry{Type: model.TxIncome, Date: day.String(), Title: "Card cashback", Amount: between(80, 420),
-				Account: "rewards-card", Category: "cashback", Status: status(day)}); err != nil {
+				Account: "rewards-card", Category: "cashback"}); err != nil {
 				return err
 			}
 		}
@@ -356,11 +347,11 @@ func daily(d *book.Data, ch *book.Change, rng *rand.Rand, start, today dates.Dat
 	// One trip with a label and a split bill.
 	trip := today.AddDays(-40)
 	if trip.After(start) {
-		_ = add(book.Entry{Type: model.TxExpense, Date: trip.String(), Title: "Flights to Goa", Amount: amt(9800), Account: "travel-card", Category: "travel", Labels: []string{"goa-trip"}, Status: status(trip)})
-		_ = add(book.Entry{Type: model.TxExpense, Date: trip.AddDays(1).String(), Title: "Beach shack dinner", Account: "travel-card", Labels: []string{"goa-trip"}, Status: status(trip),
+		_ = add(book.Entry{Type: model.TxExpense, Date: trip.String(), Title: "Flights to Goa", Amount: amt(9800), Account: "travel-card", Category: "travel", Labels: []string{"goa-trip"}})
+		_ = add(book.Entry{Type: model.TxExpense, Date: trip.AddDays(1).String(), Title: "Beach shack dinner", Account: "travel-card", Labels: []string{"goa-trip"},
 			Splits: []book.Split{{Category: "food-restaurants", Amount: amt(2400)}, {Category: "entertainment-movies", Amount: amt(600)}}})
-		_ = add(book.Entry{Type: model.TxExpense, Date: trip.AddDays(2).String(), Title: "Scooter rental", Amount: amt(1500), Account: "cash", Category: "travel", Labels: []string{"goa-trip"}, Status: status(trip)})
-		_ = add(book.Entry{Type: model.TxIncome, Date: trip.AddDays(9).String(), Title: "Team lunch refund", Amount: amt(1850), Account: "salary", Category: "other-income", Labels: []string{"reimbursable"}, Status: status(trip)})
+		_ = add(book.Entry{Type: model.TxExpense, Date: trip.AddDays(2).String(), Title: "Scooter rental", Amount: amt(1500), Account: "cash", Category: "travel", Labels: []string{"goa-trip"}})
+		_ = add(book.Entry{Type: model.TxIncome, Date: trip.AddDays(9).String(), Title: "Team lunch refund", Amount: amt(1850), Account: "salary", Category: "other-income", Labels: []string{"reimbursable"}})
 	}
 	return nil
 }

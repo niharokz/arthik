@@ -1,14 +1,16 @@
 // Package state serves GET /api/state: everything the app needs at start-up in one
-// call (settings, accounts with balances, categories, labels, the inbox count,
+// call (settings, accounts with balances, categories, labels, the inbox and reminder counts,
 // the overview numbers and any data problems). The PWA caches this for offline use.
 package state
 
 import (
 	"gitlab.com/niharokz/arthik/internal/book"
 	"gitlab.com/niharokz/arthik/internal/httpx"
+	"gitlab.com/niharokz/arthik/internal/inbox"
 	"gitlab.com/niharokz/arthik/internal/model"
 	"gitlab.com/niharokz/arthik/internal/money"
 	"gitlab.com/niharokz/arthik/internal/period"
+	"gitlab.com/niharokz/arthik/internal/plugin"
 	"gitlab.com/niharokz/arthik/internal/view"
 )
 
@@ -17,6 +19,10 @@ var Version = "dev"
 
 type summary struct {
 	NetWorth    money.Amount `json:"net_worth"`
+	Excluded    money.Amount `json:"excluded"`     // accounts left out of net worth, together
+	ExcludedIDs []string     `json:"excluded_ids"` // … which ones
+	ChecksOff   int          `json:"checks_off"`   // accounts whose bank check does not match
+	Unchecked   int          `json:"unchecked"`    // never checked, or checked too long ago
 	Assets      money.Amount `json:"assets"`
 	Liabilities money.Amount `json:"liabilities"`
 	Period      period.Range `json:"period"`
@@ -75,12 +81,17 @@ func Register(rt *httpx.Router) {
 				}
 			}
 			out["inbox"] = map[string]int{"pending": pending}
+			out["notices"] = map[string]int{"active": inbox.ActiveNotices(d, comp)}
+			out["plugins"] = plugin.Enabled(c.Book.Dir)
 			out["account_types"] = model.AccountTypes
 			out["period_kinds"] = period.Kinds
-			out["summary"] = summary{
+			s := summary{
 				NetWorth: comp.NetWorth, Assets: comp.Assets, Liabilities: comp.Liabilities,
 				Period: comp.Period, Income: comp.Income, Expense: comp.Expense, Net: comp.Income - comp.Expense,
 			}
+			s.Excluded, s.ExcludedIDs = view.Excluded(d, comp)
+			s.ChecksOff, s.Unchecked = view.Checks(d, comp)
+			out["summary"] = s
 			return nil
 		})
 		if err != nil {

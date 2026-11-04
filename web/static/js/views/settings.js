@@ -10,6 +10,7 @@ import { menuCard, wireMenuCard } from "./menu.js";
 import { isApp } from "../native.js";
 import { phoneCard, wirePhoneCard } from "./phone.js";
 import { timingsCard, wireTimings } from "./inbox.js";
+import { pluginScreens } from "../plugins.js";
 
 const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -18,10 +19,12 @@ export async function render(root, ctx) {
   const st = S.state;
   const s = st.settings;
   ctx.title("Settings");
-  const more = navOrder().slice(BOTTOM_COUNT);
+  const more = navOrder().slice(BOTTOM_COUNT).map((k) => [k, NAV_ITEMS[k][0], NAV_ITEMS[k][2]]);
+  const plugins = pluginScreens();
   const dis = ro() ? raw("disabled") : "";
   root.innerHTML = String(html`
-    ${more.length ? html`<nav class="card screens only-phone" aria-label="More screens"><ul class="list">${more.map((k) => html`<li><a class="item" href="#/${k}"><span class="ic">${NAV_ITEMS[k][2]}</span><span class="main-t"><span class="t">${NAV_ITEMS[k][0]}</span></span><span class="end faint">›</span></a></li>`)}</ul></nav>` : ""}
+    ${more.length ? html`<nav class="card screens only-phone" aria-label="More screens"><ul class="list">${more.map(([k, l, i]) => html`<li><a class="item" href="#/${k}"><span class="ic">${i}</span><span class="main-t"><span class="t">${l}</span></span><span class="end faint">›</span></a></li>`)}</ul></nav>` : ""}
+    ${plugins.length ? html`<nav class="card screens" aria-label="Plugins"><header><h2>Plugins</h2><span class="muted">personal add-ons</span></header><ul class="list">${plugins.map((p) => html`<li><a class="item" href="#/p/${p.id}"><span class="ic">${p.icon}</span><span class="main-t"><span class="t">${p.title}</span></span><span class="end faint">›</span></a></li>`)}</ul></nav>` : ""}
     ${isApp ? phoneCard() : ""}
     ${menuCard()}
     <div class="grid two">
@@ -35,6 +38,7 @@ export async function render(root, ctx) {
         <div class="fields two">
           <label class="f"><span>Year starts in</span><select name="year_start_month" ${dis}>${MONTHS.map((m, i) => html`<option value="${i + 1}" ${i + 1 === s.year_start_month ? raw("selected") : ""}>${m}${i === 3 ? " (Indian FY)" : ""}</option>`)}</select></label>
           <label class="f"><span>Look-ahead for upcoming (days)</span><input name="upcoming_days" type="number" min="1" max="365" value="${s.upcoming_days}" ${dis}></label>
+          <label class="f"><span>Re-check bank balances after (days)</span><input name="balance_check_days" type="number" min="1" max="365" value="${s.balance_check_days}" ${dis}></label>
         </div>
         <label class="f"><span>Theme</span><select name="theme" ${dis}>${[["auto", "Follow the device"], ["light", "Light"], ["dark", "Dark"]].map(([k, l]) => html`<option value="${k}" ${k === s.theme ? raw("selected") : ""}>${l}</option>`)}</select></label>
         <label class="check"><input type="checkbox" name="hide_amounts" ${s.hide_amounts ? raw("checked") : ""} ${dis}> Hide amounts (blurred — tap an amount to peek)</label>
@@ -66,7 +70,7 @@ export async function render(root, ctx) {
     e.preventDefault();
     const v = formData(e.target);
     try {
-      await put("/api/settings", { ...v, month_start_day: +v.month_start_day, year_start_month: +v.year_start_month, upcoming_days: +v.upcoming_days });
+      await put("/api/settings", { ...v, month_start_day: +v.month_start_day, year_start_month: +v.year_start_month, upcoming_days: +v.upcoming_days, balance_check_days: +v.balance_check_days });
       for (const k of Object.keys(S.view)) if (S.view[k] && S.view[k].period) S.view[k].period = v.default_period;
       toast("Preferences saved");
       ctx.refresh();
@@ -145,7 +149,7 @@ function rulesCard(el) {
 function importSheet(ctx) {
   let text = "";
   sheet("Import CSV", html`
-    <p class="muted" style="margin-top:0">Columns: <code>date, title, amount, type, account, to_account, category, labels, status, notes, splits</code> (only date and amount are required; without a type, negative amounts are expenses). Use “Parent &gt; Child” for sub-categories. Rows whose id already exists are skipped.</p>
+    <p class="muted" style="margin-top:0">Columns: <code>date, title, amount, type, account, to_account, category, labels, notes, splits</code> (only date and amount are required; without a type, negative amounts are expenses). Use “Parent &gt; Child” for sub-categories. Rows whose id already exists are skipped.</p>
     <input type="file" accept=".csv,text/csv" data-file>
     <label class="check"><input type="checkbox" data-create checked> Create missing accounts and categories</label>
     <div data-preview></div>`,

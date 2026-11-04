@@ -1,5 +1,5 @@
 // App shell: sign-in, navigation (bottom bar on phones, sidebar on desktop, the inbox
-// button in the top bar), hash router, the "+" button, banners (demo, data problems,
+// and notification buttons in the top bar), hash router, personal plugins, the "+" button, banners (demo, data problems,
 // offline queue), screen transitions and the service worker. Inside the Android app the sign-in screen is
 // replaced by the app gate (appmode.js) and the back button is handled here.
 
@@ -9,6 +9,7 @@ import { isApp, call } from "./native.js";
 import { appGate } from "./appmode.js";
 import { get, post, flush, onQueue, queue, deviceKey, setDeviceKey } from "./api.js";
 import { openTx } from "./txform.js";
+import { loadPlugins, pluginScreen, pluginScreens } from "./plugins.js";
 
 import * as dashboard from "./views/dashboard.js";
 import * as transactions from "./views/transactions.js";
@@ -20,6 +21,23 @@ import * as reports from "./views/reports.js";
 import * as calendar from "./views/calendar.js";
 import * as labels from "./views/labels.js";
 import * as settings from "./views/settings.js";
+import * as notifications from "./views/notifications.js";
+
+// A plugin's screen (#/p/<id>), rendered by its module in js/plugins/.
+const pluginView = {
+  async render(root, ctx) {
+    const p = pluginScreen(ctx.arg);
+    if (!p) { root.innerHTML = String(html`<div class="empty">This plugin is not enabled. <a href="#/settings">Settings</a></div>`); return; }
+    ctx.title(p.title);
+    await p.render(root, ctx);
+  },
+};
+
+// State and the enabled plugins' modules.
+async function load() {
+  await loadState();
+  await loadPlugins();
+}
 
 // route → [module, nav key, title]
 const ROUTES = {
@@ -32,6 +50,8 @@ const ROUTES = {
   category: [categories, "categories", "Category"],
   budgets: [budgets, "budgets", "Budgets"],
   inbox: [inbox, "inbox", "Inbox"],
+  notifications: [notifications, "notifications", "Notifications"],
+  p: [pluginView, "settings", "Plugin"],
   reports: [reports, "reports", "Reports"],
   labels: [labels, "labels", "Labels"],
   settings: [settings, "settings", "Settings"],
@@ -46,7 +66,8 @@ export const NAV_ITEMS = {
 };
 export const BOTTOM_COUNT = 4; // the first 4 go in the phone's bottom bar, the rest are listed in Settings
 
-// The inbox button's bell.
+// Top-bar icons: the inbox tray (SMS drafts) and the bell (reminders).
+const TRAY = raw(`<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>`);
 const BELL = raw(`<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>`);
 
 /** Menu order from settings (unknown keys dropped, missing ones appended). */
@@ -69,7 +90,7 @@ export const go = (hash) => { if (location.hash !== hash) location.hash = hash; 
 function shell() {
   const st = S.state;
   const order = navOrder();
-  const NAV = [...order.map((k) => [k, NAV_ITEMS[k][0], NAV_ITEMS[k][2]]), ["settings", "Settings", "⚙️"]];
+  const NAV = [...order.map((k) => [k, NAV_ITEMS[k][0], NAV_ITEMS[k][2]]), ...pluginScreens().map((p) => ["p/" + p.id, p.title, p.icon]), ["settings", "Settings", "⚙️"]];
   const BOTTOM = [...order.slice(0, BOTTOM_COUNT).map((k) => [k, NAV_ITEMS[k][1], NAV_ITEMS[k][2]]), ["settings", "Settings", "⚙️"]];
   root.innerHTML = String(html`<div class="app">
     <nav class="side" aria-label="Main">
@@ -80,7 +101,8 @@ function shell() {
     </nav>
     <div class="main">
       <header class="top"><button class="ghost icon" data-back hidden aria-label="Back">‹</button><h1 data-title>Arthik</h1><span data-qbadge></span><span data-actions class="row"></span>
-        <a class="bell" href="#/inbox" data-nav="inbox" aria-label="Inbox">${BELL}<i class="count" data-inbox-count></i></a></header>
+        <a class="bell" href="#/inbox" data-nav="inbox" aria-label="Inbox">${TRAY}<i class="count" data-inbox-count></i></a>
+        <a class="bell" href="#/notifications" data-nav="notifications" aria-label="Notifications">${BELL}<i class="count" data-notice-count></i></a></header>
       <div data-banners></div>
       <div class="content" data-view></div>
     </div>
@@ -91,19 +113,22 @@ function shell() {
   root.querySelector("[data-back]").addEventListener("click", () => history.back());
   banners();
   queueBadge(queue().length);
-  inboxBadge(st.inbox?.pending || 0);
+  badges();
 }
 
-/** Shows how many drafts wait for review on the inbox button (it pops when the count grows). */
-let lastCount = -1;
-export function inboxBadge(n) {
-  root.querySelectorAll("[data-inbox-count]").forEach((el) => {
+/** Counts on the inbox and bell buttons (they pop when a count grows). */
+const lastCount = {};
+function badge(attr, n) {
+  root.querySelectorAll(`[${attr}]`).forEach((el) => {
     el.textContent = n > 99 ? "99+" : n || "";
     el.hidden = !n;
-    if (n > lastCount && lastCount >= 0) replay(el, "pop");
+    if (n > (lastCount[attr] ?? -1) && (lastCount[attr] ?? -1) >= 0) replay(el, "pop");
   });
-  lastCount = n;
+  lastCount[attr] = n;
 }
+export const inboxBadge = (n) => badge("data-inbox-count", n);
+export const noticeBadge = (n) => badge("data-notice-count", n);
+const badges = () => { inboxBadge(S.state.inbox?.pending || 0); noticeBadge(S.state.notices?.active || 0); };
 
 function banners() {
   const st = S.state;
@@ -134,7 +159,7 @@ async function route() {
   const changed = r.name + "/" + r.arg !== lastRoute; // a new screen (not a re-render)
   lastRoute = r.name + "/" + r.arg;
   const [mod, nav, title] = ROUTES[r.name];
-  const inBottom = nav === "inbox" || navOrder().slice(0, BOTTOM_COUNT).includes(nav);
+  const inBottom = nav === "inbox" || nav === "notifications" || navOrder().slice(0, BOTTOM_COUNT).includes(nav);
   root.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === nav ||
     (a.dataset.nav === "settings" && a.closest(".bottom") && !inBottom)));
   const view = root.querySelector("[data-view]");
@@ -170,7 +195,7 @@ async function route() {
 
 /** Rebuilds the menus (after the menu order changed) and the current view. */
 export async function reshell() {
-  await loadState();
+  await load();
   shell();
   await route();
 }
@@ -178,9 +203,9 @@ export async function reshell() {
 /** Reloads /api/state and re-renders the current view. */
 export async function refresh() {
   try {
-    await loadState();
+    await load();
     banners();
-    inboxBadge(S.state.inbox?.pending || 0);
+    badges();
   } catch (e) { toast(e.message, true); }
   await route();
 }
@@ -239,7 +264,7 @@ async function boot() {
   S.me = me;
   if (!me.signed_in) return me.local ? appGate(root) : loginScreen(me);
   try {
-    await loadState();
+    await load();
   } catch (e) {
     root.innerHTML = String(html`<div class="center"><div class="card login"><h1>Arthik</h1><p class="neg">${e.message}</p><button data-retry>Try again</button></div></div>`);
     root.querySelector("[data-retry]").addEventListener("click", boot);

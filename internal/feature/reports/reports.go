@@ -53,12 +53,12 @@ func bucketKind(c *httpx.Ctx) period.Kind {
 	return k
 }
 
-// filtered returns a keep-func from the shared filter (account/label/status/q),
+// filtered returns a keep-func from the shared filter (account/label/q),
 // so every report can be narrowed the same way as the transaction list.
 func filtered(c *httpx.Ctx, d *book.Data, comp *book.Computed) func(model.Transaction) bool {
 	f := query.Parse(c.R.URL.Query())
 	f.From, f.To = dates.Date{}, dates.Date{}
-	if len(f.Accounts)+len(f.Labels)+len(f.Statuses)+len(f.Types) == 0 && f.Text == "" {
+	if len(f.Accounts)+len(f.Labels)+len(f.Types) == 0 && f.Text == "" {
 		return nil
 	}
 	f.Categories = nil

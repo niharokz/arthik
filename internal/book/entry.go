@@ -28,13 +28,14 @@ type Entry struct {
 	Splits    []Split         `json:"splits,omitempty"`
 	Labels    []string        `json:"labels,omitempty"`
 	Notes     string          `json:"notes,omitempty"`
-	Status    string          `json:"status,omitempty"`
 	Postings  []model.Posting `json:"postings,omitempty"` // journal type only
 }
 
-// Split is one category line of a split expense/income.
+// Split is one line of a split expense/income: a category, or an account the money
+// moves into (e.g. an EMI from savings = interest category + principal to the loan).
 type Split struct {
-	Category string       `json:"category"`
+	Category string       `json:"category,omitempty"`
+	Account  string       `json:"account,omitempty"`
 	Amount   money.Amount `json:"amount"`
 }
 
@@ -108,16 +109,13 @@ func ValidID(s string) bool { return validID.MatchString(s) }
 func (d *Data) BuildTx(e Entry) (model.Transaction, error) {
 	t := model.Transaction{
 		ID: e.ID, Date: strings.TrimSpace(e.Date), Time: strings.TrimSpace(e.Time),
-		Type: e.Type, Title: strings.TrimSpace(e.Title), Status: e.Status,
+		Type: e.Type, Title: strings.TrimSpace(e.Title),
 		Notes: strings.TrimSpace(e.Notes),
 	}
 	for _, l := range e.Labels {
 		if l = strings.TrimSpace(l); l != "" && !contains(t.Labels, l) {
 			t.Labels = append(t.Labels, l)
 		}
-	}
-	if t.Status == "" {
-		t.Status = model.StatusUncleared
 	}
 	switch e.Type {
 	case model.TxExpense, model.TxIncome:
@@ -130,12 +128,22 @@ func (d *Data) BuildTx(e Entry) (model.Transaction, error) {
 		}
 		var total money.Amount
 		if len(e.Splits) > 0 {
+			cats := 0
 			for i, s := range e.Splits {
-				if s.Category == "" || s.Amount == 0 {
-					return t, fmt.Errorf("split line %d needs a category and an amount", i+1)
+				if (s.Category == "") == (s.Account == "") || s.Amount == 0 {
+					return t, fmt.Errorf("split line %d needs a category or an account, and an amount", i+1)
 				}
-				t.Postings = append(t.Postings, model.Posting{Category: s.Category, Amount: sign * s.Amount})
+				if s.Account == e.Account {
+					return t, fmt.Errorf("split line %d moves money to the same account", i+1)
+				}
+				if s.Category != "" {
+					cats++
+				}
+				t.Postings = append(t.Postings, model.Posting{Category: s.Category, Account: s.Account, Amount: sign * s.Amount})
 				total += s.Amount
+			}
+			if cats == 0 {
+				return t, fmt.Errorf("a split needs at least one category line (otherwise it is a transfer)")
 			}
 		} else {
 			if e.Category == "" {
@@ -178,11 +186,6 @@ func (d *Data) ValidateTx(t model.Transaction) error {
 	if t.Time != "" && !timeRe.MatchString(t.Time) {
 		return fmt.Errorf("invalid time %q (want HH:MM)", t.Time)
 	}
-	switch t.Status {
-	case "", model.StatusUncleared, model.StatusCleared, model.StatusReconciled:
-	default:
-		return fmt.Errorf("invalid status %q", t.Status)
-	}
 	if t.Title == "" {
 		return fmt.Errorf("enter a title")
 	}
@@ -216,8 +219,8 @@ func (d *Data) ValidateTx(t model.Transaction) error {
 	}
 	switch t.Type {
 	case model.TxExpense, model.TxIncome:
-		if accounts != 1 || categories < 1 {
-			return fmt.Errorf("%s needs one account and at least one category", t.Type)
+		if accounts < 1 || categories < 1 {
+			return fmt.Errorf("%s needs an account and at least one category", t.Type)
 		}
 	case model.TxTransfer:
 		if categories != 0 || accounts != 2 {
@@ -233,10 +236,7 @@ func (d *Data) ValidateTx(t model.Transaction) error {
 // EntryOf turns a stored transaction back into the UI form.
 func EntryOf(t model.Transaction) Entry {
 	e := Entry{ID: t.ID, Type: t.Type, Date: t.Date, Time: t.Time, Title: t.Title, Labels: t.Labels,
-		Notes: t.Notes, Status: t.Status}
-	if e.Status == "" {
-		e.Status = model.StatusUncleared
-	}
+		Notes: t.Notes}
 	var accs, cats []model.Posting
 	for _, p := range t.Postings {
 		if p.Account != "" {
@@ -245,19 +245,29 @@ func EntryOf(t model.Transaction) Entry {
 			cats = append(cats, p)
 		}
 	}
-	switch {
-	case (t.Type == model.TxExpense || t.Type == model.TxIncome) && len(accs) == 1 && len(cats) >= 1:
-		sign := money.Amount(1)
-		if t.Type == model.TxIncome {
-			sign = -1
+	sign := money.Amount(1) // expense: lines +, source account -
+	if t.Type == model.TxIncome {
+		sign = -1
+	}
+	src := sourcePosting(t.Postings, sign)
+	if len(accs) == 1 { // a plain entry (a refund too): its only account is the source
+		for i, p := range t.Postings {
+			if p.Account != "" {
+				src = i
+			}
 		}
-		e.Account = accs[0].Account
-		e.Amount = -sign * accs[0].Amount
-		if len(cats) == 1 {
+	}
+	switch {
+	case (t.Type == model.TxExpense || t.Type == model.TxIncome) && len(cats) >= 1 && src >= 0:
+		e.Account = t.Postings[src].Account
+		e.Amount = -sign * t.Postings[src].Amount
+		if len(accs) == 1 && len(cats) == 1 {
 			e.Category = cats[0].Category
 		} else {
-			for _, c := range cats {
-				e.Splits = append(e.Splits, Split{Category: c.Category, Amount: sign * c.Amount})
+			for i, p := range t.Postings {
+				if i != src {
+					e.Splits = append(e.Splits, Split{Category: p.Category, Account: p.Account, Amount: sign * p.Amount})
+				}
 			}
 		}
 	case t.Type == model.TxTransfer && len(accs) == 2 && len(cats) == 0:
@@ -276,6 +286,25 @@ func EntryOf(t model.Transaction) Entry {
 		}
 	}
 	return e
+}
+
+// sourcePosting finds the one account the money leaves (expense) or enters (income):
+// the only account posting against the lines' direction. -1 when there is none or
+// several (the entry is then shown as a journal).
+func sourcePosting(ps []model.Posting, sign money.Amount) int {
+	src := -1
+	for i, p := range ps {
+		if p.Account == "" {
+			continue
+		}
+		if p.Amount*sign < 0 {
+			if src >= 0 {
+				return -1
+			}
+			src = i
+		}
+	}
+	return src
 }
 
 func contains(s []string, v string) bool {

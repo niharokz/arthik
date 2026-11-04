@@ -18,13 +18,15 @@ plus an **inbox** that turns bank SMS and due subscriptions into drafts you acce
 
 | Area | What you get |
 |---|---|
-| Accounts | Bank, cash, wallet, investment, deposit, property, receivable, credit card, loan, payable … Balance (today), cleared balance, projected balance (incl. future-dated). Credit cards: limit, available, statement/due dates, billed/unbilled. Hide, archive, leave out of net worth. Reconcile against a statement. |
-| Transactions | Expense, income, transfer, split across categories, refunds. Calculator amount field (`120+45*2`). Remembered transactions: type a few letters of a title and tap a past entry to fill in everything. Labels, notes, time, status (uncleared/cleared/reconciled). Past dates fix history; future dates count from their day. Duplicate, bulk status/label/delete. |
+| Accounts | Bank, cash, wallet, investment, deposit, property, receivable, credit card, loan, payable … Balance (today) and projected balance (incl. future-dated). Credit cards: limit, available, statement/due dates, billed/unbilled. Hide, archive, leave out of net worth (their total is shown as *not counted*). Bank balance check: record what the bank shows and see ✅ or the difference. |
+| Transactions | Expense, income, transfer, splits (category lines, and account lines such as a loan's principal), refunds. Category picker with search, recent and group grid. Calculator amount field (`120+45*2`). Remembered transactions: type a few letters of a title and tap a past entry to take its title and category (the account and everything else stay as you set them). Labels, notes, time. Every saved transaction has happened; past dates fix history; future dates count from their day. Duplicate, bulk label/delete. |
 | Categories | Two levels (parent › child) for expense, income, and “both ways” (e.g. *Market* gains and losses). Totals for a week, month, quarter, half-year, year or any custom range; the default period is a setting. Delete with “move transactions to …”. |
 | Budgets | Per category, weekly → yearly, scaled to the period you view, reset every period, with on-pace progress. |
-| Inbox | Drafts from bank SMS (the phone app) and due subscriptions (Kronos). Accept, edit, “same as” an entry you already made, or reject. Accounts are found from the card/account digits in the SMS; the category from what you taught it (🧠), a past transaction with that name (↺), the category Kronos named (📋), the local AI (✨, optional) or your fallback. A debit plus a matching card payment become one transfer. The bank's reported balance is checked against yours. Accepting teaches the merchant. |
+| Inbox | Drafts from bank SMS (the phone app). Accept, edit, “same as” an entry you already made, or reject. Accounts are found from the card/account digits in the SMS; the category from what you taught it (🧠), a past transaction with that name (↺), the local AI (✨, optional) or your fallback. A debit plus a matching card payment become one transfer. The bank's reported balance is checked against yours. Accepting teaches the merchant. |
+| Notifications | 🔔 Reminders from Kronos (bills and subscriptions due). Never a transaction by themselves: each shows *Paid ✓* when a payment with the same amount is recorded near its due date, or that its SMS waits in the inbox. Dismiss, reopen, or add the payment. |
+| Plugins | Personal add-ons switched on by their own data file. **Loans** (`loans.md`): lender summary, repayment schedule (paste the lender's table each year; estimate to payoff), EMIs left, interest still to pay, this financial year's principal and interest, *Record EMI* and *Split as EMI*. |
 | Reports | Cash flow, spending and income by category with drill-down, category trend, net worth over time, balance sheet at any date, account flow, labels, calendar. Every chart has a table. |
-| Search & data | Full-text search plus filters (dates, type, accounts, categories, labels, status, amount, posted/future); totals of the filtered list; CSV export of exactly what you filtered; CSV import with a dry-run preview. |
+| Search & data | Full-text search plus filters (dates, type, accounts, categories, labels, amount, posted/future); totals of the filtered list; CSV export of exactly what you filtered; CSV import with a dry-run preview. |
 | Home | Your blocks, in your order: net worth with its trend, the period's income/expense/savings, inbox, spending, budgets, upcoming, credit cards, accounts, recent, cash flow, plus blocks you create for any account, category or label. ✎ on the home screen. |
 | Settings | Default period, week start, month start day (salary cycles), year start month (e.g. April for the Indian FY), look-ahead days, light/dark/auto, hide amounts, menu order (which four screens sit in the phone's bottom bar), inbox fallback categories, learned rules. |
 
@@ -95,14 +97,15 @@ Only the main instance writes balances and imports the inbox.
 ```
 <FINANCE_PATH>/
   settings.md                     preferences
-  accounts.md                     accounts + computed balance / cleared_balance / projected_balance
+  accounts.md                     accounts + computed balance / projected_balance
   categories.md                   category tree + budgets + computed total for the default period
   labels.md                       labels + computed count
   money.md                        computed overview (net worth, period totals, ledger check) — output only
+  loans.md                        optional, yours: the Loans plugin (read only by Arthik)
   transactions/transaction_YYYYMM.md   one file per month
   inbox/drafts.md                 drafts waiting for review (and reviewed ones, for a while)
   inbox/learned.md                merchant → title/category rules learned when you accept
-  inbox/kronos.md                 written only by Kronos: subscriptions that fell due
+  inbox/kronos.md                 written only by Kronos: bills that fell due (shown as reminders)
   inbox/sms_<phone>.md            written only by the phone app: new bank SMS, raw text
   inbox/sms_rules.md              optional: your own SMS patterns (see below)
   demouser/                       the demo dataset (same layout)
@@ -116,7 +119,6 @@ transactions:
     date: '2026-10-01'
     type: expense            # expense | income | transfer | journal
     title: Groceries
-    status: cleared          # uncleared | cleared | reconciled
     labels: [home]
     postings:
       - account: wallet

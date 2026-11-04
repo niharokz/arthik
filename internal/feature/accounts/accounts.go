@@ -1,5 +1,5 @@
 // Package accounts is the Accounts feature: create / edit / archive / delete
-// accounts, balance history for the account chart, and reconciliation.
+// accounts, balance history for the account chart, and the bank balance check.
 package accounts
 
 import (
@@ -70,10 +70,10 @@ func (in input) apply(a *model.Account) error {
 // Register adds the routes.
 func Register(rt *httpx.Router) {
 	rt.Handle("POST /api/accounts", create)
+	rt.Handle("POST /api/accounts/{id}/check", check)
 	rt.Handle("PUT /api/accounts/{id}", update)
 	rt.Handle("DELETE /api/accounts/{id}", remove)
 	rt.Handle("GET /api/accounts/{id}/history", history)
-	rt.Handle("POST /api/accounts/{id}/reconcile", reconcile)
 }
 
 func create(c *httpx.Ctx) error {
@@ -226,49 +226,35 @@ func history(c *httpx.Ctx) error {
 	return c.OK(out)
 }
 
-// reconcile sets the status of the given transactions (which must touch this account).
-func reconcile(c *httpx.Ctx) error {
+// check records what the bank shows for the account at the end of a day; the
+// account then shows whether Arthik matches it. {balance (signed), date}
+func check(c *httpx.Ctx) error {
 	var in struct {
-		IDs    []string `json:"ids"`
-		Status string   `json:"status"`
+		Balance money.Amount `json:"balance"`
+		Date    string       `json:"date"`
 	}
 	if err := c.Decode(&in); err != nil {
 		return err
 	}
-	switch in.Status {
-	case model.StatusUncleared, model.StatusCleared, model.StatusReconciled:
-	default:
-		return fmt.Errorf("invalid status %q", in.Status)
-	}
-	id := c.R.PathValue("id")
-	n := 0
-	err := c.Book.Mutate(func(d *book.Data, ch *book.Change) error {
-		if _, ok := d.Account(id); !ok {
-			return httpx.NotFound("account")
-		}
-		for _, tid := range in.IDs {
-			t, ok := d.Tx(tid)
-			if !ok {
-				continue
-			}
-			touches := false
-			for _, p := range t.Postings {
-				if p.Account == id {
-					touches = true
-				}
-			}
-			if touches && t.Status != in.Status {
-				t.Status = in.Status
-				d.SetTx(t, ch)
-				n++
-			}
-		}
-		return nil
-	})
+	day, err := dates.Parse(in.Date)
 	if err != nil {
 		return err
 	}
-	return c.OK(map[string]int{"updated": n})
+	id := c.R.PathValue("id")
+	return okOr(c, c.Book.Mutate(func(d *book.Data, ch *book.Change) error {
+		if day.After(c.Book.Today()) {
+			return fmt.Errorf("the check date cannot be in the future")
+		}
+		for i := range d.Accounts {
+			if d.Accounts[i].ID == id {
+				b := model.Reported(in.Balance)
+				d.Accounts[i].BankBalance, d.Accounts[i].BankDate = &b, day.String()
+				ch.Accounts = true
+				return nil
+			}
+		}
+		return httpx.NotFound("account")
+	}))
 }
 
 func okOr(c *httpx.Ctx, err error) error {

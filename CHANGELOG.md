@@ -2,6 +2,42 @@
 
 Versions before 1.0.1 were pre-releases and are numbered 0.x here.
 
+## 1.0.3 — 2026-11-04
+
+- **No more cleared / uncleared.** Every saved transaction has happened; future-dated ones
+  are scheduled. The status field, the cleared balance, *Reconcile* and the status filters
+  and bulk actions are gone. Old files still load; `status:` and `cleared_balance:` are
+  dropped the next time a file is saved.
+- **Bank balance check.** On an account, *Check balance* records what the bank app shows
+  (for cards and loans: what you owe) on a day; the account then shows ✅ when Arthik
+  matches it or ⚠️ with the difference, and the accounts list marks each one (✅ ⚠️ ○).
+  Home and Accounts tell you how many don't match or haven't been checked within
+  `balance_check_days` (Settings, default 30). Stored as `bank_balance` / `bank_date` in
+  `accounts.md`.
+- **Not counted in net worth.** The net worth card shows, beside assets and owed, the total of
+  the accounts you leave out of net worth (EPF, PPF, FD, house, home loan …).
+- **Split into accounts too.** A split line can be a category *or* an account the money
+  moves into, so one debit can be, for example, interest (a category) + principal (paid
+  into the loan account). CSV: an account line is written `@Account=amount`.
+- **Kronos bills are notifications.** They no longer wait in the inbox: the top bar has an
+  inbox tray (bank SMS drafts) and a 🔔 bell (reminders). A reminder shows *Paid ✓* once a
+  transaction of the same amount is recorded within a week of its due date, or *SMS
+  waiting in the inbox*; dismiss it or add the payment from it. Kronos drafts still
+  pending become reminders on the next import.
+- **Suggestions take only the category.** Tapping a remembered transaction in the add form
+  completes the title and sets its category; the account, labels, notes and the rest stay
+  as you set them.
+- **Category picker.** Choosing a category opens a sheet: search, recently used, and a grid
+  of groups that opens into their sub-categories — one or two taps, no long list.
+- **Personal plugins.** Optional screens outside the core app, switched on by their own
+  data file. First one: **Loans** (`loans.md`) — lender summary, repayment schedule (the
+  lender's rows, then estimated from the rate until payoff), EMIs left, interest still to
+  pay, this financial year's principal (80C) and interest (24(b)), *Record EMI*, and
+  *Split as EMI* in the transaction form. Each year, paste the lender's new schedule at the
+  end of `schedule_text` as the lender shows it (`05-NOV-27  7.50%%  ₹ 23,785.27 …`): rows
+  merge by due date, a missing month or unreadable line is reported, and the estimate
+  continues from the last row at its rate.
+
 ## 1.0.2 — 2026-11-02
 
 - **New logo**: a ₹ drawn in three strokes on a dark tile, in the family of the other apps.

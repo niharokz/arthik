@@ -2,11 +2,12 @@
 // (with a dry-run preview). The export format imports back unchanged.
 //
 // Columns: id, date, time, type, title, amount, account, to_account, category,
-// labels, status, notes, splits.
+// labels, notes, splits.
 //   - account / to_account / category are names ("Food > Groceries" for a child);
 //     ids are accepted on import too.
 //   - labels are separated by "|".
-//   - splits holds split lines "Category=amount|Category=amount"; for free-form
+//   - splits holds split lines "Category=amount|@Account=amount" (an @ line moves the
+//     money into that account, e.g. a loan's principal); for free-form
 //     journal entries it holds every posting "account:Name=-100|category:Name=100".
 //   - Without a type column, a negative amount is an expense and a positive one income.
 package importexport
@@ -28,7 +29,7 @@ import (
 )
 
 // Columns is the export header.
-var Columns = []string{"id", "date", "time", "type", "title", "amount", "account", "to_account", "category", "labels", "status", "notes", "splits"}
+var Columns = []string{"id", "date", "time", "type", "title", "amount", "account", "to_account", "category", "labels", "notes", "splits"}
 
 // Register adds the routes.
 func Register(rt *httpx.Router) {
@@ -72,7 +73,11 @@ func export(c *httpx.Ctx) error {
 			}
 			var splits []string
 			for _, s := range e.Splits {
-				splits = append(splits, catName(d, s.Category)+"="+s.Amount.String())
+				if s.Account != "" {
+					splits = append(splits, "@"+accName(d, s.Account)+"="+s.Amount.String())
+				} else {
+					splits = append(splits, catName(d, s.Category)+"="+s.Amount.String())
+				}
 			}
 			if e.Type == model.TxJournal {
 				for _, p := range t.Postings {
@@ -96,7 +101,7 @@ func export(c *httpx.Ctx) error {
 				acc = accName(d, e.Account)
 			}
 			rows = append(rows, []string{t.ID, t.Date, t.Time, e.Type, t.Title, e.Amount.String(), acc, to, cat,
-				strings.Join(labels, "|"), e.Status, t.Notes, strings.Join(splits, "|")})
+				strings.Join(labels, "|"), t.Notes, strings.Join(splits, "|")})
 		}
 		return nil
 	})
@@ -328,7 +333,7 @@ func apply(d *book.Data, ch *book.Change, recs [][]string, create bool, rep *Rep
 			}
 		}
 		e := book.Entry{ID: id, Type: typ, Date: date.String(), Time: get(row, "time"), Title: get(row, "title"),
-			Amount: amt, Status: strings.ToLower(get(row, "status")), Notes: get(row, "notes")}
+			Amount: amt, Notes: get(row, "notes")}
 		if e.Title == "" {
 			e.Title = "(no title)"
 		}
@@ -356,6 +361,15 @@ func apply(d *book.Data, ch *book.Change, recs [][]string, create bool, rep *Rep
 					if err != nil {
 						rerr = err
 						break
+					}
+					if an, isAcc := strings.CutPrefix(name, "@"); isAcc {
+						aid, err := res.account(an)
+						if err != nil {
+							rerr = err
+							break
+						}
+						e.Splits = append(e.Splits, book.Split{Account: aid, Amount: v})
+						continue
 					}
 					cid, err := res.category(name, kind)
 					if err != nil {

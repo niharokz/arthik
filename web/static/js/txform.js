@@ -1,11 +1,13 @@
 // The transaction sheet: add / edit / duplicate an expense, income or transfer,
-// with Bluecoins' calculator amount, remembered items, splits, labels, status and
+// with Bluecoins' calculator amount, remembered items, splits, labels and
 // past/future dates. It also reviews inbox drafts: saving accepts the draft.
 
 import { html, raw, calc, fromPaise, paise, money, todayStr, nowTime, newId, debounce, qs, fmtShort } from "./util.js";
-import { S, sheet, toast, confirmSheet, catOptions, accOptions, ro, today, cat, accName, catName, celebrate, flashTx } from "./ui.js";
+import { S, sheet, toast, confirmSheet, accOptions, ro, today, cat, accName, catName, celebrate, flashTx } from "./ui.js";
 import { get, post, txWrite } from "./api.js";
 import { haptic } from "./native.js";
+import { pickCategory, pickLabel } from "./picker.js";
+import { formHooks } from "./plugins.js";
 
 const lastAcc = () => { try { return localStorage.getItem("arthik.lastAccount") || ""; } catch { return ""; } };
 const setLastAcc = (id) => { try { localStorage.setItem("arthik.lastAccount", id); } catch { /* ignore */ } };
@@ -34,10 +36,9 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
     account: tx.account || first,
     to: tx.to_account || "",
     category: tx.category || "",
-    splits: (tx.splits || []).map((s) => ({ category: s.category, amount: s.amount })),
+    splits: (tx.splits || []).map((s) => ({ category: s.category || "", account: s.account || "", amount: s.amount })),
     date: tx.date || today(),
     time: tx.time || (editing ? "" : nowTime()),
-    status: tx.status || "uncleared",
     labels: [...(tx.labels || [])],
     notes: tx.notes || "",
     remember: askDigits,
@@ -48,6 +49,11 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
   }
 
   let s;
+  const hooks = formHooks(); // plugin shortcuts, e.g. "Split as EMI"
+  const hookButtons = () => {
+    const on = hooks.map((h, i) => [h, i]).filter(([h]) => h.show(st));
+    return html`<div class="row wrap hooks" data-hooks>${on.map(([h, i]) => html`<button type="button" class="chip-btn" data-hook="${i}">${h.label(st)}</button>`)}</div>`;
+  };
   const choose = draft ? html`<option value="">Choose…</option>` : "";
   const body = () => html`
     ${draft?.raw ? html`<div class="draft-raw"><small>${draft.source === "sms" ? "SMS" : draft.source}</small>${draft.raw}${draft.pair_raw ? html`<hr>${draft.pair_raw}` : ""}</div>` : ""}
@@ -72,8 +78,10 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
       </div>` : html`
       <label class="f"><span>Account</span><select name="account">${choose}${accOptions(st.account)}</select></label>
       ${st.splits.length ? splitsBlock() : html`
-        <label class="f"><span>Category</span><select name="category"><option value="">Choose…</option>${catOptions(st.type, st.category)}</select></label>`}
-      <div class="row" style="margin:-4px 0 12px"><button type="button" class="ghost" data-split>${st.splits.length ? "Remove split" : "Split into categories"}</button>
+        <div class="f"><span class="muted" style="font-size:.8rem;display:block;margin-bottom:4px">Category</span>
+          <button type="button" class="pick ${st.category ? "" : "empty"}" data-pick>${pickLabel({ category: st.category })}</button></div>`}
+      ${hookButtons()}
+      <div class="row" style="margin:-4px 0 12px"><button type="button" class="ghost" data-split>${st.splits.length ? "Remove split" : "Split"}</button>
         ${st.splits.length ? "" : html`<label class="check" style="margin:0 0 0 auto"><input type="checkbox" name="negative" ${st.negative ? raw("checked") : ""}> ${st.type === "expense" ? "Refund" : "Reversal"}</label>`}</div>`}
     <div class="fields two">
       <label class="f"><span>Date ${st.date > today() ? html`<span class="badge warn">future — posts on this date</span>` : ""}</span><input type="date" name="date" value="${st.date}"></label>
@@ -85,9 +93,6 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
         ${st.labels.filter((l) => !(S.state.labels || []).some((x) => x.id === l)).map((l) => html`<button type="button" class="chip on" data-label="${l}">${l}</button>`)}
       </div>
       <input name="newlabel" placeholder="New label, press Enter" style="margin-top:8px"></label>
-    <label class="f"><span>Status</span><select name="status">
-      ${[["uncleared", "Uncleared"], ["cleared", "Cleared"], ["reconciled", "Reconciled"]].map(([v, l]) => html`<option value="${v}" ${st.status === v ? raw("selected") : ""}>${l}</option>`)}
-    </select></label>
     ${askDigits ? html`<label class="check"><input type="checkbox" name="remember" ${st.remember ? raw("checked") : ""}> Remember …${draft.digits} for this account</label>` : ""}
     <label class="f"><span>Notes</span><textarea name="notes">${st.notes}</textarea></label>
     <p class="faint" style="font-size:.78rem;margin:0" data-entry></p>`;
@@ -96,7 +101,7 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
     const total = st.splits.reduce((a, x) => a + (calc(x.amount) || 0), 0);
     return html`<div class="f"><span class="muted" style="font-size:.8rem;display:block;margin-bottom:4px">Split lines</span>
       ${st.splits.map((x, i) => html`<div class="split-line">
-        <select data-scat="${i}"><option value="">Category…</option>${catOptions(st.type, x.category)}</select>
+        <button type="button" class="pick ${x.category || x.account ? "" : "empty"}" data-spick="${i}">${pickLabel(x, "Category or account…")}</button>
         <input data-samt="${i}" inputmode="decimal" value="${x.amount}" placeholder="0.00" aria-label="Amount">
         <button type="button" class="icon ghost" data-sdel="${i}" aria-label="Remove line">✕</button></div>`)}
       <div class="row between"><button type="button" class="ghost" data-sadd>+ Add line</button><span>Total <b class="amt">${money(total / 100)}</b></span></div></div>`;
@@ -113,15 +118,25 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
       st.title = g("title").value;
       st.account = g("account")?.value || st.account;
       if (g("to")) st.to = g("to").value;
-      if (g("category")) st.category = g("category").value;
       if (g("negative")) st.negative = g("negative").checked;
       st.date = g("date").value;
       st.time = g("time").value;
-      st.status = g("status").value;
       if (g("remember")) st.remember = g("remember").checked;
       st.notes = g("notes").value;
-      d.querySelectorAll("[data-scat]").forEach((el) => (st.splits[+el.dataset.scat].category = el.value));
       d.querySelectorAll("[data-samt]").forEach((el) => (st.splits[+el.dataset.samt].amount = el.value));
+    };
+    // Plugin shortcuts follow the amount as it is typed, without redrawing the form.
+    const wireHooks = () => d.querySelectorAll("[data-hook]").forEach((b) => b.addEventListener("click", async () => {
+      pull();
+      const h = hooks[+b.dataset.hook];
+      try { if (await h.apply(st)) render(); } catch (err) { toast(err.message, true); }
+    }));
+    const refreshHooks = () => {
+      const box = d.querySelector("[data-hooks]");
+      if (!box) return;
+      pull();
+      box.outerHTML = String(hookButtons());
+      wireHooks();
     };
     const render = () => { // draws the form from st as it is
       d.querySelector(".sheet-b").innerHTML = String(body());
@@ -144,7 +159,7 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
     };
     const acLine = (x) => {
       const where = x.type === "transfer" ? `${accName(x.account)} → ${accName(x.to_account)}`
-        : `${x.splits?.length ? "Split · " + x.splits.length + " categories" : catName(x.category, true)} · ${accName(x.account)}`;
+        : `${x.splits?.length ? "Split · " + x.splits.length + " lines" : catName(x.category, true)} · ${accName(x.account)}`;
       return html`<button type="button" class="ac-item" role="option" data-ac="${acItems.indexOf(x)}">
         <span class="ac-main"><b>${x.title}</b><small>${where}</small></span>
         <span class="ac-end"><span class="amt ${x.type === "income" ? "pos" : x.type === "expense" ? "neg" : ""}">${money(x.amount)}</span>
@@ -166,16 +181,14 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
         if (document.activeElement === d.querySelector("#tx-title")) acShow();
       } catch { acItems = []; acHide(); } // offline web app: no suggestions
     }, 150);
-    // Fills the form from a remembered transaction — everything except the amount,
-    // which stays what you typed (or what the SMS said). Date and time stay too.
+    // Picking a remembered transaction completes the title and takes its category;
+    // everything else (account, amount, date, labels, notes) stays as it is.
     const acPick = (x) => {
       if (!x) return;
       pull();
-      Object.assign(st, {
-        type: x.type, title: x.title, notes: x.notes || "", labels: [...(x.labels || [])],
-        account: x.account || st.account, to: x.to_account || "", category: x.category || "",
-        splits: (x.splits || []).map((sp) => ({ category: sp.category, amount: "" })), // categories only
-      });
+      st.title = x.title;
+      const c = cat(x.category || x.splits?.find((sp) => sp.category)?.category);
+      if (c && (c.kind === st.type || c.kind === "both") && !st.splits.length) st.category = c.id;
       acHide();
       render(); // not redraw: that would read the old fields back over st
       haptic("tick");
@@ -192,6 +205,7 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
         redraw();
       }));
       d.querySelector('[name="amount"]')?.addEventListener("input", hint);
+      if (hooks.length) d.querySelector('[name="amount"]')?.addEventListener("input", debounce(refreshHooks, 250));
       const title = d.querySelector('[name="title"]');
       title.addEventListener("input", () => suggest(title.value));
       title.addEventListener("focus", () => suggest(title.value));
@@ -220,11 +234,23 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
           st.category = st.splits[0]?.category || "";
           st.splits = [];
         } else {
-          st.splits = [{ category: st.category, amount: st.amount }, { category: "", amount: "" }];
+          st.splits = [{ category: st.category, account: "", amount: st.amount }, { category: "", account: "", amount: "" }];
         }
         redraw();
       });
-      d.querySelector("[data-sadd]")?.addEventListener("click", () => { pull(); st.splits.push({ category: "", amount: "" }); redraw(); });
+      d.querySelector("[data-sadd]")?.addEventListener("click", () => { pull(); st.splits.push({ category: "", account: "", amount: "" }); redraw(); });
+      d.querySelector("[data-pick]")?.addEventListener("click", async () => {
+        pull();
+        const v = await pickCategory(st.type, { current: st.category });
+        if (v?.category) { st.category = v.category; render(); }
+      });
+      d.querySelectorAll("[data-spick]").forEach((b) => b.addEventListener("click", async () => {
+        pull();
+        const line = st.splits[+b.dataset.spick];
+        const v = await pickCategory(st.type, { current: line.category, accounts: true, exclude: st.account });
+        if (v) { Object.assign(line, { category: v.category || "", account: v.account || "" }); render(); }
+      }));
+      wireHooks();
       d.querySelectorAll("[data-sdel]").forEach((b) => b.addEventListener("click", () => { pull(); st.splits.splice(+b.dataset.sdel, 1); redraw(); }));
       d.querySelectorAll("[data-samt]").forEach((el) => el.addEventListener("change", redraw));
       d.querySelectorAll("[data-label]").forEach((b) => b.addEventListener("click", () => {
@@ -246,7 +272,7 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
     const save = async () => {
       pull();
       const e = { type: st.type, title: st.title.trim(), account: st.account, date: st.date, time: st.time,
-        status: st.status, labels: st.labels, notes: st.notes.trim() };
+        labels: st.labels, notes: st.notes.trim() };
       if (!e.title) return toast("Enter a title", true);
       if (!e.date) return toast("Choose a date", true);
       if (!e.account) return toast(st.type === "transfer" ? "Choose the account it came from" : "Choose an account", true);
@@ -257,12 +283,13 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
         e.amount = fromPaise(v);
         e.to_account = st.to;
       } else if (st.splits.length) {
-        const lines = st.splits.filter((x) => x.category || x.amount);
+        const lines = st.splits.filter((x) => x.category || x.account || x.amount);
         for (const x of lines) {
-          if (!x.category || Number.isNaN(calc(x.amount)) || !calc(x.amount)) return toast("Every split line needs a category and an amount", true);
+          if (!(x.category || x.account) || Number.isNaN(calc(x.amount)) || !calc(x.amount)) return toast("Every split line needs a category or account, and an amount", true);
         }
         if (lines.length < 2) return toast("A split needs at least two lines", true);
-        e.splits = lines.map((x) => ({ category: x.category, amount: fromPaise(calc(x.amount)) }));
+        if (!lines.some((x) => x.category)) return toast("Add at least one category line — moving money only is a transfer", true);
+        e.splits = lines.map((x) => (x.account ? { account: x.account, amount: fromPaise(calc(x.amount)) } : { category: x.category, amount: fromPaise(calc(x.amount)) }));
       } else {
         const v = calc(st.amount);
         if (Number.isNaN(v) || !v) return toast("Enter an amount", true);
@@ -295,7 +322,7 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
     d.querySelector("[data-dup]")?.addEventListener("click", () => {
       pull();
       close();
-      openTx({ ...tx, _prefill: true, id: undefined, date: todayStr(), time: nowTime(), status: "uncleared" }, onSaved);
+      openTx({ ...tx, _prefill: true, id: undefined, date: todayStr(), time: nowTime() }, onSaved);
     });
     d.querySelector("[data-del]")?.addEventListener("click", async () => {
       if (!(await confirmSheet("Delete transaction?", `“${tx.title}” will be removed from every balance and total.`))) return;

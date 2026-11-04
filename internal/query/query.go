@@ -19,8 +19,7 @@ type Filter struct {
 	Accounts   []string
 	Categories []string // a parent matches its children too
 	Labels     []string // any of
-	Statuses   []string
-	Text       string // title, notes, labels, amount
+	Text       string   // title, notes, labels, amount
 	Min, Max   money.Amount
 	HasMin     bool
 	HasMax     bool
@@ -41,12 +40,12 @@ func list(v url.Values, name string) []string {
 }
 
 // Parse reads a filter from URL query parameters:
-// from, to, type, account, category, label, status, q, min, max, when.
+// from, to, type, account, category, label, q, min, max, when.
 func Parse(v url.Values) Filter {
 	f := Filter{
 		Types: list(v, "type"), Accounts: list(v, "account"), Categories: list(v, "category"),
-		Labels: list(v, "label"), Statuses: list(v, "status"),
-		Text: strings.TrimSpace(v.Get("q")), When: v.Get("when"),
+		Labels: list(v, "label"),
+		Text:   strings.TrimSpace(v.Get("q")), When: v.Get("when"),
 	}
 	if d, err := dates.Parse(v.Get("from")); err == nil {
 		f.From = d
@@ -132,15 +131,6 @@ func (m *Matcher) match(t model.Transaction, stored bool) bool {
 	}
 	if len(f.Types) > 0 && !in(f.Types, t.Type) {
 		return false
-	}
-	if len(f.Statuses) > 0 {
-		st := t.Status
-		if st == "" {
-			st = model.StatusUncleared
-		}
-		if !in(f.Statuses, st) {
-			return false
-		}
 	}
 	if len(f.Labels) > 0 {
 		ok := false

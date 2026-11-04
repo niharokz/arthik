@@ -191,3 +191,18 @@ func TestReplicaMergesInMemoryOnly(t *testing.T) {
 		t.Fatal("replica did not save the user's transaction")
 	}
 }
+
+// A conflict copy with nothing new (e.g. an inbox copy whose drafts are all in the
+// main file) is still removed by the main device.
+func TestEmptyConflictCopyRemoved(t *testing.T) {
+	b := newBook(t)
+	name := "inbox/drafts.sync-conflict-20261103-045038-PHONE01.md"
+	writeFile(t, b, "inbox/drafts.md", "drafts: []\n")
+	writeFile(t, b, name, "drafts: []\n")
+	if err := b.Reload(); err != nil {
+		t.Fatal(err)
+	}
+	if exists(b, name) {
+		t.Error("no-op conflict copy left behind")
+	}
+}

@@ -185,7 +185,7 @@ func remove(c *httpx.Ctx) error {
 	return c.OK(map[string]bool{"ok": true})
 }
 
-// bulk applies one action to many transactions: status, delete, add_label, remove_label.
+// bulk applies one action to many transactions: delete, add_label, remove_label.
 func bulk(c *httpx.Ctx) error {
 	var in struct {
 		IDs    []string `json:"ids"`
@@ -213,14 +213,6 @@ func bulk(c *httpx.Ctx) error {
 			switch in.Action {
 			case "delete":
 				d.DeleteTx(id, ch)
-			case "status":
-				switch in.Value {
-				case model.StatusUncleared, model.StatusCleared, model.StatusReconciled:
-				default:
-					return fmt.Errorf("invalid status %q", in.Value)
-				}
-				t.Status = in.Value
-				d.SetTx(t, ch)
 			case "add_label":
 				if t.HasLabel(label) {
 					continue

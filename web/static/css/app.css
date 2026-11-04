@@ -776,3 +776,35 @@ button.link:hover { text-decoration: underline; background: none; }
 .acc-head > .ic { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; font-size: 1.5rem; background: var(--surface-2); flex: 0 0 auto; }
 .acc-head .label { font-size: .8rem; color: var(--muted); }
 .acc-head .hero-value { font-size: 1.6rem; }
+
+/* ---- category picker ---- */
+.pick { width: 100%; text-align: left; justify-content: flex-start; padding: 10px 12px; border-radius: 10px; font-size: .95rem; }
+.pick.empty { color: var(--muted); }
+.split-line .pick { padding: 8px 10px; font-size: .88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-q { width: 100%; margin-bottom: 10px; }
+.pick-h { margin: 12px 0 8px; }
+.pick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.pick-tile { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; min-height: 76px;
+  border-radius: 12px; border: 1px solid var(--line); background: var(--surface); text-align: center; font-size: .82rem; line-height: 1.2; }
+.pick-tile .pi { font-size: 1.35rem; }
+.pick-tile .pk { font-size: .7rem; color: var(--muted); }
+.pick-tile.on, .pick-tile:hover { border-color: var(--teal); background: var(--teal-soft); }
+.pick-tile.whole { border-style: dashed; }
+
+/* ---- notifications & loans plugin ---- */
+.notice.paid { opacity: .75; }
+.loan .warns { margin: 0 0 10px; padding: 0; list-style: none; font-size: .85rem; color: var(--warn); }
+.loan .warns li::before { content: "⚠ "; }
+.loan .stat .sub { font-size: .78rem; }
+details.card > summary { cursor: pointer; }
+.tbl tr.faint td { color: var(--faint); }
+.hooks { margin: -4px 0 10px; }
+.hooks:empty { display: none; }
+
+/* ---- bank balance check ---- */
+.ck { font-size: .8rem; margin-left: 2px; }
+.ck.none { color: var(--faint); }
+.card.check { padding: 12px 14px; }
+.card.check.off { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 7%, var(--surface)); }
+.card.check.ok { border-color: color-mix(in srgb, var(--income) 40%, var(--line)); }
+.hero-check { display: block; margin-top: 8px; font-size: .82rem; color: var(--warn); }

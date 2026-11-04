@@ -23,7 +23,7 @@ function subtitle(t, account) {
     return `${accName(t.account)} → ${accName(t.to_account)}`;
   }
   if (t.type === "journal") return "journal entry";
-  const c = t.splits?.length ? `Split · ${t.splits.length} categories` : catName(t.category, true);
+  const c = t.splits?.length ? `Split · ${t.splits.map((x) => (x.account ? "→ " + accName(x.account) : catName(x.category))).join(" + ")}` : catName(t.category, true);
   return account ? c : `${c} · ${accName(t.account)}`;
 }
 
@@ -39,8 +39,7 @@ export function row(t, { account, showDate = false } = {}) {
       <span class="s">${showDate ? fmtDay(t.date) + " · " : ""}${subtitle(t, account)}${(t.labels || []).length ? " · " + t.labels.map(labelName).join(", ") : ""}</span></span>
     <span class="end"><span class="amt ${cls}">${shown}</span>
       <span class="s">${t._pending ? html`<span class="badge warn">pending sync</span>` : t.invalid ? html`<span class="badge neg" title="${t.invalid}">invalid</span>` :
-        t.scheduled ? html`<span class="badge">${relDay(t.date, today())}</span>` :
-        t.status === "reconciled" ? "✓✓" : t.status === "cleared" ? "✓" : ""}</span></span>
+        t.scheduled ? html`<span class="badge">${relDay(t.date, today())}</span>` : ""}</span></span>
   </button></li>`;
 }
 

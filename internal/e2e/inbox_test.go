@@ -103,7 +103,7 @@ drafts:
 
 	for _, b := range []*book.Book{main, phone} {
 		got := drafts(b)
-		if got["sms-1111111111111111"].Status != model.DraftAccepted || got["kronos-sub-elcty-bangalore-2026-10-06"].Status != model.DraftPending {
+		if got["sms-1111111111111111"].Status != model.DraftAccepted || got["kronos-sub-elcty-bangalore-2026-10-06"].Status != model.DraftNotice {
 			t.Fatalf("%s drafts: %+v", b.Name, got)
 		}
 		if k := got["kronos-sub-elcty-bangalore-2026-10-06"]; k.Account != "card" || k.Category != "utility" || k.Via != model.ViaSource {

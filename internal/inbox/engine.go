@@ -38,9 +38,21 @@ func Ingest(d *book.Data, ch *book.Change, items []Item, o Options) int {
 		d.SetDraft(newDraft(d, it), ch)
 		added++
 	}
+	noticeKronos(d, ch)
 	pair(d, ch, o.PairDays)
 	purge(d, ch, o.Now, o.KeepDays)
 	return added
+}
+
+// noticeKronos turns Kronos drafts still waiting in the inbox (from before 1.0.3)
+// into reminders.
+func noticeKronos(d *book.Data, ch *book.Change) {
+	for _, x := range d.Drafts {
+		if x.Source == SourceKronos && x.Status == model.DraftPending {
+			x.Status = model.DraftNotice
+			d.SetDraft(x, ch)
+		}
+	}
 }
 
 // TxID is the transaction id an accepted draft becomes (so accepting twice, on two
@@ -73,6 +85,9 @@ func newDraft(d *book.Data, it Item) model.Draft {
 	}
 	x.Title = it.Title
 	Categorise(d, &x)
+	if it.Source == SourceKronos { // Kronos reminds; the bank SMS is the proof
+		x.Status = model.DraftNotice
+	}
 	return x
 }
 

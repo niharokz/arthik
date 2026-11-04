@@ -11,6 +11,8 @@
 package model
 
 import (
+	"gopkg.in/yaml.v3"
+
 	"gitlab.com/niharokz/arthik/internal/money"
 )
 
@@ -56,12 +58,13 @@ func TypeInfo(id string) (AccountType, bool) {
 
 // Settings is settings.md.
 type Settings struct {
-	DefaultPeriod  string   `yaml:"default_period" json:"default_period"`     // weekly|monthly|quarterly|halfyearly|yearly
-	WeekStart      string   `yaml:"week_start" json:"week_start"`             // monday|sunday|…
-	MonthStartDay  int      `yaml:"month_start_day" json:"month_start_day"`   // 1..28
-	YearStartMonth int      `yaml:"year_start_month" json:"year_start_month"` // 1..12 (4 = Indian FY)
-	UpcomingDays   int      `yaml:"upcoming_days" json:"upcoming_days"`       // dashboard look-ahead
-	Theme          string   `yaml:"theme" json:"theme"`                       // auto|light|dark
+	DefaultPeriod  string   `yaml:"default_period" json:"default_period"`                   // weekly|monthly|quarterly|halfyearly|yearly
+	WeekStart      string   `yaml:"week_start" json:"week_start"`                           // monday|sunday|…
+	MonthStartDay  int      `yaml:"month_start_day" json:"month_start_day"`                 // 1..28
+	YearStartMonth int      `yaml:"year_start_month" json:"year_start_month"`               // 1..12 (4 = Indian FY)
+	UpcomingDays   int      `yaml:"upcoming_days" json:"upcoming_days"`                     // dashboard look-ahead
+	CheckDays      int      `yaml:"balance_check_days,omitempty" json:"balance_check_days"` // a bank balance check older than this is stale
+	Theme          string   `yaml:"theme" json:"theme"`                                     // auto|light|dark
 	HideAmounts    bool     `yaml:"hide_amounts" json:"hide_amounts"`
 	NavOrder       []string `yaml:"nav_order,omitempty,flow" json:"nav_order"` // menu order; first 4 = phone bottom bar
 	// Home screen sections, top to bottom (empty = the default layout).
@@ -133,7 +136,7 @@ func NormNav(in []string) (out []string, unknown string) {
 
 // DefaultSettings are used for any missing value.
 func DefaultSettings() Settings {
-	return Settings{DefaultPeriod: "monthly", WeekStart: "monday", MonthStartDay: 1, YearStartMonth: 1, UpcomingDays: 30, Theme: "auto"}
+	return Settings{DefaultPeriod: "monthly", WeekStart: "monday", MonthStartDay: 1, YearStartMonth: 1, UpcomingDays: 30, CheckDays: 30, Theme: "auto"}
 }
 
 // Account is one entry of accounts.md. Fields after the "computed" marker are
@@ -155,14 +158,24 @@ type Account struct {
 	Archived        bool         `yaml:"archived,omitempty" json:"archived,omitempty"`
 	ExcludeNetWorth bool         `yaml:"exclude_net_worth,omitempty" json:"exclude_net_worth,omitempty"`
 	SMSDigits       []string     `yaml:"sms_digits,omitempty,flow" json:"sms_digits,omitempty"` // last digits banks use in SMS, e.g. ['9001']
+	BankBalance     *Reported    `yaml:"bank_balance,omitempty" json:"bank_balance,omitempty"`  // what the bank showed (signed like balance) …
+	BankDate        string       `yaml:"bank_date,omitempty" json:"bank_date,omitempty"`        // … at the end of this day
 
 	// computed (rewritten on every change)
 	Balance   money.Amount `yaml:"balance" json:"balance"`                     // as of today
-	Cleared   money.Amount `yaml:"cleared_balance" json:"cleared_balance"`     // cleared + reconciled only
 	Projected money.Amount `yaml:"projected_balance" json:"projected_balance"` // incl. future-dated
 
 	Extra map[string]any `yaml:",inline" json:"-"`
 }
+
+// Reported is an amount a bank reported. Unlike money.Amount it has no IsZero, so a
+// reported ₹0 (a card fully paid) is written to the file instead of being omitted.
+type Reported money.Amount
+
+func (r Reported) MarshalYAML() (any, error)         { return money.Amount(r).MarshalYAML() }
+func (r *Reported) UnmarshalYAML(n *yaml.Node) error { return (*money.Amount)(r).UnmarshalYAML(n) }
+func (r Reported) MarshalJSON() ([]byte, error)      { return money.Amount(r).MarshalJSON() }
+func (r *Reported) UnmarshalJSON(b []byte) error     { return (*money.Amount)(r).UnmarshalJSON(b) }
 
 // Class returns asset or liability (unknown types count as assets).
 func (a Account) Class() string {
@@ -221,13 +234,6 @@ const (
 	TxJournal  = "journal" // free-form postings, e.g. typed by hand in Obsidian
 )
 
-// Statuses (reconciliation).
-const (
-	StatusUncleared  = "uncleared"
-	StatusCleared    = "cleared"
-	StatusReconciled = "reconciled"
-)
-
 // Posting is one leg of a transaction: exactly one of Account / Category is set.
 type Posting struct {
 	Account  string         `yaml:"account,omitempty" json:"account,omitempty"`
@@ -245,13 +251,25 @@ type Transaction struct {
 	Time     string         `yaml:"time,omitempty" json:"time,omitempty"`
 	Type     string         `yaml:"type,omitempty" json:"type"`
 	Title    string         `yaml:"title,omitempty" json:"title"`
-	Status   string         `yaml:"status,omitempty" json:"status,omitempty"`
 	Labels   []string       `yaml:"labels,omitempty,flow" json:"labels,omitempty"`
 	Notes    string         `yaml:"notes,omitempty" json:"notes,omitempty"`
 	Postings []Posting      `yaml:"postings,omitempty" json:"postings"`
 	Updated  string         `yaml:"updated,omitempty" json:"updated,omitempty"` // UTC time of the last change (newest wins on merge)
 	Deleted  string         `yaml:"deleted,omitempty" json:"-"`                 // UTC time of deletion (tombstone)
 	Extra    map[string]any `yaml:",inline" json:"-"`
+}
+
+// Retired keys of older versions, dropped on load so they are not written back.
+var (
+	RetiredAccountKeys = []string{"cleared_balance"}
+	RetiredTxKeys      = []string{"status"}
+)
+
+// DropKeys removes retired keys from an Extra map.
+func DropKeys(m map[string]any, keys []string) {
+	for _, k := range keys {
+		delete(m, k)
+	}
 }
 
 // IsTombstone reports whether the record only marks a deletion.
@@ -264,6 +282,9 @@ const (
 	DraftMatched  = "matched"  // was already recorded as transaction Txn
 	DraftRejected = "rejected" // not a transaction you want
 	DraftMerged   = "merged"   // folded into draft Pair (two SMS of one transfer)
+
+	DraftNotice    = "notice"    // a reminder (Kronos bill due): never a transaction by itself
+	DraftDismissed = "dismissed" // a reminder you closed
 )
 
 // How a draft's category was chosen (shown as a badge).

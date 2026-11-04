@@ -54,7 +54,7 @@ internal/model/             records as stored: Settings, Account(+AccountTypes, 
 internal/book/              the ledger engine (one Book per dataset)
   book.go                     load/reload, fixups, Mutate (copy → validate → persist touched files → recompute), DryRun
   entry.go                    Entry (UI shape) ↔ Transaction (postings): BuildTx, EntryOf, ValidateTx, ids, EnsureLabels
-  compute.go                  Computed: balances, cleared, projected, net worth, period totals; writes computed fields + money.md
+  compute.go                  Computed: balances, projected, net worth, period totals; writes computed fields + money.md
   schedule.go                 RunScheduler: recompute when the day changes (future-dated transactions start counting)
   digits.go                   SMS digits on accounts: CleanDigits, DigitsFree, AccountByDigits
   watch.go                    polling watcher for external edits (acts once a change is stable for one tick)
@@ -62,7 +62,11 @@ internal/book/              the ledger engine (one Book per dataset)
 internal/inbox/             the review inbox (no HTTP): sources.go reads inbox/kronos.md + inbox/sms_*.md → Items;
                               sms.go + sms_rules.yaml parse SMS (data-driven, user file inbox/sms_rules.md first);
                               engine.go Ingest/Categorise/pair/purge; review.go Accept/Match/Reject/Restore/Unpair/learn;
-                              view.go duplicates ("same") + warnings (balance check); runner.go background import + AI
+                              view.go duplicates ("same") + warnings (balance check); runner.go background import + AI;
+                              notices.go Kronos reminders (paid/proof matching, dismiss/reopen)
+internal/plugin/            personal plugins: Plugin{ID, File, Register}; on when <data>/<File> exists (Enabled)
+  loans/                    loans.md: schedule (YAML rows + the lender's table pasted in schedule_text, merged by date and
+                              checked) + projection from the latest rate, FY totals, EMI split (GET /api/plugins/loans[/split])
 internal/ai/                Ollama /api/chat client: picks a category id from the given list + a clean title (JSON)
 internal/query/             shared transaction filter (list, search, export, reports)
 internal/view/              API shapes: Tx, Account(+Card statement info), BudgetFor (period scaling)
@@ -71,13 +75,14 @@ internal/auth/              users, HMAC session cookie (12 h, or until sign-out 
 internal/guard/             failed sign-ins → IP ban (bans.json in /state), client IP behind trusted proxies
 internal/feature/<name>/    one package per feature, each with Register(rt):
   state        GET /api/state, GET /api/period
-  accounts     POST/PUT/DELETE /api/accounts, /{id}/history, /{id}/reconcile
+  accounts     POST/PUT/DELETE /api/accounts, /{id}/history, POST /{id}/check (bank balance check)
   categories   POST/PUT/DELETE(?move_to=) /api/categories, GET /api/categories/totals
   labels       POST/PUT/DELETE /api/labels
   transactions GET/POST /api/transactions, GET/PUT/DELETE /{id}, POST /bulk, GET /api/suggest
   review       GET /api/inbox?status=pending|done|all, POST /api/inbox/{id}/{accept,match,reject,restore,unpair},
                GET /api/inbox/rules?q=&offset=&limit= (paged, most used first), DELETE /api/inbox/rules/{id};
-               drafts carry confidence high|medium|low + checks (view.go)
+               drafts carry confidence high|medium|low + checks (view.go);
+               GET /api/notices[?all=1], POST /api/notices/{id}/{dismiss,reopen}
   budgets      GET /api/budgets
   reports      GET /api/reports/{cashflow,categories,trend,networth,balance-sheet,labels,accounts,calendar}
                (?bucket=daily|weekly|monthly|… ; daily only for reports)
@@ -124,8 +129,10 @@ mirrors (`replace` in go.mod), same as Omnimo/Kronos.
 - **Future-dated** transactions are stored normally; they count in `projected_balance` and
   in nothing else until their date (`Computed.Effective`). The scheduler recomputes when the
   day changes. Period totals/reports exclude them.
-- **Recurring bills** are not Arthik's job (reminders were removed in 0.2.1): Kronos drops
-  due subscriptions into the inbox and you accept them. Old `reminder:` keys on
+- **Recurring bills** are not Arthik's job: Kronos drops due bills into `inbox/kronos.md`;
+  since 1.0.3 they are reminders (draft status `notice`, Notifications screen), never
+  transactions — the bank SMS records the payment. Splits may include account lines
+  (`Split.Account`), so one debit can be interest (category) + principal (loan account). Old `reminder:` keys on
   transactions survive as unknown keys; an old `reminders.md` is simply ignored.
 
 ---
@@ -138,7 +145,7 @@ and only when content changed (so Syncthing isn't spammed).
 | File | Edited by | Computed fields (rewritten) |
 |---|---|---|
 | `settings.md` | user/app | — |
-| `accounts.md` | user/app | `balance`, `cleared_balance`, `projected_balance` |
+| `accounts.md` | user/app | `balance`, `projected_balance` |
 | `categories.md` | user/app | `period`, `total` (default period, parents include children) |
 | `labels.md` | user/app | `count` |
 | `inbox/drafts.md` | arthik (+ your decisions from any device) | whole file managed by arthik |
@@ -180,7 +187,7 @@ accepts offline while nimory imports a Kronos draft; one transaction, rule learn
 
 ```
  phone app ── nightly ──► inbox/sms_phone.md ┐
- Kronos ──── 02:12 ─────► inbox/kronos.md    ├─► main arthik: Ingest ─► inbox/drafts.md ─► Inbox screen
+ Kronos ──── 02:12 ─────► inbox/kronos.md    ├─► main arthik: Ingest ─► inbox/drafts.md ─► Inbox (SMS) / 🔔 Notifications (Kronos)
                                              ┘     (parse, account by digits,           accept → transaction d-<id>
                                                     categorise, pair, purge)            + inbox/learned.md
  Kronos ──── 07:00 ── reads drafts.md ──► Omnimo outbox ──► Telegram
@@ -232,11 +239,11 @@ cookie, secret random per start so every launch needs the app). `/` redirects to
   accepted, left + red when rejected).
 - Feedback: `celebrate(kind)` (ui.js) draws a tick / pencil / cross burst after saves,
   accepts, rejects and deletes; the saved transaction's row flashes once (`S.flash`).
-- Account screen: balance strip, then its transactions; card details, cleared/projected
-  balances and the 12-month chart below.
+- Account screen: balance strip, then its transactions; card details, projected
+  balance and the 12-month chart below.
 - Remembered transactions: the add form's title field asks `GET /api/suggest?q=&type=`
   (latest valid non-journal transaction per title, ranked prefix → same type → uses →
-  recent). Picking fills all fields except date/time. Not shown when editing or offline.
+  recent). Picking sets only the title and category (the account and the rest stay). Not shown when editing or offline.
 - `html``…`` tagged template escapes every value (data comes from editable files).
 - Offline: service worker caches the shell and the last answer of each `GET /api/*`
   (network first). Transaction creates/edits/deletes made offline go to a localStorage
@@ -279,6 +286,11 @@ mode) has no passwords, bans or expiry; the app lock guards it.
 3. Screen: `web/static/js/views/<name>.js` exporting `render(root, ctx)`, route in `main.js`,
    file listed in `sw.js`.
 4. Tests: `internal/book/book_test.go` (engine) and `internal/server/server_test.go` (API).
+
+A **personal plugin** instead: `internal/plugin/<id>/` calling `plugin.Add` in `init` (with
+the data file that switches it on), a blank import in `server.go`, and
+`web/static/js/plugins/<id>.js` calling `register(id, {title, icon, render, formHook})`.
+The app loads the modules of the plugins `/api/state` lists; the screen is `#/p/<id>`.
 
 ---
 

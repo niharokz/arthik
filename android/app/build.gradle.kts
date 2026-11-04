@@ -9,7 +9,7 @@ plugins {
 val arthikVersion: String = (findProperty("arthikVersion") as String?)
     ?: rootProject.file("../VERSION").readText().trim().ifEmpty { "0.0.0" }
 
-// 1.0.2 → 30002. The +20000 keeps codes above the old pre-release builds (up to 10306),
+// 1.0.3 → 30003. The +20000 keeps codes above the old pre-release builds (up to 10306),
 // so phones update in place after the numbering restarted at 1.0.1.
 fun versionCodeOf(v: String): Int {
     val p = v.split(".").map { it.takeWhile(Char::isDigit).toIntOrNull() ?: 0 } + listOf(0, 0, 0)
