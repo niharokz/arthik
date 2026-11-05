@@ -6,6 +6,7 @@ package review
 import (
 	"sort"
 	"strings"
+	"time"
 
 	"gitlab.com/niharokz/arthik/internal/book"
 	"gitlab.com/niharokz/arthik/internal/httpx"
@@ -72,11 +73,19 @@ func list(c *httpx.Ctx) error {
 	return c.OK(out)
 }
 
-// importNow reads the SMS and Kronos files right away ("Check now").
+// importNow reads the SMS and Kronos files right away ("Run now"). A device that
+// does not import (the phone in online mode) asks the main device instead, through
+// the synced folder.
 func importNow(c *httpx.Ctx) error {
 	added, ok, err := inbox.ImportFor(c.Book.Dir)
 	if !ok {
-		return httpx.Errorf(409, "this device doesn't import the inbox — your main device (the server) does")
+		if c.User.ReadOnly {
+			return httpx.Errorf(403, "the demo is read-only")
+		}
+		if err := inbox.Request(c.Book.Dir, c.User.Name, time.Now()); err != nil {
+			return err
+		}
+		return c.OK(map[string]any{"requested": true})
 	}
 	if err != nil {
 		return err

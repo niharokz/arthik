@@ -1,7 +1,8 @@
-// Hand-drawn SVG charts (no library): paired income/expense columns, a single-series
-// line with a hover crosshair, single-series columns and ranked horizontal bars.
-// Colours come from CSS tokens, so light/dark mode follows the theme. Every chart
-// has a hover tooltip and a legend when it shows more than one series.
+// Hand-drawn SVG charts (no library): paired income/expense columns or lines, a
+// single-series line, area or columns with a hover crosshair, and shares of a total
+// as ranked bars, a donut, a pie or columns. Which type a chart uses is chosen in
+// Settings → Look (settings.md). Colours come from CSS tokens, so every palette
+// and light/dark mode follows. Every chart has a hover tooltip.
 
 import { html, raw, paise, short, money } from "./util.js";
 
@@ -26,10 +27,12 @@ function box(draw) {
   pending.set(id, draw);
   return html`<div class="chartbox" data-cid="${id}"></div>`;
 }
-export const incomeExpense = (rows, o) => box((w) => incomeExpenseSVG(w, rows, o));
-export const line = (points, o) => (points.length ? box((w) => lineSVG(w, points, o)) : html`<div class="empty">No data</div>`);
+// o.kind picks the type: incomeExpense bar|line, line area|line|bar, spark area|line|bar.
+export const incomeExpense = (rows, o = {}) => box((w) => (o.kind === "line" ? pairLinesSVG : incomeExpenseSVG)(w, rows, o));
+export const line = (points, o = {}) => (!points.length ? html`<div class="empty">No data</div>`
+  : box((w) => (o.kind === "bar" ? columnsSVG(w, points, o) : lineSVG(w, points, o))));
 export const columns = (rows, o) => box((w) => columnsSVG(w, rows, o));
-export const spark = (points, o) => box((w) => sparkSVG(w, points, o));
+export const spark = (points, o = {}) => box((w) => (o.kind === "bar" ? sparkBarsSVG : sparkSVG)(w, points, o));
 
 function drawAll(root) {
   root.querySelectorAll(".chartbox[data-cid]").forEach((el) => {
@@ -116,7 +119,7 @@ function bar(x, y, w, h, cls) {
 /**
  * Single-series line: points = [{label, value}] (decimal strings). Can go negative.
  */
-function lineSVG(W, points, { height = 200, name = "Balance" } = {}) {
+function lineSVG(W, points, { height = 200, name = "Balance", kind = "area" } = {}) {
   const H = height, L = 56, R = 10, T = 12, B = 26;
   if (!points.length) return html`<div class="empty">No data</div>`;
   const vals = points.map((p) => paise(p.value));
@@ -131,7 +134,7 @@ function lineSVG(W, points, { height = 200, name = "Balance" } = {}) {
   for (const t of ticks(lo, hi)) g += `<line class="grid-l" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/><text x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${short(t)}</text>`;
   if (lo < 0) g += `<line class="zero" x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}"/>`;
   const d = vals.map((v, i) => `${i ? "L" : "M"}${x(i)},${y(v)}`).join(" ");
-  g += `<path class="area" d="${d} L${x(n - 1)},${y(Math.max(lo, 0))} L${x(0)},${y(Math.max(lo, 0))} Z"/>`;
+  if (kind !== "line") g += `<path class="area" d="${d} L${x(n - 1)},${y(Math.max(lo, 0))} L${x(0)},${y(Math.max(lo, 0))} Z"/>`;
   g += `<path class="line" pathLength="1" d="${d}"/>`;
   const step = Math.ceil(n / Math.max(2, Math.floor((W - L) / 56)));
   const gw = (W - L - R) / Math.max(1, n - 1);
@@ -148,7 +151,7 @@ function lineSVG(W, points, { height = 200, name = "Balance" } = {}) {
  * Axis-free trend line for a headline number: points = [{label, value}]. The
  * y-range hugs the data so small changes stay visible; hover shows each point.
  */
-function sparkSVG(W, points, { height = 72, name = "Net worth" } = {}) {
+function sparkSVG(W, points, { height = 72, name = "Net worth", kind = "area" } = {}) {
   const H = height, P = 6, n = points.length;
   if (n < 2) return html`<div class="spark-none faint">Not enough history yet</div>`;
   const vals = points.map((p) => paise(p.value));
@@ -160,7 +163,7 @@ function sparkSVG(W, points, { height = 72, name = "Net worth" } = {}) {
   const y = (v) => P + (H - 2 * P) * (1 - (v - lo) / (hi - lo));
   const d = vals.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
   const trend = vals[n - 1] >= vals[0] ? "up" : "down";
-  let g = `<path class="area ${trend}" d="${d} L${x(n - 1)},${H} L${x(0)},${H} Z"/><path class="line ${trend}" pathLength="1" d="${d}"/>`;
+  let g = (kind === "line" ? "" : `<path class="area ${trend}" d="${d} L${x(n - 1)},${H} L${x(0)},${H} Z"/>`) + `<path class="line ${trend}" pathLength="1" d="${d}"/>`;
   const gw = (W - 2 * P) / (n - 1);
   points.forEach((p, i) => {
     g += `<g data-cross="${i}" style="opacity:0"><line class="cross" x1="${x(i)}" x2="${x(i)}" y1="0" y2="${H}"/><circle class="dot" r="4" cx="${x(i)}" cy="${y(vals[i])}"/></g>`;
@@ -173,15 +176,16 @@ function sparkSVG(W, points, { height = 72, name = "Net worth" } = {}) {
 /** Single-series columns: rows = [{label, value}]. */
 function columnsSVG(W, rows, { height = 180, name = "Total" } = {}) {
   const H = height, L = 52, R = 8, T = 10, B = 26;
-  const max = niceMax(Math.max(1, ...rows.map((r) => Math.abs(paise(r.value)))));
+  const vals = rows.map((r) => paise(r.value));
+  const hi = niceMax(Math.max(1, ...vals)), lo = Math.min(...vals, 0) < 0 ? -niceMax(-Math.min(...vals)) : 0;
   const n = rows.length || 1, gw = (W - L - R) / n, bw = Math.max(4, Math.min(28, gw - 6));
-  const y = (v) => T + (H - T - B) * (1 - v / max);
+  const y = (v) => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
   const step = Math.ceil(n / Math.max(2, Math.floor((W - L) / 52)));
   let g = "";
-  for (const t of ticks(0, max)) g += `<line class="grid-l" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/><text x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${short(t)}</text>`;
+  for (const t of ticks(lo, hi)) g += `<line class="grid-l" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/><text x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${short(t)}</text>`;
   rows.forEach((r, i) => {
-    const cx = L + gw * i + gw / 2, v = Math.max(0, paise(r.value));
-    g += bar(cx - bw / 2, y(v), bw, y(0) - y(v), "one");
+    const cx = L + gw * i + gw / 2, v = vals[i];
+    g += v >= 0 ? bar(cx - bw / 2, y(v), bw, y(0) - y(v), "one") : `<rect class="one below" x="${cx - bw / 2}" y="${y(0)}" width="${bw}" height="${y(v) - y(0)}" rx="2"/>`;
     g += `<rect class="hit" x="${L + gw * i}" y="${T}" width="${gw}" height="${H - T - B}" data-tip="${esc(`<b>${esc(r.label)}</b><br>${esc(name)} ${esc(money(r.value))}`)}"/>`;
     if (i % step === 0) g += `<text x="${cx}" y="${H - 8}" text-anchor="middle">${esc(r.label.replace(/ \d{4}$/, ""))}</text>`;
   });
@@ -204,4 +208,106 @@ export function ranked(rows, total) {
       <div class="bar"><i style="width:${Math.max(1, (v / max) * 100).toFixed(1)}%"></i></div>
     </div>`;
   })}`;
+}
+
+/** Paired lines: rows = [{label, income, expense}], the income/expense chart as lines. */
+function pairLinesSVG(W, rows, { height = 200 } = {}) {
+  const H = height, L = 52, R = 10, T = 12, B = 26, n = rows.length;
+  if (!n) return html`<div class="empty">No data</div>`;
+  const max = niceMax(Math.max(1, ...rows.flatMap((r) => [paise(r.income), paise(r.expense)])));
+  const x = (i) => (n === 1 ? (L + W - R) / 2 : L + ((W - L - R) * i) / (n - 1));
+  const y = (v) => T + (H - T - B) * (1 - v / max);
+  const path = (k) => rows.map((r, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(paise(r[k])).toFixed(1)}`).join(" ");
+  const step = Math.ceil(n / Math.max(2, Math.floor((W - L) / 52)));
+  const gw = (W - L - R) / Math.max(1, n - 1);
+  let g = "";
+  for (const t of ticks(0, max)) g += `<line class="grid-l" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/><text x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${short(t)}</text>`;
+  g += `<path class="line inc-l" pathLength="1" d="${path("income")}"/><path class="line exp-l" pathLength="1" d="${path("expense")}"/>`;
+  rows.forEach((r, i) => {
+    const tipText = `<b>${esc(r.label)}</b><br>Income ${esc(money(r.income))}<br>Expense ${esc(money(r.expense))}<br>Net ${esc(money(r.net ?? (paise(r.income) - paise(r.expense)) / 100))}`;
+    g += `<g data-cross="${i}" style="opacity:0"><line class="cross" x1="${x(i)}" x2="${x(i)}" y1="${T}" y2="${H - B}"/><circle class="dot inc-d" r="4" cx="${x(i)}" cy="${y(paise(r.income))}"/><circle class="dot exp-d" r="4" cx="${x(i)}" cy="${y(paise(r.expense))}"/></g>`;
+    g += `<rect class="hit" data-i="${i}" x="${x(i) - gw / 2}" y="${T}" width="${gw}" height="${H - T - B}" data-tip="${esc(tipText)}"/>`;
+    if (i % step === 0 || i === n - 1) g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${esc(r.label.replace(/ \d{4}$/, ""))}</text>`;
+  });
+  return html`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Income and expense by period">${raw(g)}</svg>
+    <div class="legend"><span><i class="inc"></i>Income</span><span><i class="exp"></i>Expense</span></div>`;
+}
+
+/** Axis-free columns for a headline number (the spark as bars). */
+function sparkBarsSVG(W, points, { height = 72, name = "Net worth" } = {}) {
+  const H = height, P = 4, n = points.length;
+  if (n < 2) return html`<div class="spark-none faint">Not enough history yet</div>`;
+  const vals = points.map((p) => paise(p.value));
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (hi === lo) { hi += 100; lo -= 100; }
+  lo -= (hi - lo) * 0.25;
+  const gw = (W - 2 * P) / n, bw = Math.max(3, Math.min(22, gw - 4));
+  const y = (v) => P + (H - 2 * P) * (1 - (v - lo) / (hi - lo));
+  const trend = vals[n - 1] >= vals[0] ? "up" : "down";
+  let g = "";
+  points.forEach((p, i) => {
+    const cx = P + gw * i + gw / 2;
+    g += bar(cx - bw / 2, y(vals[i]), bw, H - y(vals[i]), `one ${i === n - 1 ? "last " + trend : ""}`);
+    g += `<rect class="hit" x="${cx - gw / 2}" y="0" width="${gw}" height="${H}" data-tip="${esc(`<b>${esc(p.label)}</b><br>${esc(name)} ${esc(money(p.value))}`)}"/>`;
+  });
+  return html`<svg class="chart spark bars" viewBox="0 0 ${W} ${H}" role="img" aria-label="${name} trend">${raw(g)}</svg>`;
+}
+
+// ---- shares of a total: ranked bars, donut, pie or columns ----
+
+const SLICES = 8; // matte series colours --c1…--c8 in app.css; a category's own colour wins
+
+/**
+ * A total split into parts: rows = [{key, name, icon, value, note, color}], drawn as
+ * kind = hbar | donut | pie | bar. Rows carry data-key so callers can open them.
+ */
+export function share(rows, total, kind = "hbar") {
+  if (kind === "donut" || kind === "pie") return ring(rows, total, kind === "donut");
+  if (kind === "bar") return box((w) => shareColsSVG(w, rows, total));
+  return ranked(rows, total);
+}
+
+const pctOf = (v, total) => (paise(total) ? Math.round((v * 1000) / paise(total)) / 10 : 0);
+const sliceColor = (r, i) => (r.color ? r.color : `var(--c${(i % SLICES) + 1})`);
+
+// Donut or pie with a legend; the centre of a donut shows the total.
+function ring(rows, total, hole) {
+  const sum = rows.reduce((a, r) => a + Math.max(0, paise(r.value)), 0) || 1;
+  const R = 50, r0 = hole ? 31 : 0;
+  let a = -Math.PI / 2, g = "";
+  rows.forEach((r, i) => {
+    const v = Math.max(0, paise(r.value));
+    if (!v) return;
+    const sweep = Math.min((v / sum) * Math.PI * 2, Math.PI * 2 - 1e-4), b = a + sweep;
+    const big = sweep > Math.PI ? 1 : 0;
+    const p = (rad, ang) => `${(60 + rad * Math.cos(ang)).toFixed(2)},${(60 + rad * Math.sin(ang)).toFixed(2)}`;
+    const d = r0 ? `M${p(R, a)} A${R},${R} 0 ${big} 1 ${p(R, b)} L${p(r0, b)} A${r0},${r0} 0 ${big} 0 ${p(r0, a)} Z`
+      : `M60,60 L${p(R, a)} A${R},${R} 0 ${big} 1 ${p(R, b)} Z`;
+    g += `<path class="slice" style="--c:${esc(sliceColor(r, i))}" d="${d}" data-key="${esc(r.key)}" data-tip="${esc(`<b>${esc(r.name)}</b><br>${esc(money(r.value))} · ${pctOf(v, total)}%`)}"/>`;
+    a = b;
+  });
+  const centre = hole ? `<text class="ring-v" x="60" y="62" text-anchor="middle">${esc(short(paise(total)))}</text><text class="ring-l" x="60" y="76" text-anchor="middle">total</text>` : "";
+  return html`<div class="ring chartbox">
+    <svg class="chart ring-svg ${hole ? "donut" : "pie"}" viewBox="0 0 120 120" role="img" aria-label="Share of the total">${raw(g + centre)}</svg>
+    <ul class="ring-legend">${rows.map((r, i) => html`<li data-key="${r.key}" role="button" tabindex="0">
+      <i style="--c:${sliceColor(r, i)}"></i><span class="ellipsis">${r.icon ? r.icon + " " : ""}${r.name}</span>
+      <small class="faint">${pctOf(paise(r.value), total)}%</small><span class="amt">${money(r.value)}</span></li>`)}</ul></div>`;
+}
+
+// One column per part, labelled underneath.
+function shareColsSVG(W, rows, total, { height = 190 } = {}) {
+  const H = height, L = 52, R = 8, T = 10, B = 30, n = rows.length || 1;
+  const max = niceMax(Math.max(1, ...rows.map((r) => paise(r.value))));
+  const gw = (W - L - R) / n, bw = Math.max(6, Math.min(34, gw - 10));
+  const y = (v) => T + (H - T - B) * (1 - v / max);
+  let g = "";
+  for (const t of ticks(0, max)) g += `<line class="grid-l" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/><text x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${short(t)}</text>`;
+  rows.forEach((r, i) => {
+    const cx = L + gw * i + gw / 2, v = Math.max(0, paise(r.value));
+    g += bar(cx - bw / 2, y(v), bw, y(0) - y(v), "slice").replace("<path", `<path style="--c:${esc(sliceColor(r, i))}"`);
+    g += `<rect class="hit" x="${L + gw * i}" y="${T}" width="${gw}" height="${H - T - B}" data-key="${esc(r.key)}" data-tip="${esc(`<b>${esc(r.name)}</b><br>${esc(money(r.value))} · ${pctOf(v, total)}%`)}"/>`;
+    g += `<text x="${cx}" y="${H - 10}" text-anchor="middle">${esc(r.icon || r.name.slice(0, 6))}</text>`;
+  });
+  g += `<line class="zero" x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}"/>`;
+  return html`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Share of the total">${raw(g)}</svg>`;
 }

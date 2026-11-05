@@ -18,7 +18,7 @@ plus an **inbox** that turns bank SMS and due subscriptions into drafts you acce
 
 | Area | What you get |
 |---|---|
-| Accounts | Bank, cash, wallet, investment, deposit, property, receivable, credit card, loan, payable … Balance (today) and projected balance (incl. future-dated). Credit cards: limit, available, statement/due dates, billed/unbilled. Hide, archive, leave out of net worth (their total is shown as *not counted*). Bank balance check: record what the bank shows and see ✅ or the difference. |
+| Accounts | Bank, cash, wallet, investment, deposit, property, receivable, credit card, loan, payable … Balance (today) and projected balance (incl. future-dated). Credit cards: limit, available, statement/due dates, billed/unbilled. Hide, archive, leave out of net worth (their total is shown as *not counted*). Bank balance check: record what the bank shows and see ✅, or ❌ with the difference. |
 | Transactions | Expense, income, transfer, splits (category lines, and account lines such as a loan's principal), refunds. Category picker with search, recent and group grid. Calculator amount field (`120+45*2`). Remembered transactions: type a few letters of a title and tap a past entry to take its title and category (the account and everything else stay as you set them). Labels, notes, time. Every saved transaction has happened; past dates fix history; future dates count from their day. Duplicate, bulk label/delete. |
 | Categories | Two levels (parent › child) for expense, income, and “both ways” (e.g. *Market* gains and losses). Totals for a week, month, quarter, half-year, year or any custom range; the default period is a setting. Delete with “move transactions to …”. |
 | Budgets | Per category, weekly → yearly, scaled to the period you view, reset every period, with on-pace progress. |
@@ -28,7 +28,7 @@ plus an **inbox** that turns bank SMS and due subscriptions into drafts you acce
 | Reports | Cash flow, spending and income by category with drill-down, category trend, net worth over time, balance sheet at any date, account flow, labels, calendar. Every chart has a table. |
 | Search & data | Full-text search plus filters (dates, type, accounts, categories, labels, amount, posted/future); totals of the filtered list; CSV export of exactly what you filtered; CSV import with a dry-run preview. |
 | Home | Your blocks, in your order: net worth with its trend, the period's income/expense/savings, inbox, spending, budgets, upcoming, credit cards, accounts, recent, cash flow, plus blocks you create for any account, category or label. ✎ on the home screen. |
-| Settings | Default period, week start, month start day (salary cycles), year start month (e.g. April for the Indian FY), look-ahead days, light/dark/auto, hide amounts, menu order (which four screens sit in the phone's bottom bar), inbox fallback categories, learned rules. |
+| Settings | Default period, week start, month start day (salary cycles), year start month (e.g. April for the Indian FY), look-ahead days, look (themes nss · AMOLED · Galaxy · White · Gold, any element's colour, card background none/glass/matte/opaque, chart type per chart), the phone's daily alert (bank mismatch ❌, inbox + notifications above a count), hide amounts, menu order (which four screens sit in the phone's bottom bar), inbox fallback categories, learned rules. |
 
 ## Quick start (Docker)
 
@@ -96,7 +96,7 @@ Only the main instance writes balances and imports the inbox.
 
 ```
 <FINANCE_PATH>/
-  settings.md                     preferences
+  settings.md                     preferences, look (theme, cards, colours, charts) and the daily alert
   accounts.md                     accounts + computed balance / projected_balance
   categories.md                   category tree + budgets + computed total for the default period
   labels.md                       labels + computed count
@@ -108,6 +108,7 @@ Only the main instance writes balances and imports the inbox.
   inbox/kronos.md                 written only by Kronos: bills that fell due (shown as reminders)
   inbox/sms_<phone>.md            written only by the phone app: new bank SMS, raw text
   inbox/sms_rules.md              optional: your own SMS patterns (see below)
+  inbox/run_request.md            written by a phone in online mode: "SMS → drafts now" (the server deletes it)
   demouser/                       the demo dataset (same layout)
 ```
 
@@ -145,8 +146,14 @@ drafted twice; items older than `ARTHIK_INBOX_MAX_AGE_DAYS` are ignored):
 | Step | When | Run it now |
 |---|---|---|
 | Phone copies bank SMS → `inbox/sms_<device>.md` | daily, time set in the app (Settings → Phone) | *Copy now* (app) |
-| SMS → drafts | *as soon as they arrive*, or *every day at HH:MM* (`inbox_sms_time`, set on the Inbox screen or in Settings) | *Run now* |
+| SMS → drafts | *as soon as they arrive*, or *every day at HH:MM* (`inbox_sms_time`, Settings → Inbox) | *Run now* (server) · *Run on server* (phone, online mode) |
 | Kronos subscriptions → drafts | as soon as Kronos writes `inbox/kronos.md` | *Run now* |
+
+On the phone, *online mode* (the server is the main device) asks the server through
+the synced folder: the request lands in `inbox/run_request.md`, the server imports on its
+next check and deletes it, and the drafts come back through Syncthing. In *offline mode*
+(Settings → Phone → this phone is the main device) the phone makes drafts by itself at the
+set time, so *Run now* is off.
 
 "As soon as" means within seconds of the file changing, re-checked at least every
 `ARTHIK_INBOX_RESCAN_MINUTES` (10) in case a change was missed. A daily SMS import

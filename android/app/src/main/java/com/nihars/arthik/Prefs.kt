@@ -134,14 +134,14 @@ class Prefs(ctx: Context) {
         get() = sp.getLong("sms_next_run", 0)
         set(v) = sp.edit().putLong("sms_next_run", v).apply()
 
-    // ---- morning inbox notification ----
+    // ---- daily alert ----
 
-    /** Notify about drafts waiting in the inbox once a day. */
+    /** The daily alert (bank mismatch, full inbox) is on for this phone. */
     var notifyEnabled: Boolean
         get() = sp.getBoolean("notify_enabled", false)
         set(v) = sp.edit().putBoolean("notify_enabled", v).apply()
 
-    /** Time of the daily notice (default 07:00). */
+    /** Time of the daily alert (follows Settings → Daily alert; default 07:00 until first read). */
     var notifyHour: Int
         get() = sp.getInt("notify_hour", 7)
         set(v) = sp.edit().putInt("notify_hour", v).apply()

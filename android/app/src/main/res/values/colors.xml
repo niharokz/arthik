@@ -2,8 +2,8 @@
 <!-- nss palette (same as the web app). -->
 <resources>
     <color name="teal">#0A3D3A</color> <!-- fallback; the icon uses ic_launcher_background -->
-    <color name="teal_icon">#070B0F</color> <!-- splash icon circle (icon background) -->
-    <color name="bg">#F6F8F7</color>
+    <color name="icon_bg">#080C0A</color> <!-- launcher icon background behind the ₹ mark -->
+    <color name="bg">#F5F7F6</color>
 
     <!-- home-screen widget -->
     <color name="widget_text">#13201E</color>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="teal">#5FB3AA</color>
-    <color name="bg">#0F1413</color>
+    <color name="bg">#080C0A</color>
     <color name="widget_text">#E8EFED</color>
     <color name="widget_muted">#A3B1AE</color>
     <color name="widget_accent">#5FB3AA</color>

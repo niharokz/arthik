@@ -16,12 +16,34 @@ export const S = {
 export async function loadState() {
   S.state = await get("/api/state");
   const st = S.state.settings || {};
-  document.documentElement.dataset.theme = st.theme && st.theme !== "auto" ? st.theme : "";
-  if (st.theme === "auto") delete document.documentElement.dataset.theme;
+  applyLook(st);
   document.body.classList.toggle("hide-amounts", !!st.hide_amounts);
   applyAccent();
   requestAnimationFrame(syncBars); // phone app: match status bar to the theme
   return S.state;
+}
+
+// Palettes with a fixed mode; nss follows the theme setting (auto, light, dark).
+const FIXED_MODE = { amoled: "dark", galaxy: "dark", gold: "dark", white: "light" };
+// Settings → Look colour element → CSS token.
+export const LOOK_TOKENS = { accent: "--teal", bg: "--bg", surface: "--surface", text: "--text", muted: "--muted", line: "--line", income: "--income", expense: "--expense", warn: "--warn" };
+
+/** Applies theme, palette, card background and colour overrides from settings (s). */
+export function applyLook(s) {
+  const r = document.documentElement, look = s.look || {};
+  const pal = look.palette || "nss", mode = FIXED_MODE[pal] || s.theme;
+  if (pal === "nss") delete r.dataset.palette; else r.dataset.palette = pal;
+  if (mode && mode !== "auto") r.dataset.theme = mode; else delete r.dataset.theme;
+  r.dataset.cards = look.cards || "matte";
+  for (const [k, token] of Object.entries(LOOK_TOKENS)) {
+    const v = look.colors?.[k];
+    if (v) r.style.setProperty(token, v); else r.style.removeProperty(token);
+  }
+}
+
+/** The chart type chosen for a chart (spending, budgets, cashflow, networth, reports). */
+export function chartType(name) {
+  return S.state?.settings?.look?.charts?.[name] || S.state?.look_options?.charts?.[name]?.[0] || "";
 }
 
 export const ro = () => !!(S.state && S.state.read_only);

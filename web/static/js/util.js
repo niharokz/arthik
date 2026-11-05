@@ -144,7 +144,7 @@ export const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)"
 export function countUp(root, sel = ".stat .value .amt, .hero-value .amt, .stat-chip .amt") {
   if (reducedMotion() || document.body.classList.contains("hide-amounts")) return;
   root.querySelectorAll(sel).forEach((el) => {
-    const final = el.textContent;
+    const final = el.textContent, markup = el.innerHTML; // markup keeps the small paise of the headline
     const target = paise(final);
     if (!target) return;
     const plus = final.trim().startsWith("+") ? "+" : "";
@@ -153,7 +153,8 @@ export function countUp(root, sel = ".stat .value .amt, .hero-value .amt, .stat-
       if (!el.isConnected) return;
       const p = Math.min(1, (now - t0) / dur);
       const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
-      el.textContent = p < 1 ? plus + money(fromPaise(Math.round(target * eased))) : final;
+      if (p < 1) el.textContent = plus + money(fromPaise(Math.round(target * eased)));
+      else el.innerHTML = markup;
       if (p < 1) requestAnimationFrame(step);
     };
     requestAnimationFrame(step);

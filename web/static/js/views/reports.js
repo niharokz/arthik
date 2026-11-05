@@ -2,9 +2,9 @@
 // over time, balance sheet, account flow and labels. Every chart has a table view.
 
 import { html, raw, qs, money, amt, paise, parseDate, ymd, fromPaise } from "../util.js";
-import { S, today, loading, periodState, periodQuery, periodBar, wirePeriod, catName, catIcon, accName, labelName, cat } from "../ui.js";
+import { S, today, loading, periodState, periodQuery, periodBar, wirePeriod, catName, catIcon, accName, labelName, cat, chartType } from "../ui.js";
 import { get } from "../api.js";
-import { incomeExpense, line, ranked, wireTips } from "../charts.js";
+import { incomeExpense, line, share, wireTips } from "../charts.js";
 
 const TABS = [["cashflow", "Cash flow"], ["spending", "Spending"], ["income", "Income"], ["networth", "Net worth"],
   ["sheet", "Balance sheet"], ["accounts", "Accounts"], ["labels", "Labels"]];
@@ -68,7 +68,7 @@ export async function render(root, ctx) {
         <div class="card stat"><div class="label">Expense</div><div class="value neg">${amt(d.total.expense)}</div></div>
         <div class="card stat"><div class="label">Net</div><div class="value">${amt(d.total.net, { signed: true })}</div>
           <div class="sub">${paise(d.total.income) > 0 ? `savings rate ${Math.round((paise(d.total.net) * 100) / paise(d.total.income))}%` : ""}</div></div></div>
-      <div class="card" style="margin-top:14px">${incomeExpense(d.rows, { height: 240 })}</div>
+      <div class="card" style="margin-top:14px">${incomeExpense(d.rows, { height: 240, kind: chartType("cashflow") })}</div>
       <div class="card scroll-x"><table class="tbl"><thead><tr><th>Period</th><th class="r">Income</th><th class="r">Expense</th><th class="r">Net</th></tr></thead>
         <tbody>${d.rows.map((x) => html`<tr><td><a href="#/tx?from=${x.from}&to=${x.to}">${x.label}</a></td><td class="r">${amt(x.income)}</td><td class="r">${amt(x.expense)}</td><td class="r">${amt(x.net, { signed: true })}</td></tr>`)}</tbody></table></div>`);
     wireRange(body, r, rerender);
@@ -79,17 +79,19 @@ export async function render(root, ctx) {
     const parent = S.view.repParent && cat(S.view.repParent)?.kind === kind ? S.view.repParent : "";
     const d = await get("/api/reports/categories" + qs({ ...periodQuery(p), kind, parent }));
     if (!ctx.alive()) return;
-    const rows = d.rows.map((x) => ({ key: x.category, name: x.category === parent ? catName(x.category) + " (itself)" : catName(x.category), icon: catIcon(x.category), value: x.total, note: x.has_children ? "tap to open" : "" }));
+    const rows = d.rows.map((x) => ({ key: x.category, name: x.category === parent ? catName(x.category) + " (itself)" : catName(x.category), icon: catIcon(x.category), color: cat(x.category)?.color, value: x.total, note: x.has_children ? "tap to open" : "" }));
     body.innerHTML = String(html`${periodBar(p, d.range)}
       ${parent ? html`<p><button class="ghost" data-up>‹ All categories</button> <b>${catIcon(parent)} ${catName(parent)}</b></p>` : ""}
       <div class="card"><header><h2>${kind === "expense" ? "Spent" : "Received"} · ${d.range.label}</h2><b class="amt">${money(d.total)}</b></header>
-        ${rows.length ? html`<div data-rows>${ranked(rows, d.total)}</div>` : html`<div class="empty">Nothing in this period</div>`}</div>`);
+        ${rows.length ? html`<div data-rows>${share(rows, d.total, chartType("reports"))}</div>` : html`<div class="empty">Nothing in this period</div>`}</div>`);
     wirePeriod(body, p, d, rerender);
     body.querySelector("[data-up]")?.addEventListener("click", () => { S.view.repParent = ""; rerender(); });
-    body.querySelectorAll("[data-rows] [data-key]").forEach((el) => el.addEventListener("click", () => {
+    body.querySelector("[data-rows]")?.addEventListener("click", (e) => { // rows, slices and columns
+      const el = e.target.closest("[data-key]");
+      if (!el) return;
       const row = d.rows.find((x) => x.category === el.dataset.key);
       if (row?.has_children && !parent) { S.view.repParent = row.category; rerender(); } else ctx.go("#/category/" + encodeURIComponent(el.dataset.key));
-    }));
+    });
   }
 
   if (tab === "networth") {
@@ -101,7 +103,7 @@ export async function render(root, ctx) {
       <div class="grid three"><div class="card stat"><div class="label">Net worth</div><div class="value">${amt(lastRow?.net_worth || "0")}</div></div>
         <div class="card stat"><div class="label">Change over the range</div><div class="value">${amt(fromPaise(change), { signed: true })}</div></div>
         <div class="card stat"><div class="label">Owed</div><div class="value neg">${amt(fromPaise(-paise(lastRow?.liabilities || "0")))}</div></div></div>
-      <div class="card" style="margin-top:14px">${line(d.rows.map((x) => ({ label: x.label, value: x.net_worth })), { height: 240, name: "Net worth" })}</div>
+      <div class="card" style="margin-top:14px">${line(d.rows.map((x) => ({ label: x.label, value: x.net_worth })), { height: 240, name: "Net worth", kind: chartType("networth") })}</div>
       <div class="card scroll-x"><table class="tbl"><thead><tr><th>At end of</th><th class="r">Assets</th><th class="r">Liabilities</th><th class="r">Net worth</th></tr></thead>
         <tbody>${d.rows.map((x) => html`<tr><td>${x.label}</td><td class="r">${amt(x.assets)}</td><td class="r">${amt(x.liabilities)}</td><td class="r"><b>${amt(x.net_worth)}</b></td></tr>`)}</tbody></table></div>`);
     wireRange(body, r, rerender);

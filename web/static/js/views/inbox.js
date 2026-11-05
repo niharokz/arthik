@@ -4,8 +4,8 @@
 // what that merchant is, so the next draft fills itself in.
 
 import { html, raw, money, fmtShort, relDay, reducedMotion } from "../util.js";
-import { S, toast, ro, today, catName, catIcon, accName, loading, confirmSheet, celebrate } from "../ui.js";
-import { get, post, put } from "../api.js";
+import { S, toast, ro, today, catName, catIcon, accName, loading, confirmSheet, celebrate, catOptions } from "../ui.js";
+import { get, post } from "../api.js";
 import { isApp, config, call, onNative } from "../native.js";
 import { openTx } from "../txform.js";
 
@@ -83,28 +83,37 @@ function nextAt(hhmm) {
   return d;
 }
 
-/** The two timings (and Kronos) with their "now" buttons; res is GET /api/inbox. */
+// Who turns SMS into drafts here: "main" (this server), "offline" (the phone app as
+// main device: it runs at the set time by itself, so "Run now" is off) or "online"
+// (the phone app with a server: "Run now" asks the server through Syncthing).
+function runMode(res) {
+  if (isApp) return config().primary ? "offline" : "online";
+  return (res.main ?? true) ? "main" : "online";
+}
+
+/** The steps from bank SMS to drafts, with their "now" buttons; res is GET /api/inbox. */
 export function timingsCard(res) {
   const st = res.status || {};
   const phones = res.phones || [];
-  const main = res.main ?? !!stamp(st.last_import); // only the main device imports
   const at = res.sms_time || "";
   const app = isApp ? config().sms || {} : null;
+  const mode = runMode(res);
   const phoneLine = phones.length
     ? phones.map((p) => html`<div>${p.device}: ${p.schedule ? `daily at ${p.schedule}` : "nightly"}${stamp(p.last_run) ? ` · last ${stamp(p.last_run)}` : ""}</div>`)
     : html`<div>No phone has sent SMS yet — switch it on in the Arthik app: Settings → Phone.</div>`;
+  const runBtn = ro() ? "" : mode === "offline"
+    ? html`<button disabled title="Offline mode: this phone makes the drafts at the set time">Run now</button>`
+    : html`<button data-check title="${mode === "online" ? "Asks your server; the drafts arrive through Syncthing" : ""}">${mode === "online" ? "Run on server" : "Run now"}</button>`;
   return html`<section class="card timings" data-timings>
-    <header><h2>⏱ When drafts arrive</h2></header>
+    <header><h2>⏱ How drafts arrive</h2><a href="#/settings?s=inbox">Change</a></header>
     <div class="tstep"><span class="tn">1</span>
       <div class="grow"><div class="thead"><b>Phone copies bank SMS</b>${app && app.enabled ? html`<button data-smsnow>Copy now</button>` : ""}</div>
-        <div class="muted">${phoneLine}${app ? html`<div>Change it in Settings → Phone.</div>` : ""}</div></div></div>
+        <div class="muted">${phoneLine}</div></div></div>
     <div class="tstep"><span class="tn">2</span>
-      <div class="grow"><div class="thead"><b>SMS become drafts</b>${ro() ? "" : main ? html`<button data-check>Run now</button>` : html`<small class="faint">done by your main device</small>`}</div>
+      <div class="grow"><div class="thead"><b>SMS become drafts</b>${runBtn}</div>
         <div class="muted">${at ? `Every day at ${at}` : "As soon as the SMS file arrives"}${at ? ` · next ${stamp(nextAt(at))}` : ""}${stamp(st.last_sms) ? ` · last ${stamp(st.last_sms)}` : ""}</div>
-        ${ro() ? "" : html`<div class="row wrap tset">
-          <select data-smsmode aria-label="When SMS become drafts"><option value="" ${at ? "" : raw("selected")}>As soon as they arrive</option><option value="at" ${at ? raw("selected") : ""}>Every day at</option></select>
-          <input type="time" data-smstime value="${at || "23:45"}" ${at ? "" : raw("hidden")} aria-label="Time">
-          <button data-savetime hidden>Save</button></div>`}</div></div>
+        ${mode === "offline" ? html`<div class="faint">Offline mode — this phone is the main device and makes the drafts itself.</div>`
+        : mode === "online" ? html`<div class="faint">Online mode — your server makes the drafts; Syncthing brings them here.</div>` : ""}</div></div>
     <div class="tstep"><span class="tn">↻</span>
       <div class="grow"><b>Reminders from Kronos</b><div class="muted">Shown under <a href="#/notifications">🔔 Notifications</a>, not here${stamp(st.last_import) ? ` · checked ${stamp(st.last_import)}` : ""}</div></div></div>
   </section>`;
@@ -114,23 +123,13 @@ export function timingsCard(res) {
 export function wireTimings(root, after) {
   const card = root.querySelector("[data-timings]");
   if (!card) return;
-  const mode = card.querySelector("[data-smsmode]"), time = card.querySelector("[data-smstime]"), save = card.querySelector("[data-savetime]");
-  const changed = () => { time.hidden = !mode.value; save.hidden = false; };
-  mode?.addEventListener("change", changed);
-  time?.addEventListener("input", changed);
-  save?.addEventListener("click", async () => {
-    try {
-      await put("/api/settings", { ...S.state.settings, inbox_sms_time: mode.value ? time.value : "" });
-      toast(mode.value ? `SMS become drafts every day at ${time.value}` : "SMS become drafts as soon as they arrive");
-      after();
-    } catch (e) { toast(e.message, true); }
-  });
   card.querySelector("[data-check]")?.addEventListener("click", async (e) => {
     e.target.disabled = true;
     try {
       const r = await post("/api/inbox/import", {});
       const cap = stamp(r.last_capture);
-      toast(r.added ? `${r.added} new draft${r.added > 1 ? "s" : ""}` : `Nothing new${cap ? ` · phone SMS file here is from ${cap}` : ""}`);
+      toast(r.requested ? "Asked your server — new drafts arrive through Syncthing in a minute or two"
+        : r.added ? `${r.added} new draft${r.added > 1 ? "s" : ""}` : `Nothing new${cap ? ` · phone SMS file here is from ${cap}` : ""}`);
     } catch (err) { toast(err.message, true); }
     after();
   });
@@ -138,6 +137,39 @@ export function wireTimings(root, after) {
     e.target.disabled = true;
     const off = onNative((ev) => { if (ev.type === "sms") { off(); toast(ev.result); after(); } });
     call("smsRunNow");
+  });
+}
+
+/** Settings → Inbox: when SMS become drafts and the fallback categories. */
+export function inboxSettingsCard() {
+  const s = S.state.settings, at = s.inbox_sms_time || "";
+  const dis = ro() ? raw("disabled") : "";
+  return html`<form class="card set-sec" id="set-inbox" data-inboxset>
+    <header><h2>Inbox</h2><a href="#/inbox">Open inbox</a></header>
+    <div class="fields two">
+      <label class="f"><span>SMS become drafts</span><select name="mode" ${dis}><option value="" ${at ? "" : raw("selected")}>As soon as they arrive</option><option value="at" ${at ? raw("selected") : ""}>Every day at a set time</option></select></label>
+      <label class="f" data-atf ${at ? "" : raw("hidden")}><span>Time</span><input type="time" name="at" value="${at || "23:45"}" ${dis}></label>
+    </div>
+    <div class="fields two">
+      <label class="f"><span>Expense category when unsure</span><select name="inbox_expense_category" ${dis}><option value="">Leave empty (I'll choose)</option>${catOptions("expense", s.inbox_expense_category)}</select></label>
+      <label class="f"><span>Income category when unsure</span><select name="inbox_income_category" ${dis}><option value="">Leave empty (I'll choose)</option>${catOptions("income", s.inbox_income_category)}</select></label>
+    </div>
+    ${ro() ? "" : html`<div class="row set-act"><span class="grow"></span><button class="primary" type="submit">Save inbox</button></div>`}
+  </form>`;
+}
+
+/** Wires the inbox settings; save(patch, msg) stores them. */
+export function wireInboxSettings(root, save) {
+  const f = root.querySelector("[data-inboxset]");
+  if (!f) return;
+  f.mode.addEventListener("change", () => { f.querySelector("[data-atf]").hidden = !f.mode.value; });
+  f.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const at = f.mode.value ? f.at.value : "";
+    try {
+      await save({ inbox_sms_time: at, inbox_expense_category: f.inbox_expense_category.value, inbox_income_category: f.inbox_income_category.value },
+        at ? `SMS become drafts every day at ${at}` : "SMS become drafts as soon as they arrive");
+    } catch (err) { toast(err.message, true); }
   });
 }
 

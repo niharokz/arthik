@@ -1,18 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Launch logo: the icon's mark on its dark circle, drawn like Android 12's splash icon (160 dp circle, the 108 dp foreground cropped to 72) so the hand-over is seamless. -->
+<!-- Launch logo: the ₹ mark alone on the window background (Android 12 splash geometry: 160 dp, the 108 dp foreground cropped to 72). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="160dp"
     android:height="160dp"
     android:viewportWidth="72"
     android:viewportHeight="72">
-    <path android:fillColor="@color/teal_icon" android:pathData="M0,36a36,36 0,1 0,72 0a36,36 0,1 0,-72 0" />
     <group
-        android:scaleX="0.82"
-        android:scaleY="0.82"
-        android:translateX="-5"
-        android:translateY="-5">
-        <path android:fillColor="#00000000" android:strokeColor="#593A807A" android:strokeWidth="1.6"
-            android:pathData="M11.5,50a38.5,38.5 0,1 0,77 0a38.5,38.5 0,1 0,-77 0" />
+        android:scaleX="0.95"
+        android:scaleY="0.95"
+        android:translateX="-11.5"
+        android:translateY="-11.5">
         <path android:fillColor="#00000000" android:strokeColor="#FF66BDB3" android:strokeWidth="7"
             android:strokeLineCap="round" android:pathData="M37,27H65M37,40H65" />
         <path android:fillColor="#00000000" android:strokeColor="#FFA9B8FF" android:strokeWidth="7"

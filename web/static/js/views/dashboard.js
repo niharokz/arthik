@@ -4,13 +4,14 @@
 // and blocks of your own for any account, category or label.
 
 import { html, raw, money, money0, amt, paise, qs, fmtShort, relDay, parseDate, ymd, addDays, replay, countUp } from "../util.js";
-import { S, periodState, periodQuery, periodBar, wirePeriod, catName, catIcon, today, loading, ro, acc, accName, cat, label, sheet, toast, celebrate } from "../ui.js";
+import { S, periodState, periodQuery, periodBar, wirePeriod, catName, catIcon, today, loading, ro, acc, accName, cat, label, sheet, toast, celebrate, chartType } from "../ui.js";
 import { get, put } from "../api.js";
 import { haptic } from "../native.js";
-import { incomeExpense, ranked, spark, wireTips } from "../charts.js";
+import { incomeExpense, share, spark, wireTips } from "../charts.js";
 import { grouped, wireRows, pendingCreates } from "../txlist.js";
 import { openTx } from "../txform.js";
 import { draftRow } from "./inbox.js";
+import { icon } from "../icons.js";
 
 // Built-in blocks: type → [name, icon, full width on wide screens].
 const BLOCKS = {
@@ -33,7 +34,7 @@ export async function render(root, ctx) {
   const p = periodState("dash");
   const blocks = layout().filter(exists);
   const has = (t) => blocks.some((b) => b.type === t);
-  ctx.actions(ro() ? "" : html`<button class="ghost icon" data-customize aria-label="Customize home" title="Customize home">✎</button>`);
+  ctx.actions(ro() ? "" : html`<button class="ghost icon" data-customize aria-label="Customize home" title="Customize home">${icon("edit", 18)}</button>`);
   root.innerHTML = String(loading());
   const sixAgo = parseDate(today());
   sixAgo.setMonth(sixAgo.getMonth() - 5, 1);
@@ -62,7 +63,13 @@ function block(b, d) {
   const out = (BLOCKS[b.type] ? BUILT[b.type] : OWN[b.type])(b, d);
   if (!out) return "";
   const wide = BLOCKS[b.type]?.[2];
-  return html`<div class="home-b ${wide ? "wide" : ""}" data-block="${b.type}${b.ref ? "/" + b.ref : ""}">${out}</div>`;
+  return html`<div class="home-b ${wide ? "wide" : ""}" data-block="${b.type}${b.ref ? "/" + b.ref : ""}" ${b.style ? raw(`data-style="${b.style}"`) : ""}>${out}</div>`;
+}
+
+// The headline amount with its paise set smaller (₹12,41,566.90).
+function heroAmt(v) {
+  const [whole, dec] = money(v).split(".");
+  return html`<span class="amt">${whole}${dec ? html`<small class="dec">.${dec}</small>` : ""}</span>`;
 }
 
 const head = (b, title, link, linkText = "All") => html`<header><h2>${b.title || title}</h2>${link ? html`<a href="${link}">${linkText}</a>` : ""}</header>`;
@@ -71,7 +78,7 @@ const BUILT = {
   networth: (b, { st }) => html`<section class="card hero" data-hero>
       <div class="hero-head">
         <div class="hero-main"><div class="label">${b.title || "Net worth"}</div>
-          <div class="hero-value">${amt(st.summary.net_worth)}</div>
+          <div class="hero-value">${heroAmt(st.summary.net_worth)}</div>
           <div class="delta" data-delta></div></div>
         <div class="seg mini" role="group" aria-label="Net worth timeline">${Object.entries(SPANS).map(([k, v]) =>
           html`<button data-span="${k}" class="${k === span() ? "on" : ""}" aria-pressed="${k === span()}">${v.label}</button>`)}</div>
@@ -79,7 +86,7 @@ const BUILT = {
       <div class="hero-spark" data-spark><div class="sk spark-sk"></div></div>
       <div class="hero-foot"><span>Assets ${amt(st.summary.assets)}</span><span>Owed ${amt(String(-paise(st.summary.liabilities) / 100))}</span>
         ${st.summary.excluded_ids?.length ? html`<span title="${st.summary.excluded_ids.map(accName).join(", ")}">Not counted ${amt(st.summary.excluded, { signed: true })}</span>` : ""}</div>
-      ${st.summary.checks_off || st.summary.unchecked ? html`<a class="hero-check" href="#/accounts">${st.summary.checks_off ? `⚠️ ${st.summary.checks_off} don't match the bank` : ""}${st.summary.checks_off && st.summary.unchecked ? " · " : ""}${st.summary.unchecked ? `${st.summary.unchecked} not checked in ${st.settings.balance_check_days} days` : ""}</a>` : ""}
+      ${st.summary.checks_off || st.summary.unchecked ? html`<a class="hero-check" href="#/accounts">${st.summary.checks_off ? `❌ ${st.summary.checks_off} don't match the bank` : ""}${st.summary.checks_off && st.summary.unchecked ? " · " : ""}${st.summary.unchecked ? `${st.summary.unchecked} not checked in ${st.settings.balance_check_days} days` : ""}</a>` : ""}
     </section>`,
   period: (b, { p, tot }) => html`<div data-period>${periodBar(p, tot.range)}
     <div class="stat-chips">
@@ -92,16 +99,18 @@ const BUILT = {
       : html`<div class="empty">Nothing to review</div>`}</section>`,
   spending: (b, { st, tot }) => {
     const top = st.categories.filter((c) => !c.parent && c.kind === "expense" && paise(tot.totals[c.id]) > 0)
-      .map((c) => ({ key: c.id, name: c.name, icon: c.icon, value: tot.totals[c.id] }))
+      .map((c) => ({ key: c.id, name: c.name, icon: c.icon, color: c.color, value: tot.totals[c.id] }))
       .sort((x, y) => paise(y.value) - paise(x.value)).slice(0, 6);
     return html`<section class="card">${head(b, `Spending · ${tot.range.label}`, "#/categories")}
-      ${top.length ? html`<div data-cats>${ranked(top, tot.expense)}</div>` : html`<div class="empty">Nothing spent in this period</div>`}</section>`;
+      ${top.length ? html`<div data-cats>${share(top, tot.expense, chartType("spending"))}</div>` : html`<div class="empty">Nothing spent in this period</div>`}</section>`;
   },
   budgets: (b, { bud }) => html`<section class="card">${head(b, "Budgets", "#/budgets")}
     ${paise(bud.total.budget) > 0 ? html`
       <div class="row between"><span>${amt(bud.total.spent)} of ${amt(bud.total.budget)}</span><span class="${paise(bud.total.left) < 0 ? "neg" : "muted"}">${paise(bud.total.left) < 0 ? "over by " : ""}${amt(String(Math.abs(paise(bud.total.left)) / 100))}${paise(bud.total.left) >= 0 ? " left" : ""}</span></div>
       <div class="bar ${bud.total.percent > 100 ? "over" : bud.total.percent > 85 ? "near" : ""}" style="margin:8px 0 12px"><i style="width:${Math.min(100, bud.total.percent)}%"></i></div>
-      ${bud.lines.filter((l) => !l.parent).slice(0, 4).map((l) => html`<a class="bline" href="#/category/${encodeURIComponent(l.category)}">
+      ${chartType("budgets") !== "hbar" ? html`<div data-cats>${share(bud.lines.filter((l) => !l.parent && l.kind === "expense" && paise(l.spent) > 0)
+        .map((l) => ({ key: l.category, name: catName(l.category), icon: catIcon(l.category), color: cat(l.category)?.color, value: l.spent })), bud.total.spent, chartType("budgets"))}</div>`
+      : bud.lines.filter((l) => !l.parent).slice(0, 4).map((l) => html`<a class="bline" href="#/category/${encodeURIComponent(l.category)}">
         <div class="row between"><span>${catIcon(l.category)} ${catName(l.category)}</span><small>${amt(l.spent)} / ${amt(l.budget)}</small></div>
         <div class="bar ${l.percent > 100 ? "over" : l.percent > 85 ? "near" : ""}"><i style="width:${Math.min(100, l.percent)}%"></i></div></a>`)}`
     : html`<div class="empty">No budgets yet — set one on a category</div>`}</section>`,
@@ -134,7 +143,7 @@ const BUILT = {
     d.recentItems = [...pendingCreates(), ...d.recent.items];
     return html`<section class="card">${head(b, "Recent", "#/tx")}<div data-recent>${grouped(d.recentItems)}</div></section>`;
   },
-  cashflow: (b, { flow }) => html`<section class="card">${head(b, "Cash flow · 6 months", "#/reports", "Reports")}${incomeExpense(flow.rows)}</section>`,
+  cashflow: (b, { flow }) => html`<section class="card">${head(b, "Cash flow · 6 months", "#/reports", "Reports")}${incomeExpense(flow.rows, { kind: chartType("cashflow") })}</section>`,
 };
 
 const OWN = {
@@ -170,7 +179,10 @@ function wire(root, ctx, blocks, d) {
   if (per) wirePeriod(per, d.p, d.tot, () => again().then(() => countUp(root, ".stat-chip .amt")));
   wireHero(root.querySelector("[data-hero]"), ctx);
   wireTips(root);
-  root.querySelectorAll("[data-cats] [data-key]").forEach((el) => el.addEventListener("click", () => ctx.go("#/category/" + encodeURIComponent(el.dataset.key))));
+  root.querySelectorAll("[data-cats]").forEach((el) => el.addEventListener("click", (e) => { // rows, slices and columns
+    const k = e.target.closest("[data-key]");
+    if (k) ctx.go("#/category/" + encodeURIComponent(k.dataset.key));
+  }));
   const recent = root.querySelector("[data-recent]");
   if (recent) wireRows(recent, d.recentItems, (t) => (t._pending ? null : openTx(t, () => ctx.refresh())));
   root.querySelectorAll("[data-soon] [data-id]").forEach((a) => a.addEventListener("click", (e) => {
@@ -201,6 +213,8 @@ function customize(ctx) {
     <p class="muted" style="margin-top:0">Top to bottom, as on the home screen. Saved in settings.md, so the phone and the web match.</p>
     <ol class="list home-edit">${list.map((b, i) => html`<li class="menu-row ${i === moved ? "moved" : ""}">
       <span class="ic">${iconOf(b)}</span><span class="grow">${nameOf(b)}${CUSTOM[b.type] ? html` <small class="faint">${CUSTOM[b.type][0].toLowerCase()}</small>` : ""}</span>
+      <select class="mini" data-style="${i}" aria-label="Card background" title="Card background">${[["", "Card: default"], ...(S.state.look_options?.cards || []).map((c) => [c, c[0].toUpperCase() + c.slice(1)])].map(([v, l]) =>
+        html`<option value="${v}" ${(b.style || "") === v ? raw("selected") : ""}>${l}</option>`)}</select>
       <button class="icon ghost" data-up="${i}" aria-label="Move up" ${i === 0 ? raw("disabled") : ""}>▲</button>
       <button class="icon ghost" data-down="${i}" aria-label="Move down" ${i === list.length - 1 ? raw("disabled") : ""}>▼</button>
       <button class="icon ghost danger-t" data-rm="${i}" aria-label="Remove">✕</button></li>`)}</ol>
@@ -222,6 +236,10 @@ function customize(ctx) {
       $$("[data-rm]", (x) => { list.splice(+x.dataset.rm, 1); moved = -1; redraw(); });
       $$("[data-add]", (x) => { list.push({ type: x.dataset.add }); moved = list.length - 1; redraw(); });
       d.querySelector("[data-kind]").addEventListener("change", (e) => { kind = e.target.value; redraw(); });
+      d.querySelectorAll("[data-style]").forEach((x) => x.addEventListener("change", () => {
+        const b = list[+x.dataset.style];
+        if (x.value) b.style = x.value; else delete b.style;
+      }));
       d.querySelector("[data-create]").addEventListener("click", () => {
         const ref = d.querySelector("[data-ref]").value, title = d.querySelector("[data-title]").value.trim();
         if (!ref) return;
@@ -304,7 +322,7 @@ async function drawTrend(el, ctx) {
   if (!ctx.alive() || asked !== span() || !el.isConnected) return;
   const points = rows.map((r) => ({ label: r.label, value: r.net_worth }));
   const box = el.querySelector("[data-spark]");
-  box.innerHTML = String(spark(points));
+  box.innerHTML = String(spark(points, { kind: chartType("networth") }));
   wireTips(box);
   replay(box, "appear");
   const delta = el.querySelector("[data-delta]");

@@ -85,6 +85,9 @@ func Register(rt *httpx.Router) {
 			out["plugins"] = plugin.Enabled(c.Book.Dir)
 			out["account_types"] = model.AccountTypes
 			out["period_kinds"] = period.Kinds
+			out["look_options"] = map[string]any{ // what Settings → Look offers
+				"palettes": model.Palettes, "cards": model.CardStyles, "colors": model.LookColors, "charts": model.Charts,
+			}
 			s := summary{
 				NetWorth: comp.NetWorth, Assets: comp.Assets, Liabilities: comp.Liabilities,
 				Period: comp.Period, Income: comp.Income, Expense: comp.Expense, Net: comp.Income - comp.Expense,

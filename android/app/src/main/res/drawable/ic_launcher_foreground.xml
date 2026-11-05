@@ -1,17 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The mark from icon.svg (100 grid): a ring and a ₹ in three strokes, scaled to stay inside the 66 dp circle every launcher mask keeps. -->
+<!-- The ₹ mark from icon.svg (100 grid), no ring, scaled to stay inside the 66 dp circle every launcher mask keeps. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <group
-        android:scaleX="0.82"
-        android:scaleY="0.82"
-        android:translateX="13"
-        android:translateY="13">
-        <path android:fillColor="#00000000" android:strokeColor="#593A807A" android:strokeWidth="1.6"
-            android:pathData="M11.5,50a38.5,38.5 0,1 0,77 0a38.5,38.5 0,1 0,-77 0" />
+        android:scaleX="0.95"
+        android:scaleY="0.95"
+        android:translateX="6.5"
+        android:translateY="6.5">
         <path android:fillColor="#00000000" android:strokeColor="#FF66BDB3" android:strokeWidth="7"
             android:strokeLineCap="round" android:pathData="M37,27H65M37,40H65" />
         <path android:fillColor="#00000000" android:strokeColor="#FFA9B8FF" android:strokeWidth="7"

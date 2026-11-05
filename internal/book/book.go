@@ -24,9 +24,11 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"gitlab.com/niharokz/arthik/internal/dates"
 	"gitlab.com/niharokz/arthik/internal/model"
@@ -408,10 +410,64 @@ func normSettings(s model.Settings) model.Settings {
 	if s.Theme == "" {
 		s.Theme = def.Theme
 	}
+	s.Look, s.Alerts = NormLook(s.Look), NormAlerts(s.Alerts)
 	if len(s.NavOrder) > 0 {
 		s.NavOrder, _ = model.NormNav(s.NavOrder) // e.g. "scheduled" from 0.2.0 → "inbox"
 	}
 	return s
+}
+
+// NormLook fills a missing look and drops values Arthik does not know (a hand edit
+// with a typo falls back to the default instead of breaking the screen).
+func NormLook(l *model.Look) *model.Look {
+	def := model.DefaultLook()
+	if l == nil {
+		return def
+	}
+	out := *l
+	if !slices.Contains(model.Palettes, out.Palette) {
+		out.Palette = def.Palette
+	}
+	if !slices.Contains(model.CardStyles, out.Cards) {
+		out.Cards = def.Cards
+	}
+	out.Colors = map[string]string{}
+	for k, v := range l.Colors {
+		if slices.Contains(model.LookColors, k) && model.HexColor(v) {
+			out.Colors[k] = strings.ToLower(v)
+		}
+	}
+	out.Charts = map[string]string{}
+	for k, v := range l.Charts {
+		if kinds, ok := model.Charts[k]; ok && slices.Contains(kinds, v) {
+			out.Charts[k] = v
+		}
+	}
+	if len(out.Colors) == 0 {
+		out.Colors = nil
+	}
+	if len(out.Charts) == 0 {
+		out.Charts = nil
+	}
+	return &out
+}
+
+// NormAlerts fills a missing alert section and repairs a bad time.
+func NormAlerts(a *model.Alerts) *model.Alerts {
+	def := model.DefaultAlerts()
+	if a == nil {
+		return def
+	}
+	out := *a
+	if t, err := time.Parse("15:04", out.Time); err != nil {
+		out.Time = def.Time
+	} else {
+		out.Time = t.Format("15:04")
+	}
+	if out.Count < 0 {
+		out.Count = 0
+	}
+	return &out
 }
 
 // fixup repairs missing definition ids and labels used on transactions but missing

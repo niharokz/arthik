@@ -4,15 +4,19 @@
 package summary
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 
 	"gitlab.com/niharokz/arthik/internal/book"
 	"gitlab.com/niharokz/arthik/internal/feature/budgets"
 	"gitlab.com/niharokz/arthik/internal/feature/reports"
 	"gitlab.com/niharokz/arthik/internal/httpx"
+	"gitlab.com/niharokz/arthik/internal/inbox"
 	"gitlab.com/niharokz/arthik/internal/model"
 	"gitlab.com/niharokz/arthik/internal/money"
 	"gitlab.com/niharokz/arthik/internal/period"
+	"gitlab.com/niharokz/arthik/internal/view"
 )
 
 // Summary is everything the widget and the notification need.
@@ -24,6 +28,18 @@ type Summary struct {
 	Budget  budgets.Line `json:"budget"` // expense budgets only; Budget = 0 when none are set
 	Inbox   Inbox        `json:"inbox"`
 	Worth   Worth        `json:"net_worth"`
+	Alert   Alert        `json:"alert"` // the phone's daily alert
+}
+
+// Alert is what the phone's once-a-day alert says, at Time. Show is false when
+// nothing is due: no mismatch (or that alert is off) and Count within Limit.
+type Alert struct {
+	Time     string   `json:"time"`     // "09:00" from settings
+	Show     bool     `json:"show"`     // something to tell
+	Mismatch []string `json:"mismatch"` // accounts whose bank check does not match (empty when that alert is off)
+	Count    int      `json:"count"`    // inbox drafts + active notifications
+	Limit    int      `json:"limit"`    // alert above this count (0 = off)
+	Text     string   `json:"text"`     // the notification line
 }
 
 // Worth is net worth now, its change this month and the last 12 month-ends.
@@ -100,7 +116,37 @@ func Build(d *book.Data, comp *book.Computed, newest int) Summary {
 		x := pending[i]
 		s.Inbox.Newest = append(s.Inbox.Newest, Draft{Title: x.Title, Type: x.Type, Amount: x.Amount, Date: x.Date})
 	}
+	s.Alert = alert(d, comp, s.Inbox.Pending)
 	return s
+}
+
+// alert decides the daily alert from settings, the bank checks and the queues.
+func alert(d *book.Data, comp *book.Computed, pending int) Alert {
+	cfg := d.Settings.Alerts
+	if cfg == nil {
+		cfg = model.DefaultAlerts()
+	}
+	a := Alert{Time: cfg.Time, Mismatch: []string{}, Count: pending + inbox.ActiveNotices(d, comp), Limit: cfg.Count}
+	if cfg.Mismatch {
+		a.Mismatch = view.Mismatched(d, comp)
+	}
+	var parts []string
+	if n := len(a.Mismatch); n > 0 {
+		parts = append(parts, fmt.Sprintf("❌ %s doesn't match the bank", names(a.Mismatch)))
+	}
+	if a.Limit > 0 && a.Count > a.Limit {
+		parts = append(parts, fmt.Sprintf("%d items wait in the inbox and notifications", a.Count))
+	}
+	a.Show, a.Text = len(parts) > 0, strings.Join(parts, " · ")
+	return a
+}
+
+// names lists up to two names and how many more.
+func names(n []string) string {
+	if len(n) <= 2 {
+		return strings.Join(n, " and ")
+	}
+	return fmt.Sprintf("%s, %s and %d more", n[0], n[1], len(n)-2)
 }
 
 func worth(d *book.Data, comp *book.Computed, month period.Range) Worth {

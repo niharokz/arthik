@@ -12,9 +12,10 @@ import android.graphics.Color
 import android.os.Build
 
 /**
- * The morning notice: once a day, at the time set in Settings → Phone, tells you how
- * many drafts wait in the inbox (silent when there are none). Replaces Kronos's
- * Telegram message for people who prefer a phone notification.
+ * The daily alert: once a day, at the time in Settings → Daily alert (settings.md, the
+ * same for every phone), tells you when an account doesn't match the bank or when the
+ * inbox and notifications hold more than the chosen count. Silent otherwise. Switched
+ * on per phone in Settings → Phone.
  */
 object InboxNotify {
     private const val ALARM = 1 // DailyAlarm request code (SMS uses 0)
@@ -37,38 +38,51 @@ object InboxNotify {
     }
 
     /**
-     * Reads the inbox and notifies when drafts wait; [test] also shows a notice when
-     * the inbox is empty. Returns a one-line result for Settings. Call off the main thread.
+     * Checks the alert and notifies when something is due; [test] ("Check now") also
+     * shows a notification when nothing is. Follows the shared alert time. Returns a
+     * one-line result for Settings. Call off the main thread.
      */
     fun run(ctx: Context, test: Boolean = false): String {
         val s = Summary.load(ctx) ?: return "Couldn't read the finance folder"
         Widget.draw(ctx, s)
+        follow(ctx, s.alert)
+        val a = s.alert
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return "No notification service"
-        if (s.pending == 0 && !test) {
+        if (!a.show && !test) {
             nm.cancel(ID)
-            return "Nothing to review"
+            return "Nothing to tell"
         }
         if (!permitted(ctx)) return "Notifications are off for Arthik"
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Inbox", NotificationManager.IMPORTANCE_DEFAULT).apply {
-            description = "Drafts from bank SMS and subscriptions waiting for review"
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Daily alert", NotificationManager.IMPORTANCE_DEFAULT).apply {
+            description = "Bank balance mismatches and a full inbox, once a day"
         })
         val b = Notification.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_arthik)
             .setColor(Color.parseColor(TEAL))
-            .setContentIntent(MainActivity.openIntent(ctx, "inbox", TAP))
+            .setContentIntent(MainActivity.openIntent(ctx, a.route, TAP))
             .setAutoCancel(true)
             .setCategory(Notification.CATEGORY_REMINDER)
             .setShowWhen(true)
-        if (s.pending == 0) {
-            b.setContentTitle("Inbox clear").setContentText("Nothing waiting. This is how the morning notice looks.")
+        if (!a.show) {
+            b.setContentTitle("All good").setContentText("Nothing needs a look. This is how the daily alert looks.")
         } else {
-            val style = Notification.InboxStyle().setBigContentTitle(s.notifyTitle)
-            s.notifyLines.forEach { style.addLine(it) }
-            if (s.out > 0) style.setSummaryText("${Rupees.format(s.out)} out")
-            b.setContentTitle(s.notifyTitle).setContentText(s.notifyText).setStyle(style).setNumber(s.pending)
+            val style = Notification.InboxStyle().setBigContentTitle(a.title)
+            a.mismatch.forEach { style.addLine("❌ $it") }
+            if (a.limit > 0 && a.count > a.limit) s.notifyLines.forEach { style.addLine(it) }
+            b.setContentTitle(a.title).setContentText(a.text).setStyle(style)
+            if (a.count > 0) b.setNumber(a.count)
         }
         nm.notify(ID, b.build())
-        return if (s.pending == 0) "Test notice shown" else "Notified: ${s.notifyTitle}"
+        return if (!a.show) "Test alert shown" else "Alerted: ${a.title}"
+    }
+
+    /** Moves this phone's alarm to the alert time in settings.md when it changed there. */
+    private fun follow(ctx: Context, a: Summary.Alert) {
+        val (h, m) = a.clock ?: return
+        val p = Prefs(ctx)
+        if (p.notifyHour == h && p.notifyMinute == m) return
+        p.notifyHour = h
+        p.notifyMinute = m
     }
 
     private const val TEAL = "#3A807A"

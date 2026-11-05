@@ -241,9 +241,9 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
-    // ---- morning inbox notification ----
+    // ---- daily alert ----
 
-    /** Switches the daily notice on/off; false when notifications must be allowed first ("notify_permission" event follows). */
+    /** Switches the daily alert on/off for this phone; false when notifications must be allowed first ("notify_permission" event follows). */
     @JavascriptInterface
     fun setNotify(on: Boolean): Boolean {
         if (on && !InboxNotify.permitted(a)) {
@@ -255,7 +255,7 @@ class Bridge(private val a: MainActivity) {
         return true
     }
 
-    /** Time of the daily notice. */
+    /** Time of the daily alert (the web passes the time from settings.md). */
     @JavascriptInterface
     fun setNotifyTime(hour: Int, minute: Int) {
         prefs.notifyHour = hour.coerceIn(0, 23)
@@ -263,7 +263,7 @@ class Bridge(private val a: MainActivity) {
         InboxNotify.schedule(a)
     }
 
-    /** Shows the notice now, even with an empty inbox (result: "notify" event). */
+    /** Checks the alert now and shows it even when nothing is due (result: "notify" event). */
     @JavascriptInterface
     fun notifyNow() {
         app.bg.execute {

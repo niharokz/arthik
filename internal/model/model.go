@@ -11,6 +11,8 @@
 package model
 
 import (
+	"strings"
+
 	"gopkg.in/yaml.v3"
 
 	"gitlab.com/niharokz/arthik/internal/money"
@@ -76,8 +78,60 @@ type Settings struct {
 	// Inbox: turn bank SMS into drafts once a day at this time ("23:45"); empty = as soon as they arrive.
 	InboxSMSTime string `yaml:"inbox_sms_time,omitempty" json:"inbox_sms_time"`
 
+	Look   *Look   `yaml:"look,omitempty" json:"look"`     // palette, card style, colours, chart types (all devices)
+	Alerts *Alerts `yaml:"alerts,omitempty" json:"alerts"` // the phone's daily alert
+
 	Extra map[string]any `yaml:",inline" json:"-"`
 }
+
+// Look is how Arthik looks on every device: a palette, the card background, colour
+// overrides per element and the chart type per chart.
+type Look struct {
+	Palette string            `yaml:"palette" json:"palette"`                   // nss|amoled|galaxy|white|gold
+	Cards   string            `yaml:"cards" json:"cards"`                       // none|glass|matte|opaque
+	Colors  map[string]string `yaml:"colors,omitempty" json:"colors,omitempty"` // element → #rrggbb
+	Charts  map[string]string `yaml:"charts,omitempty" json:"charts,omitempty"` // chart → type
+}
+
+// Palettes, card backgrounds, colour elements and charts a Look may name.
+var (
+	Palettes   = []string{"nss", "amoled", "galaxy", "white", "gold"}
+	CardStyles = []string{"none", "glass", "matte", "opaque"}
+	LookColors = []string{"accent", "bg", "surface", "text", "muted", "line", "income", "expense", "warn"}
+	// Charts maps each chart to its allowed types; the first is the default.
+	Charts = map[string][]string{
+		"spending": {"hbar", "donut", "pie", "bar"},
+		"budgets":  {"hbar", "donut", "bar"},
+		"cashflow": {"bar", "line"},
+		"networth": {"area", "line", "bar"},
+		"reports":  {"hbar", "donut", "pie", "bar"},
+	}
+)
+
+// Alerts is the phone's once-a-day alert: at Time, when an account's bank check does
+// not match (Mismatch) or when the inbox and notifications hold more than Count.
+type Alerts struct {
+	Time     string `yaml:"time" json:"time"`         // "09:00"
+	Mismatch bool   `yaml:"mismatch" json:"mismatch"` // alert on a bank check mismatch
+	Count    int    `yaml:"count" json:"count"`       // alert above this many (0 = off)
+}
+
+// HexColor reports whether s is a #rrggbb colour.
+func HexColor(s string) bool {
+	if len(s) != 7 || s[0] != '#' {
+		return false
+	}
+	for _, c := range s[1:] {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", c) {
+			return false
+		}
+	}
+	return true
+}
+
+// DefaultLook and DefaultAlerts fill a settings file that has none.
+func DefaultLook() *Look     { return &Look{Palette: "nss", Cards: "matte"} }
+func DefaultAlerts() *Alerts { return &Alerts{Time: "09:00", Mismatch: true, Count: 30} }
 
 // HomeSection is one block of the home screen: a built-in one, or an account,
 // category or label of yours (Ref) with an optional title.
@@ -85,6 +139,7 @@ type HomeSection struct {
 	Type  string `yaml:"type" json:"type"`
 	Ref   string `yaml:"ref,omitempty" json:"ref,omitempty"`
 	Title string `yaml:"title,omitempty" json:"title,omitempty"`
+	Style string `yaml:"style,omitempty" json:"style,omitempty"` // card background (empty = Look.Cards)
 }
 
 // HomeBuiltins are the built-in home sections, in the default order.
@@ -136,7 +191,7 @@ func NormNav(in []string) (out []string, unknown string) {
 
 // DefaultSettings are used for any missing value.
 func DefaultSettings() Settings {
-	return Settings{DefaultPeriod: "monthly", WeekStart: "monday", MonthStartDay: 1, YearStartMonth: 1, UpcomingDays: 30, CheckDays: 30, Theme: "auto"}
+	return Settings{DefaultPeriod: "monthly", WeekStart: "monday", MonthStartDay: 1, YearStartMonth: 1, UpcomingDays: 30, CheckDays: 30, Theme: "auto", Look: DefaultLook(), Alerts: DefaultAlerts()}
 }
 
 // Account is one entry of accounts.md. Fields after the "computed" marker are

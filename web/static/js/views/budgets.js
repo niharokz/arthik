@@ -2,9 +2,10 @@
 // own period) and scaled to the period you view; they reset every period.
 
 import { html, qs, money, amt, paise, fromPaise } from "../util.js";
-import { S, sheet, ro, loading, periodState, periodQuery, periodBar, wirePeriod, catName, catIcon, cat } from "../ui.js";
+import { S, sheet, ro, loading, periodState, periodQuery, periodBar, wirePeriod, catName, catIcon, cat, chartType } from "../ui.js";
 import { get } from "../api.js";
 import { categoryForm } from "./categories.js";
+import { share, wireTips } from "../charts.js";
 
 export async function render(root, ctx) {
   const p = periodState("budgets");
@@ -28,12 +29,19 @@ export async function render(root, ctx) {
       <div class="row between"><div class="stat"><div class="label">Spent of budget · ${b.range.label}</div><div class="value">${amt(t.spent)} <small class="muted">/ ${money(t.budget)}</small></div></div>
         <div class="stat" style="text-align:right"><div class="label">${paise(t.left) < 0 ? "Over" : "Left"}</div><div class="value ${paise(t.left) < 0 ? "neg" : "pos"}">${amt(fromPaise(Math.abs(paise(t.left))))}</div></div></div>
       <div class="bar ${cls(t.percent)}" style="margin-top:10px;height:12px"><i style="width:${Math.min(100, t.percent)}%"></i></div>
-      ${progressNote(b.range)}</div>` : ""}
+      ${progressNote(b.range)}
+      ${chartType("budgets") !== "hbar" && expense.some((l) => !l.parent && paise(l.spent) > 0) ? html`<div class="bud-chart" data-cats>${share(expense.filter((l) => !l.parent && paise(l.spent) > 0)
+        .map((l) => ({ key: l.category, name: catName(l.category), icon: catIcon(l.category), color: cat(l.category)?.color, value: l.spent })), t.spent, chartType("budgets"))}</div>` : ""}</div>` : ""}
     ${expense.length ? html`<div class="card"><header><h2>Expense budgets</h2></header><ul class="list">${expense.map(lineH)}</ul></div>` : ""}
     ${income.length ? html`<div class="card"><header><h2>Income targets</h2></header><ul class="list">${income.map(lineH)}</ul></div>` : ""}
     ${!b.lines.length ? html`<div class="card empty">No budgets yet.${ro() ? "" : " Use “Set budget” to give a category a weekly, monthly, quarterly, half-yearly or yearly budget."}</div>` : ""}
     <p class="muted" style="font-size:.85rem">Budgets reset at the start of every period. A monthly budget shown for a quarter counts three times.</p>`);
   wirePeriod(root, p, b, () => render(root, ctx));
+  wireTips(root);
+  root.querySelector("[data-cats]")?.addEventListener("click", (e) => {
+    const k = e.target.closest("[data-key]");
+    if (k) ctx.go("#/category/" + encodeURIComponent(k.dataset.key));
+  });
   ctx.actionsEl.querySelector("[data-set]")?.addEventListener("click", () => {
     sheet("Set a budget", html`<label class="f"><span>Category</span><select name="c" autofocus>
       ${S.state.categories.filter((c) => !c.parent).map((c) => [html`<option value="${c.id}">${c.icon || ""} ${c.name}</option>`,

@@ -8,8 +8,8 @@ import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 /**
- * This month's spending against the budgets, the drafts waiting in the inbox and net
- * worth — what the home-screen widgets and the morning notification show. The engine computes
+ * This month's spending against the budgets, the drafts waiting in the inbox, net
+ * worth and the daily alert — what the home-screen widgets and the daily notification show. The engine computes
  * it (`libarthik.so summary`, read-only), so the numbers match the app exactly.
  */
 data class Summary(
@@ -24,8 +24,35 @@ data class Summary(
     val worth: Long = 0, // paise, now
     val worthChange: Long = 0, // paise since the end of last month
     val trend: List<Long> = emptyList(), // net worth at the last 12 month-ends, oldest first
+    val alert: Alert = Alert(),
 ) {
     data class Draft(val title: String, val type: String, val amount: Long)
+
+    /** The daily alert from settings.md: when, whether to show it and what to say. */
+    data class Alert(
+        val time: String = "", // "09:00" (Settings → Daily alert), empty when unknown
+        val show: Boolean = false,
+        val mismatch: List<String> = emptyList(), // accounts that don't match the bank
+        val count: Int = 0, // inbox drafts + active notifications
+        val limit: Int = 0, // alert above this (0 = off)
+        val text: String = "",
+    ) {
+        /** Hour and minute of [time], or null when it isn't HH:MM. */
+        val clock: Pair<Int, Int>? get() = Regex("(\\d{1,2}):(\\d{2})").matchEntire(time)?.let {
+            val (h, m) = it.destructured
+            if (h.toInt() in 0..23 && m.toInt() in 0..59) h.toInt() to m.toInt() else null
+        }
+
+        /** Notification title: the bank mismatch first, else the queue size. */
+        val title: String get() = when {
+            mismatch.size == 1 -> "❌ ${mismatch[0]} doesn't match the bank"
+            mismatch.isNotEmpty() -> "❌ ${mismatch.size} accounts don't match the bank"
+            else -> "$count waiting in the inbox and notifications"
+        }
+
+        /** Where a tap goes: Accounts for a mismatch, else the inbox. */
+        val route: String get() = if (mismatch.isNotEmpty()) "accounts" else "inbox"
+    }
 
     // ---- the words shown on the widget and in the notification ----
 
@@ -95,6 +122,8 @@ data class Summary(
             val list = box.optJSONArray("newest")
             val nw = o.optJSONObject("net_worth") ?: JSONObject()
             val trend = nw.optJSONArray("trend")
+            val al = o.optJSONObject("alert") ?: JSONObject()
+            val mis = al.optJSONArray("mismatch")
             val newest = (0 until (list?.length() ?: 0)).map { i ->
                 val d = list!!.getJSONObject(i)
                 Draft(d.optString("title"), d.optString("type"), Rupees.paise(d.optString("amount")))
@@ -111,6 +140,11 @@ data class Summary(
                 worth = Rupees.paise(nw.optString("now")),
                 worthChange = Rupees.paise(nw.optString("change")),
                 trend = (0 until (trend?.length() ?: 0)).map { Rupees.paise(trend!!.optString(it)) },
+                alert = Alert(
+                    time = al.optString("time"), show = al.optBoolean("show"),
+                    mismatch = (0 until (mis?.length() ?: 0)).map { mis!!.optString(it) },
+                    count = al.optInt("count"), limit = al.optInt("limit"), text = al.optString("text"),
+                ),
             )
         } catch (e: JSONException) {
             null

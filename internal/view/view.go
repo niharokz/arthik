@@ -131,6 +131,21 @@ func Checks(d *book.Data, c *book.Computed) (off, unchecked int) {
 	return
 }
 
+// Mismatched names the visible accounts whose latest bank check does not match
+// (the ones counted as off by Checks).
+func Mismatched(d *book.Data, c *book.Computed) []string {
+	out := []string{}
+	for _, a := range d.Accounts {
+		if a.Hidden || a.Archived {
+			continue
+		}
+		if ck := checkOf(a, d, c); ck != nil && !ck.Stale && ck.Diff != 0 {
+			out = append(out, a.Name)
+		}
+	}
+	return out
+}
+
 // Excluded is what the accounts left out of net worth add up to (hidden and
 // archived ones aside), with their ids.
 func Excluded(d *book.Data, c *book.Computed) (money.Amount, []string) {

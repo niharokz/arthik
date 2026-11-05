@@ -17,7 +17,7 @@ export async function render(root, ctx) {
   const list = st.accounts.filter((a) => showAll || (!a.archived && !a.hidden));
   const s = st.summary;
   root.innerHTML = String(html`
-    ${s.checks_off ? html`<div class="banner warn" style="margin:0 0 12px">⚠️ ${s.checks_off} account(s) don't match the bank — open them to see the difference.</div>` : ""}
+    ${s.checks_off ? html`<div class="banner warn" style="margin:0 0 12px">❌ ${s.checks_off} account(s) don't match the bank — open them to see the difference.</div>` : ""}
     <div class="grid three">
       <div class="card stat"><div class="label">Net worth</div><div class="value">${amt(s.net_worth)}</div>
         ${s.excluded_ids?.length ? html`<div class="sub">not counted: ${money(s.excluded)}</div>` : ""}</div>
@@ -165,11 +165,11 @@ function accountForm(a, ctx) {
 
 // ---- bank balance check ----
 
-/** ✅ / ⚠️ / ○ after an account's name. */
+/** ✅ / ❌ / ○ after an account's name. */
 function checkMark(a) {
   const c = a.check;
   if (!c || c.stale) return html`<span class="ck none" title="${c ? `Checked ${c.age} days ago` : "Never checked against the bank"}">○</span>`;
-  return paise(c.diff) ? html`<span class="ck off" title="Off by ${money(c.diff)}">⚠️</span>` : html`<span class="ck ok" title="Matches the bank">✅</span>`;
+  return paise(c.diff) ? html`<span class="ck off" title="Off by ${money(c.diff)}">❌</span>` : html`<span class="ck ok" title="Matches the bank">✅</span>`;
 }
 
 // What the bank shows vs Arthik on the same day; owed amounts read positive for cards and loans.
@@ -181,7 +181,7 @@ function checkCard(a) {
   if (!c) return html`<section class="card check none"><div class="row between"><span>○ Not checked against the bank yet.</span>${btn}</div></section>`;
   const ok = !paise(c.diff);
   return html`<section class="card check ${ok ? "ok" : "off"}"><div class="row between wrap">
-      <span>${ok ? html`✅ Matches the bank` : html`⚠️ Bank ${shown(c.bank)} · Arthik ${shown(c.arthik)} · off by <b>${money(Math.abs(paise(c.diff)) / 100)}</b>`}
+      <span>${ok ? html`✅ Matches the bank` : html`❌ Bank ${shown(c.bank)} · Arthik ${shown(c.arthik)} · off by <b>${money(Math.abs(paise(c.diff)) / 100)}</b>`}
         <span class="muted"> · ${liab ? "owed " : ""}on ${fmtDate(c.date)}${c.stale ? " — checked a while ago" : ""}</span></span>${btn}</div></section>`;
 }
 

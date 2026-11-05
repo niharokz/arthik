@@ -9,7 +9,7 @@ import android.net.Uri
 import android.os.Build
 import java.time.ZoneId
 
-/** A once-a-day wake-up at a clock time, shared by the SMS copy and the inbox notice. */
+/** A once-a-day wake-up at a clock time, shared by the SMS copy and the daily alert. */
 object DailyAlarm {
     /** True when Android lets the app wake at an exact minute (else it runs within ~15 min). */
     fun exactAllowed(ctx: Context): Boolean {

@@ -1,11 +1,11 @@
 // Settings → Phone (only inside the Android app): data folder or demo, file access,
-// main-device switch, app lock (PIN or fingerprint/face), look (Material You), the
-// morning inbox notice, the home-screen widget, the nightly bank-SMS copy, the
+// offline/online mode (main-device switch), app lock (PIN or fingerprint/face), look
+// (Material You), the daily alert, the home-screen widgets, the nightly bank-SMS copy, the
 // settings file and the engine log. Settings are stored by the app itself and
 // mirrored to arthik-phone.yaml in a folder you choose.
 
 import { html, raw, fmtShort } from "../util.js";
-import { sheet, toast, confirmSheet, colorField, wireColorFields, hexColor } from "../ui.js";
+import { S, sheet, toast, confirmSheet, colorField, wireColorFields, hexColor } from "../ui.js";
 import { call, config, onNative, applyAccent } from "../native.js";
 import { pickFolder, chooseSettingsFolder } from "../appmode.js";
 
@@ -35,7 +35,7 @@ function smsBlock(c) {
       <div class="prow"><div class="grow"><b>After a missed night, look back</b></div>
         <select data-lookback style="width:auto">${[1, 2, 3, 4, 5, 6, 7].map((n) => html`<option value="${n}" ${n === m.lookback ? raw("selected") : ""}>${n} day${n > 1 ? "s" : ""}</option>`)}</select></div>
       <div class="prow"><div class="grow"><b>Last run</b><div class="muted">${stamp(m.last_run)}${m.last_result ? " · " + m.last_result : ""}${m.next_run ? html`<br>Next: ${stamp(m.next_run)}` : ""}</div></div>
-        <button data-smsnow>Run now</button></div>` : ""}`;
+        <a class="btn" href="#/inbox">Copy now in Inbox</a></div>` : ""}`;
 }
 
 // The settings file: where this phone's settings are kept (restored on a new install).
@@ -64,26 +64,28 @@ function lookBlock(c) {
   </label>`;
 }
 
-// The morning notice.
-function notifyBlock(c) {
+// The daily alert: what and when come from Settings → Daily alert (settings.md);
+// here it is switched on for this phone.
+function notifyBlock(c, alerts) {
   const n = c.notify || {};
   const folder = c.mode === "folder" && c.folder_ok;
-  return html`<div class="psec"><b>🔔 Inbox notice</b>
-    <div class="muted" style="font-size:.85rem">Once a day the phone tells you how many drafts wait for review (nothing is shown when the inbox is empty). If you use this, you can switch off Kronos's Telegram notice (<code>arthik_inbox_notify</code>).</div></div>
+  const a = alerts || {};
+  const what = [a.mismatch ? "an account doesn't match the bank (❌)" : "", a.count ? `inbox + notifications pass ${a.count}` : ""].filter(Boolean).join(" or ");
+  return html`<div class="psec"><b>🔔 Daily alert</b>
+    <div class="muted" style="font-size:.85rem">${what ? html`At <b>${a.time}</b> when ${what}.` : "Both alerts are off."} Change it in <a href="#/settings?s=alerts">Settings → Daily alert</a> — every phone follows.</div></div>
     <label class="prow">
-      <div class="grow"><b>Morning notification</b>${!folder ? html`<div class="neg">Choose your finance folder first.</div>` : !n.permission && n.enabled ? html`<div class="neg">Notifications are blocked for Arthik — allow them in app info.</div>` : ""}</div>
+      <div class="grow"><b>Alert on this phone</b>${!folder ? html`<div class="neg">Choose your finance folder first.</div>` : !n.permission && n.enabled ? html`<div class="neg">Notifications are blocked for Arthik — allow them in app info.</div>` : ""}
+        ${n.enabled && !n.exact ? html`<div class="muted">Android may show it up to 15 minutes late.</div>` : ""}</div>
       <input type="checkbox" class="switch" data-notify ${n.enabled ? raw("checked") : ""} ${!folder ? raw("disabled") : ""}>
     </label>
     ${n.enabled ? html`
-      <div class="prow"><div class="grow"><b>Time</b>${!n.exact ? html`<div class="muted">Android may show it up to 15 minutes late.</div>` : ""}</div>
-        <input type="time" data-notifytime value="${pad(n.hour)}:${pad(n.minute)}" style="width:auto"></div>
-      <div class="prow"><div class="grow"><b>Last notice</b><div class="muted">${n.last_result || "not yet"}${n.next_run ? html`<br>Next: ${stamp(n.next_run)}` : ""}</div></div>
-        <button data-notifynow>Show now</button></div>` : ""}
+      <div class="prow"><div class="grow"><b>Last alert</b><div class="muted">${n.last_result || "not yet"}${n.next_run ? html`<br>Next check: ${stamp(n.next_run)}` : ""}</div></div>
+        <button data-notifynow>Check now</button></div>` : ""}
 `;
 }
 
 // Widgets: what exists, how to add them, and their look (with a live preview).
-const LOOKS = { auto: "Auto", light: "Light", dark: "Dark", amoled: "AMOLED", glass: "Glass", clear: "Clear" };
+const LOOKS = { auto: "Auto", light: "Light", dark: "Dark", amoled: "AMOLED", matte: "Matte", glass: "Glass", clear: "None" };
 function widgetBlock(c) {
   const w = c.widget_look || { bg: "auto", opacity: 100, text: "auto", presets: {} };
   const preset = presetOf(w);
@@ -194,7 +196,7 @@ export function phoneCard() {
       ${c.files_access ? html`<span class="badge">✓ Allowed</span>` : html`<button class="primary" data-access>Allow</button>`}
     </div>
     <label class="prow">
-      <div class="grow"><b>This phone is the main device</b><div class="muted">Leave off when your server runs Arthik: it then writes balances, merges sync conflicts and imports the inbox (SMS and Kronos drafts). Turn on only if the phone is used without the server.</div></div>
+      <div class="grow"><b>Offline mode — this phone is the main device</b><div class="muted">Off (online mode): your server writes balances, merges sync conflicts and turns SMS into drafts; “Run on server” in the Inbox asks it to do that now. On: the phone does all of it by itself, for use without the server.</div></div>
       <input type="checkbox" class="switch" data-primary ${c.primary ? raw("checked") : ""}>
     </label>
     <div class="prow">
@@ -211,7 +213,7 @@ export function phoneCard() {
         <select data-after style="width:auto">${LOCK_AFTER.map(([v, l]) => html`<option value="${v}" ${+c.lock_after === v ? raw("selected") : ""}>${l}</option>`)}</select></div>
       <div class="prow"><div class="grow"></div><button data-locknow>Lock now</button></div>` : ""}
     ${lookBlock(c)}
-    ${notifyBlock(c)}
+    ${notifyBlock(c, S.state.settings.alerts)}
     ${widgetBlock(c)}
     ${smsBlock(c)}
     ${configBlock(c)}
@@ -233,7 +235,7 @@ export function wirePhoneCard(root, ctx) {
     if (e.type === "sms_permission") { if (e.blocked) blockedSheet(); redraw(); }
     if (e.type === "sms") { toast(e.result); redraw(); }
     if (e.type === "notify_permission") {
-      if (e.granted) toast("You'll get the inbox notice every morning");
+      if (e.granted) toast("You'll get the daily alert on this phone");
       else if (!e.settings) toast("Notifications not allowed", true);
       redraw();
     }
@@ -273,7 +275,6 @@ export function wirePhoneCard(root, ctx) {
   });
   $("[data-smstime]")?.addEventListener("change", (e) => { const [h, m] = e.target.value.split(":").map(Number); call("setSmsTime", h, m); redraw(); });
   $("[data-lookback]")?.addEventListener("change", (e) => call("setSmsLookback", +e.target.value));
-  $("[data-smsnow]")?.addEventListener("click", (e) => { e.target.disabled = true; call("smsRunNow"); });
   $("[data-exact]")?.addEventListener("click", (e) => { e.preventDefault(); call("openExactAlarms"); });
   $("[data-you]")?.addEventListener("change", (e) => {
     if (!call("setMaterialYou", e.target.checked)) { e.target.checked = false; return toast("Needs Android 12 or newer", true); }
@@ -282,10 +283,10 @@ export function wirePhoneCard(root, ctx) {
   $("[data-notify]")?.addEventListener("change", (e) => {
     const on = e.target.checked;
     if (!call("setNotify", on)) { e.target.checked = false; return; } // asks for permission; an event follows
-    toast(on ? "Inbox notice on" : "Inbox notice off");
+    if (on) { const [h, m] = (S.state.settings.alerts?.time || "09:00").split(":").map(Number); call("setNotifyTime", h, m); } // the shared time
+    toast(on ? "Daily alert on for this phone" : "Daily alert off for this phone");
     redraw();
   });
-  $("[data-notifytime]")?.addEventListener("change", (e) => { const [h, m] = e.target.value.split(":").map(Number); call("setNotifyTime", h, m); redraw(); });
   $("[data-notifynow]")?.addEventListener("click", (e) => { e.target.disabled = true; call("notifyNow"); });
   $("[data-widget]")?.addEventListener("click", () => { call("refreshWidget"); toast("Widgets updated"); });
   wireWidgetLook(card, config());

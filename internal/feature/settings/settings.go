@@ -1,11 +1,13 @@
 // Package settings is the Settings feature: default category period, week/month/
-// year start, look-ahead days, theme, amount privacy, menu order, home layout and
+// year start, look-ahead days, theme and look (palette, cards, colours, charts),
+// the phone's daily alert, amount privacy, menu order, home layout and
 // the inbox's fallback categories. Sign-in passwords live in
 // .env and are not editable here.
 package settings
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -35,6 +37,12 @@ func Register(rt *httpx.Router) {
 			}
 			if in.CheckDays == 0 {
 				in.CheckDays = d.Settings.CheckDays
+			}
+			if in.Look == nil {
+				in.Look = d.Settings.Look // a form without the look keeps it
+			}
+			if in.Alerts == nil {
+				in.Alerts = d.Settings.Alerts // likewise the daily alert
 			}
 			in.Home = homeRefs(d, in.Home)
 			for _, c := range []struct{ id, kind string }{{in.InboxExpenseCategory, model.KindExpense}, {in.InboxIncomeCategory, model.KindIncome}} {
@@ -105,6 +113,58 @@ func validate(s *model.Settings) error {
 	default:
 		return fmt.Errorf("theme must be auto, light or dark")
 	}
+	if s.Look != nil {
+		if err := look(s.Look); err != nil {
+			return err
+		}
+	}
+	if s.Alerts != nil {
+		if err := alerts(s.Alerts); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// look checks the palette, card style, colours and chart types.
+func look(l *model.Look) error {
+	if !slices.Contains(model.Palettes, l.Palette) {
+		return fmt.Errorf("theme must be one of %s", strings.Join(model.Palettes, ", "))
+	}
+	if !slices.Contains(model.CardStyles, l.Cards) {
+		return fmt.Errorf("card background must be one of %s", strings.Join(model.CardStyles, ", "))
+	}
+	for k, v := range l.Colors {
+		if !slices.Contains(model.LookColors, k) {
+			return fmt.Errorf("unknown colour %q", k)
+		}
+		if !model.HexColor(v) {
+			return fmt.Errorf("colour %s must be #rrggbb", k)
+		}
+		l.Colors[k] = strings.ToLower(v)
+	}
+	for k, v := range l.Charts {
+		kinds, ok := model.Charts[k]
+		if !ok {
+			return fmt.Errorf("unknown chart %q", k)
+		}
+		if !slices.Contains(kinds, v) {
+			return fmt.Errorf("the %s chart can be %s", k, strings.Join(kinds, ", "))
+		}
+	}
+	return nil
+}
+
+// alerts checks the daily alert time and threshold.
+func alerts(a *model.Alerts) error {
+	t, err := time.Parse("15:04", a.Time)
+	if err != nil {
+		return fmt.Errorf("alert time must be HH:MM (24-hour)")
+	}
+	a.Time = t.Format("15:04")
+	if a.Count < 0 || a.Count > 9999 {
+		return fmt.Errorf("alert count must be 0–9999 (0 = off)")
+	}
 	return nil
 }
 
@@ -143,6 +203,9 @@ func homeLayout(in []model.HomeSection) ([]model.HomeSection, error) {
 			}
 		default:
 			return nil, fmt.Errorf("unknown home section %q", h.Type)
+		}
+		if h.Style != "" && !slices.Contains(model.CardStyles, h.Style) {
+			return nil, fmt.Errorf("unknown card background %q", h.Style)
 		}
 		if len(h.Title) > 60 {
 			return nil, fmt.Errorf("section titles are at most 60 characters")

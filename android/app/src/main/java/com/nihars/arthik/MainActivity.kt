@@ -102,7 +102,7 @@ class MainActivity : Activity() {
         // nightly SMS job): stay unlocked only within the lock delay of leaving.
         arthik.unlocked = arthik.stillUnlocked() || (arthik.unlocked && prefs.leftAt == 0L)
         engine.onCrash = { tail -> ui { showError("The engine stopped unexpectedly.", tail) } }
-        SmsSync.schedule(this) // keeps the nightly SMS run and the morning notice set after updates
+        SmsSync.schedule(this) // keeps the nightly SMS run and the daily alert set after updates
         InboxNotify.schedule(this)
         if (engine.running) openStart() else restartEngine()
     }
@@ -558,7 +558,7 @@ class MainActivity : Activity() {
         }
     }
 
-    /** "1.0.3 (30003)". */
+    /** "1.0.4 (30004)". */
     fun versionLabel(): String {
         val info = packageManager.getPackageInfo(packageName, 0)
         val code = if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()

@@ -94,7 +94,9 @@ internal/demo/              demo generator (6 months, relative to today, determi
 internal/server/            mux: public pages, auth, features, security headers (CSP self-only)
 web/static/                 embedded front end (no build step)
   about.html app.html sw.js manifest.webmanifest icon.svg icon-*.png css/app.css
-  js/main.js(shell, router, sign-in, sync) util.js api.js(offline queue) ui.js charts.js txform.js txlist.js
+  fonts/                    Plus Jakarta Sans + JetBrains Mono (woff2, OFL), loaded by css/app.css
+  js/main.js(shell, router, sign-in, sync) util.js api.js(offline queue) ui.js charts.js icons.js txform.js txlist.js
+  js/views/look.js          Settings → Look (theme, cards, colours, charts) and Daily alert
   js/views/<feature>.js     one module per screen
   js/native.js appmode.js views/phone.js   Android app bridge, welcome/lock, Settings → Phone
 android/                    Android app (Kotlin WebView shell + engine), see android/README.md
@@ -250,7 +252,19 @@ cookie, secret random per start so every launch needs the app). `/` redirects to
   queue and are replayed in order (`online` event, every 30 s, at start). Creates carry a
   client id → server returns `duplicate: true` on replay. Other edits need a connection.
 - Charts are hand-drawn SVG at the box's real pixel width (`charts.js`), with tooltips.
-- Theme: nss teal `#3a807a`, square grid background, tokens on `:root`, dark mode auto or forced.
+  The type of each chart (`settings.look.charts`, allowed values in `model.Charts`) picks
+  the drawing: ranked bars, donut, pie or columns for shares; bars/lines for cash flow;
+  area, line or bars for net worth.
+- Look: nine base colour tokens on `:root` per palette (nss follows auto/light/dark;
+  amoled, galaxy, white, gold are fixed); every other colour is `color-mix`ed from them,
+  so `settings.look.colors` overrides (set inline on `<html>`) flow everywhere. Card
+  background (`data-cards` on `<html>`, or `data-style` on a home block): none, glass,
+  matte, opaque. Text is Plus Jakarta Sans, amounts and small labels JetBrains Mono.
+- Daily alert: `settings.alerts` (time, mismatch, count) → `summary.alert` (served by
+  `/api/summary` and `arthik summary`), read by the phone's daily alarm.
+- Run now from a phone in online mode: `POST /api/inbox/import` on a device that doesn't
+  import writes `inbox/run_request.md`; the main device's runner sees it on its next tick,
+  imports everything and deletes it.
 - Motion: new screens fade up with staggered cards/list rows, sheets slide up (pop on
   desktop) and slide out before removal, bars grow, chart bars rise and lines draw,
   stat amounts count up on first view, toasts slide in. All off under

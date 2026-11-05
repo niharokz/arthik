@@ -559,3 +559,39 @@ func TestRunnerLateSync(t *testing.T) {
 		t.Fatalf("capture after the import read before the next day: %d drafts", n)
 	}
 }
+
+// A device that does not import asks through inbox/run_request.md; the main device
+// imports SMS on its next tick, whatever the schedule, and deletes the request.
+func TestRunnerRequest(t *testing.T) {
+	b := newBook(t)
+	ist := time.FixedZone("IST", 5*3600+1800)
+	mutate(t, b, func(d *book.Data, ch *book.Change) error {
+		d.Settings.InboxSMSTime, ch.Settings = "23:45", true
+		d.SMSImport, ch.Drafts = book.Stamp(time.Date(2026, 10, 10, 23, 50, 0, 0, ist)), true
+		return nil
+	})
+	dir := filepath.Join(b.Dir, book.InboxDir)
+	_ = os.MkdirAll(dir, 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "sms_phone.md"), []byte("device: phone\nmessages:\n"+
+		`  - {id: "aaaaaaaaaaaaaaaa", from: "AX-HDFCBK", at: "2026-10-11T20:00:00+05:30", body: "Spent Rs.50 On HDFC Bank Card 4111 At TEA On 2026-10-11:20:00:00."}`+"\n"), 0o644)
+	clock := time.Date(2026, 10, 11, 12, 0, 0, 0, ist)
+	r := &Runner{Book: b, Cfg: config.Inbox{MaxAgeDays: 30, KeepDays: 120, PairDays: 2, Rescan: 10 * time.Minute}, Loc: ist, Now: func() time.Time { return clock }}
+	count := func() (n int) {
+		_ = b.View(func(d *book.Data, _ *book.Computed) error { n = len(d.Drafts); return nil })
+		return n
+	}
+	r.Tick(context.Background())
+	if n := count(); n != 0 {
+		t.Fatalf("noon without a request: %d drafts", n)
+	}
+	if err := Request(b.Dir, "phone", clock); err != nil || !Requested(b.Dir) {
+		t.Fatalf("request: %v", err)
+	}
+	r.Tick(context.Background())
+	if n := count(); n != 1 {
+		t.Fatalf("after the request: %d drafts", n)
+	}
+	if Requested(b.Dir) {
+		t.Fatal("request file not deleted")
+	}
+}

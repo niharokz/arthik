@@ -347,8 +347,11 @@ func TestInboxAPI(t *testing.T) {
 	if code, _ := o.do("GET", "/api/inbox?status=bogus", ""); code != 400 {
 		t.Errorf("bad status = %d", code)
 	}
-	if code, _ := o.do("POST", "/api/inbox/import", `{}`); code != 409 { // no importer runs in this test
-		t.Errorf("import without a runner = %d", code)
+	if code, out := o.do("POST", "/api/inbox/import", `{}`); code != 200 || out["requested"] != true { // no importer here: ask the main device
+		t.Errorf("import without a runner = %d %v", code, out)
+	}
+	if code, _ := d.do("POST", "/api/inbox/import", `{}`); code != 403 {
+		t.Errorf("demo import = %d", code)
 	}
 	if code, _ := o.do("POST", "/api/inbox/nope/reject", `{}`); code != 404 {
 		t.Errorf("missing draft = %d", code)
@@ -449,5 +452,49 @@ func TestBalanceCheckZero(t *testing.T) {
 	_, st := o.do("GET", "/api/state", "")
 	if s := st["summary"].(map[string]any); s["unchecked"].(float64) != 0 || s["checks_off"].(float64) != 0 {
 		t.Errorf("a ₹0 check must count as checked: %v", s)
+	}
+}
+
+// Look and alerts live in settings.md (the same on every device): bad values are
+// refused, a save without them keeps them.
+func TestLookAndAlerts(t *testing.T) {
+	o, _ := setup(t)
+	_, st := o.do("GET", "/api/state", "")
+	s := st["settings"].(map[string]any)
+	if l := s["look"].(map[string]any); l["palette"] != "nss" || l["cards"] != "matte" {
+		t.Fatalf("default look = %v", l)
+	}
+	if a := s["alerts"].(map[string]any); a["time"] != "09:00" || a["count"].(float64) != 30 || a["mismatch"] != true {
+		t.Fatalf("default alerts = %v", a)
+	}
+	put := func() int {
+		b, _ := json.Marshal(s)
+		code, _ := o.do("PUT", "/api/settings", string(b))
+		return code
+	}
+	for _, bad := range []map[string]any{
+		{"palette": "neon", "cards": "matte"},
+		{"palette": "gold", "cards": "shiny"},
+		{"palette": "gold", "cards": "glass", "colors": map[string]string{"accent": "red"}},
+		{"palette": "gold", "cards": "glass", "charts": map[string]string{"spending": "radar"}},
+	} {
+		s["look"] = bad
+		if code := put(); code != 400 {
+			t.Errorf("look %v = %d", bad, code)
+		}
+	}
+	s["look"] = map[string]any{"palette": "gold", "cards": "glass", "colors": map[string]string{"accent": "#C9A45C"}, "charts": map[string]string{"spending": "donut"}}
+	s["alerts"] = map[string]any{"time": "7:30", "mismatch": false, "count": 12}
+	if code := put(); code != 200 {
+		t.Fatalf("good look = %d", code)
+	}
+	delete(s, "look")
+	delete(s, "alerts")
+	put()
+	_, st = o.do("GET", "/api/state", "")
+	got, _ := json.Marshal([]any{st["settings"].(map[string]any)["look"], st["settings"].(map[string]any)["alerts"]})
+	want := `[{"cards":"glass","charts":{"spending":"donut"},"colors":{"accent":"#c9a45c"},"palette":"gold"},{"count":12,"mismatch":false,"time":"07:30"}]`
+	if string(got) != want {
+		t.Errorf("kept = %s", got)
 	}
 }

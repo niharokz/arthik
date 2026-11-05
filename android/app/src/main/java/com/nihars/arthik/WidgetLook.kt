@@ -27,6 +27,7 @@ data class WidgetLook(
             "light" to Triple("#FFFFFF", 100, "auto"),
             "dark" to Triple("#1A2120", 100, "auto"),
             "amoled" to Triple("#000000", 100, "auto"),
+            "matte" to Triple("#0D1412", 92, "light"), // the app's matte card
             "glass" to Triple("#000000", 35, "light"),
             "clear" to Triple("#000000", 0, "light"),
         )

@@ -119,9 +119,20 @@ func (r *Runner) Tick(ctx context.Context) {
 	r.importMu.Lock()
 	w := r.due(now, at, last)
 	r.importMu.Unlock()
+	asked := Requested(r.Book.Dir) // another device asked for "now"
+	if asked {
+		w = sources{kronos: true, sms: true}
+	}
 	if w.kronos || w.sms {
-		if _, err := r.run(w); err != nil {
+		_, err := r.run(w)
+		if err != nil {
 			log.Printf("[%s] WARN inbox import: %v", r.Book.Name, err)
+		}
+		if asked && err == nil {
+			if err := doneRequest(r.Book.Dir); err != nil {
+				log.Printf("[%s] WARN inbox request: %v", r.Book.Name, err)
+			}
+			log.Printf("[%s] inbox: ran the import another device asked for", r.Book.Name)
 		}
 	}
 	r.showSchedule(now)

@@ -1,19 +1,25 @@
-// Settings (the phone's fifth tab): the screens not in the bottom bar, default
-// category period, week/month/year start, look-ahead, theme, hide amounts, inbox
-// fallback categories and learned rules, CSV import/export, data health, sign out.
+// Settings, one card per feature with an index to jump between them: Look, Daily
+// alert, Periods, Home & menu, Accounts, Inbox (with learned rules), Phone (app
+// only), Data (export, import, health) and this device. Each card saves only its
+// own part of settings.md, so nothing appears twice.
 
 import { html, raw, qs, debounce, reducedMotion } from "../util.js";
-import { S, toast, formData, ro, sheet, PERIODS, catOptions, catName } from "../ui.js";
-import { get, put, post, del, postText, deviceKey, setDeviceKey } from "../api.js";
+import { S, toast, ro, sheet, PERIODS, catName } from "../ui.js";
+import { get, post, del, postText, deviceKey, setDeviceKey } from "../api.js";
 import { logout, navOrder, NAV_ITEMS, BOTTOM_COUNT } from "../main.js";
 import { menuCard, wireMenuCard } from "./menu.js";
 import { isApp } from "../native.js";
 import { phoneCard, wirePhoneCard } from "./phone.js";
-import { timingsCard, wireTimings } from "./inbox.js";
+import { inboxSettingsCard, wireInboxSettings } from "./inbox.js";
+import { lookCard, wireLook, alertsCard, wireAlerts, saveSettings } from "./look.js";
 import { pluginScreens } from "../plugins.js";
 
 const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+// Section id → index label (Phone only inside the app, Device only on the web).
+const SECTIONS = [["look", "Look"], ["alerts", "Alert"], ["periods", "Periods"], ["home", "Home & menu"], ["accounts", "Accounts"],
+  ["inbox", "Inbox"], ["phone", "Phone", () => isApp], ["data", "Data"], ["device", "Device", () => !isApp]];
 
 export async function render(root, ctx) {
   const st = S.state;
@@ -22,35 +28,44 @@ export async function render(root, ctx) {
   const more = navOrder().slice(BOTTOM_COUNT).map((k) => [k, NAV_ITEMS[k][0], NAV_ITEMS[k][2]]);
   const plugins = pluginScreens();
   const dis = ro() ? raw("disabled") : "";
+  const sel = (v, cur) => (v === cur ? raw("selected") : "");
+  const saveBtn = (t) => (ro() ? "" : html`<div class="row set-act"><span class="grow"></span><button class="primary" type="submit">${t}</button></div>`);
   root.innerHTML = String(html`
     ${more.length ? html`<nav class="card screens only-phone" aria-label="More screens"><ul class="list">${more.map(([k, l, i]) => html`<li><a class="item" href="#/${k}"><span class="ic">${i}</span><span class="main-t"><span class="t">${l}</span></span><span class="end faint">›</span></a></li>`)}</ul></nav>` : ""}
     ${plugins.length ? html`<nav class="card screens" aria-label="Plugins"><header><h2>Plugins</h2><span class="muted">personal add-ons</span></header><ul class="list">${plugins.map((p) => html`<li><a class="item" href="#/p/${p.id}"><span class="ic">${p.icon}</span><span class="main-t"><span class="t">${p.title}</span></span><span class="end faint">›</span></a></li>`)}</ul></nav>` : ""}
-    ${isApp ? phoneCard() : ""}
-    ${menuCard()}
-    <div class="grid two">
-      <form class="card" data-settings><header><h2>Preferences</h2></header>
+    <nav class="set-index" aria-label="Settings sections">${SECTIONS.filter(([, , on]) => !on || on()).map(([id, l]) => html`<button class="chip-btn" data-jump="${id}">${l}</button>`)}</nav>
+    <div class="set-grid">
+      ${lookCard()}
+      ${alertsCard()}
+      <form class="card set-sec" id="set-periods" data-periods><header><h2>Periods</h2></header>
         <label class="f"><span>Default period for categories, budgets and reports</span><select name="default_period" ${dis}>
-          ${PERIODS.filter(([k]) => k !== "custom").map(([k, l]) => html`<option value="${k}" ${k === s.default_period ? raw("selected") : ""}>${l === "Half-year" ? "Half-yearly" : l + "ly"}</option>`)}</select></label>
+          ${PERIODS.filter(([k]) => k !== "custom").map(([k, l]) => html`<option value="${k}" ${sel(k, s.default_period)}>${l === "Half-year" ? "Half-yearly" : l + "ly"}</option>`)}</select></label>
         <div class="fields two">
-          <label class="f"><span>Week starts on</span><select name="week_start" ${dis}>${WEEKDAYS.map((w) => html`<option value="${w}" ${w === s.week_start ? raw("selected") : ""}>${w[0].toUpperCase() + w.slice(1)}</option>`)}</select></label>
+          <label class="f"><span>Week starts on</span><select name="week_start" ${dis}>${WEEKDAYS.map((w) => html`<option value="${w}" ${sel(w, s.week_start)}>${w[0].toUpperCase() + w.slice(1)}</option>`)}</select></label>
           <label class="f"><span>Month starts on day</span><input name="month_start_day" type="number" min="1" max="28" value="${s.month_start_day}" ${dis}></label>
         </div>
-        <div class="fields two">
-          <label class="f"><span>Year starts in</span><select name="year_start_month" ${dis}>${MONTHS.map((m, i) => html`<option value="${i + 1}" ${i + 1 === s.year_start_month ? raw("selected") : ""}>${m}${i === 3 ? " (Indian FY)" : ""}</option>`)}</select></label>
-          <label class="f"><span>Look-ahead for upcoming (days)</span><input name="upcoming_days" type="number" min="1" max="365" value="${s.upcoming_days}" ${dis}></label>
-          <label class="f"><span>Re-check bank balances after (days)</span><input name="balance_check_days" type="number" min="1" max="365" value="${s.balance_check_days}" ${dis}></label>
-        </div>
-        <label class="f"><span>Theme</span><select name="theme" ${dis}>${[["auto", "Follow the device"], ["light", "Light"], ["dark", "Dark"]].map(([k, l]) => html`<option value="${k}" ${k === s.theme ? raw("selected") : ""}>${l}</option>`)}</select></label>
-        <label class="check"><input type="checkbox" name="hide_amounts" ${s.hide_amounts ? raw("checked") : ""} ${dis}> Hide amounts (blurred — tap an amount to peek)</label>
-        <div class="fields two">
-          <label class="f"><span>Inbox: expense category when unsure</span><select name="inbox_expense_category" ${dis}><option value="">Leave empty (I'll choose)</option>${catOptions("expense", s.inbox_expense_category)}</select></label>
-          <label class="f"><span>Inbox: income category when unsure</span><select name="inbox_income_category" ${dis}><option value="">Leave empty (I'll choose)</option>${catOptions("income", s.inbox_income_category)}</select></label>
-        </div>
-        ${ro() ? html`<p class="muted">The demo is read-only.</p>` : html`<button class="primary" type="submit">Save preferences</button>`}
+        <label class="f"><span>Year starts in</span><select name="year_start_month" ${dis}>${MONTHS.map((m, i) => html`<option value="${i + 1}" ${sel(i + 1, s.year_start_month)}>${m}${i === 3 ? " (Indian FY)" : ""}</option>`)}</select></label>
+        ${saveBtn("Save periods")}
       </form>
-      <div class="stack">
-        <div data-timings-slot></div>
+      <div class="set-sec stack" id="set-home">
+        <form class="card" data-homeprefs><header><h2>Home</h2><a href="#/home">Customize blocks on Home ✎</a></header>
+          <label class="f"><span>Look-ahead for upcoming (days)</span><input name="upcoming_days" type="number" min="1" max="365" value="${s.upcoming_days}" ${dis}></label>
+          <label class="check"><input type="checkbox" name="hide_amounts" ${s.hide_amounts ? raw("checked") : ""} ${dis}> Hide amounts (blurred — tap an amount to peek)</label>
+          ${saveBtn("Save home")}
+        </form>
+        ${menuCard()}
+      </div>
+      <form class="card set-sec" id="set-accounts" data-accprefs><header><h2>Accounts</h2><a href="#/accounts">Open accounts</a></header>
+        <label class="f"><span>Re-check bank balances after (days)</span><input name="balance_check_days" type="number" min="1" max="365" value="${s.balance_check_days}" ${dis}></label>
+        <p class="muted set-note">An account checked longer ago shows ○; one that doesn't match shows ❌ (and can raise the daily alert).</p>
+        ${saveBtn("Save accounts")}
+      </form>
+      <div class="set-sec stack" id="set-inbox-wrap">
+        ${inboxSettingsCard()}
         <div class="card" data-rules><header><h2>🧠 Learned rules</h2></header><p class="muted" style="margin:0">Loading…</p></div>
+      </div>
+      ${isApp ? html`<div class="set-sec wide" id="set-phone">${phoneCard()}</div>` : ""}
+      <div class="set-sec stack" id="set-data">
         <div class="card"><header><h2>Export & import</h2></header>
           <p class="muted" style="margin-top:0">Export every transaction as CSV (the transaction list exports what you filtered). The same format imports back.</p>
           <div class="row wrap"><a class="btn" href="/api/export.csv" download>Export all (CSV)</a>${ro() ? "" : html`<button data-import>Import CSV…</button>`}</div></div>
@@ -59,35 +74,43 @@ export async function render(root, ctx) {
           ${(st.problems || []).length ? html`<ul class="list">${st.problems.map((p) => html`<li style="padding:8px 0">${p.level === "info" ? "ℹ️" : "⚠️"} <b>${p.file}</b>${p.id ? html` <code>${p.id}</code>` : ""}<br><span class="muted">${p.msg}</span></li>`)}</ul>` : ""}
           ${st.load_error || (st.problems || []).some((p) => p.level !== "info") ? "" : html`<p class="pos" style="margin:0">✓ Every file loads and the books balance.</p>`}
           <p class="muted" style="font-size:.85rem;margin-bottom:0">Data lives in YAML files (accounts.md, categories.md, transactions/transaction_YYYYMM.md …). Edits made in other apps are picked up within seconds and every computed value is rebuilt.</p></div>
-        ${isApp ? "" : html`<div class="card"><header><h2>Account</h2></header>
+      </div>
+      ${isApp ? "" : html`<div class="set-sec stack" id="set-device">
+        <div class="card"><header><h2>Account</h2></header>
           <p style="margin-top:0">Signed in as <b>${st.user}</b>${ro() ? " (read-only demo)" : ""}. ${ro() ? "" : html`<span class="muted">The password is set in the server's .env file.</span>`}</p>
           <button data-logout>Sign out</button>
           <p class="faint" style="font-size:.8rem;margin-bottom:0">Arthik ${st.version} · <a href="/">About</a></p></div>
-        ${ro() ? "" : html`<div class="card" data-devkey></div>`}`}
-      </div>
+        ${ro() ? "" : html`<div class="card" data-devkey></div>`}</div>`}
     </div>`);
-  root.querySelector("[data-settings]").addEventListener("submit", async (e) => {
+
+  // Each form saves its own fields; the rest of settings.md stays as it is.
+  const form = (sel, pick, msg) => root.querySelector(sel)?.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const v = formData(e.target);
-    try {
-      await put("/api/settings", { ...v, month_start_day: +v.month_start_day, year_start_month: +v.year_start_month, upcoming_days: +v.upcoming_days, balance_check_days: +v.balance_check_days });
-      for (const k of Object.keys(S.view)) if (S.view[k] && S.view[k].period) S.view[k].period = v.default_period;
-      toast("Preferences saved");
-      ctx.refresh();
-    } catch (err) { toast(err.message, true); }
+    try { await saveSettings(pick(e.target), msg); ctx.refresh(); } catch (err) { toast(err.message, true); }
   });
+  form("[data-periods]", (f) => {
+    for (const k of Object.keys(S.view)) if (S.view[k] && S.view[k].period) S.view[k].period = f.default_period.value;
+    return { default_period: f.default_period.value, week_start: f.week_start.value, month_start_day: +f.month_start_day.value, year_start_month: +f.year_start_month.value };
+  }, "Periods saved");
+  form("[data-homeprefs]", (f) => ({ upcoming_days: +f.upcoming_days.value, hide_amounts: f.hide_amounts.checked }), "Home saved");
+  form("[data-accprefs]", (f) => ({ balance_check_days: +f.balance_check_days.value }), "Accounts saved");
+  wireInboxSettings(root, async (patch, msg) => { await saveSettings(patch, msg); ctx.refresh(); });
+  wireLook(root, ctx);
+  wireAlerts(root);
   root.querySelector("[data-logout]")?.addEventListener("click", logout);
   deviceKeyCard(root.querySelector("[data-devkey]"));
   if (isApp) wirePhoneCard(root, ctx);
   wireMenuCard(root);
   root.querySelector("[data-import]")?.addEventListener("click", () => importSheet(ctx));
   rulesCard(root.querySelector("[data-rules]"));
-  get("/api/inbox").then((res) => { // the inbox timings, also shown on the Inbox screen
-    if (!ctx.alive()) return;
-    const slot = root.querySelector("[data-timings-slot]");
-    slot.innerHTML = String(timingsCard(res));
-    wireTimings(slot, () => ctx.refresh());
-  }).catch(() => {});
+  const jump = (id) => {
+    const el = root.querySelector(`#set-${id}`) || root.querySelector(`#set-${id}-wrap`);
+    el?.scrollIntoView({ block: "start", behavior: reducedMotion() ? "auto" : "smooth" });
+    el?.classList.add("flash-sec");
+    setTimeout(() => el?.classList.remove("flash-sec"), 1200);
+  };
+  root.querySelector(".set-index").addEventListener("click", (e) => { const b = e.target.closest("[data-jump]"); if (b) jump(b.dataset.jump); });
+  if (ctx.params.get("s")) requestAnimationFrame(() => jump(ctx.params.get("s")));
 }
 
 // What merchants become in the inbox, learned when you accept drafts. There can be

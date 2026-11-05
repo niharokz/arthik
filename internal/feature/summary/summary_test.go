@@ -74,3 +74,45 @@ func TestBuild(t *testing.T) {
 		t.Errorf("newest = %+v", in.Newest)
 	}
 }
+
+func TestAlert(t *testing.T) {
+	b, err := book.Open(t.TempDir(), "test", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.Today = func() dates.Date { return dates.MustParse("2026-10-12") }
+	bank := model.Reported(money.FromRupees(900))
+	err = b.Mutate(func(d *book.Data, ch *book.Change) error {
+		d.Accounts = []model.Account{
+			{ID: "bank", Name: "Bank", Type: "bank", OpeningBalance: money.FromRupees(1000), BankBalance: &bank, BankDate: "2026-10-10"},
+			{ID: "cash", Name: "Cash", Type: "cash", OpeningBalance: money.FromRupees(50)},
+		}
+		ch.Accounts = true
+		for i := 0; i < 3; i++ {
+			d.SetDraft(model.Draft{ID: string(rune('a' + i)), Status: model.DraftPending, Date: "2026-10-11", Type: model.TxExpense, Amount: money.FromRupees(10), Title: "x"}, ch)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	build := func(a *model.Alerts) Alert {
+		var s Summary
+		_ = b.Mutate(func(d *book.Data, ch *book.Change) error { d.Settings.Alerts, ch.Settings = a, true; return nil })
+		_ = b.View(func(d *book.Data, c *book.Computed) error { s = Build(d, c, 0); return nil })
+		return s.Alert
+	}
+	a := build(&model.Alerts{Time: "08:30", Mismatch: true, Count: 30})
+	if !a.Show || a.Time != "08:30" || len(a.Mismatch) != 1 || a.Mismatch[0] != "Bank" || a.Count != 3 {
+		t.Errorf("mismatch alert = %+v", a)
+	}
+	if a = build(&model.Alerts{Time: "08:30", Mismatch: false, Count: 30}); a.Show || len(a.Mismatch) != 0 {
+		t.Errorf("both off = %+v", a)
+	}
+	if a = build(&model.Alerts{Time: "08:30", Mismatch: false, Count: 2}); !a.Show || a.Text != "3 items wait in the inbox and notifications" {
+		t.Errorf("count alert = %+v", a)
+	}
+	if a = build(&model.Alerts{Time: "08:30", Count: 0}); a.Show {
+		t.Errorf("count 0 means off: %+v", a)
+	}
+}

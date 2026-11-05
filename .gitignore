@@ -25,6 +25,7 @@ android/.env
 android/.cache/
 android/dist/
 android/.gradle/
+android/.kotlin/
 android/app/build/
 android/build/
 android/local.properties

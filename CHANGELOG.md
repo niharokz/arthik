@@ -2,6 +2,38 @@
 
 Versions before 1.0.1 were pre-releases and are numbered 0.x here.
 
+## 1.0.4 — 2026-11-05
+
+- **Matte look.** A calmer redesign of the web app and the phone app: line icons in the
+  menus, Plus Jakarta Sans for text and JetBrains Mono for amounts and small labels (both
+  bundled, no CDN), pill switches, quieter colours and a *New transaction* button in the
+  top bar on wide screens. The nss teal stays the default.
+- **Themes.** *Settings → Look*: nss (follows light/dark), AMOLED, Galaxy, White and Gold.
+  Any element — accent, background, cards, text, secondary text, lines, income, expense,
+  warning — can be given its own colour. Saved in `settings.md` (`look:`), so every device
+  looks the same.
+- **Card backgrounds.** None, glass, matte or opaque, for every card; a home block can
+  override it (*Customize home* → card).
+- **Chart types.** Spending, budgets and reports can be ranked bars, a donut, a pie or
+  columns; cash flow bars or lines; net worth area, line or bars. Chosen per chart in
+  *Settings → Look → Charts*.
+- **❌ for a bank mismatch.** An account whose bank check doesn't match now shows ❌
+  (was ⚠️).
+- **Daily alert on the phone.** Once a day, at a time set in *Settings → Daily alert*, the
+  phone app tells you when an account doesn't match the bank, or when the inbox and
+  notifications together hold more than a number you choose (default 30, 0 = never).
+  Switched on per phone in *Settings → Phone*; it replaces the morning inbox notice.
+- **Offline and online mode.** On the phone, *offline mode* (the phone is the main device)
+  makes drafts by itself, so *Run now* is off; in *online mode* the inbox's *Run on server*
+  writes `inbox/run_request.md`, Syncthing carries it to the server, the server turns SMS
+  into drafts and deletes the request, and the drafts sync back.
+- **Settings in sections.** One card per feature with an index to jump to it: Look, Daily
+  alert, Periods, Home & menu, Accounts, Inbox, Phone, Data, Device. The SMS → drafts
+  timing is set only in *Settings → Inbox*; the Inbox shows the status and the *now*
+  buttons.
+- **Logo.** The ₹ mark alone, without the ring, on a transparent background (web icon,
+  launcher, splash and notification icon).
+
 ## 1.0.3 — 2026-11-04
 
 - **No more cleared / uncleared.** Every saved transaction has happened; future-dated ones
@@ -29,6 +61,10 @@ Versions before 1.0.1 were pre-releases and are numbered 0.x here.
   as you set them.
 - **Category picker.** Choosing a category opens a sheet: search, recently used, and a grid
   of groups that opens into their sub-categories — one or two taps, no long list.
+- **`scripts/release.sh`**: stops when the tests fail (a failure used to be ignored), skips
+  the local tests when the installed Go is older than `go.mod` needs (CI runs them), and
+  pushes to every push URL of `origin`: a mirror that fails (e.g. GitHub without a key) is
+  reported and the release goes on; only a failed GitLab push stops it.
 - **Personal plugins.** Optional screens outside the core app, switched on by their own
   data file. First one: **Loans** (`loans.md`) — lender summary, repayment schedule (the
   lender's rows, then estimated from the rate until payoff), EMIs left, interest still to

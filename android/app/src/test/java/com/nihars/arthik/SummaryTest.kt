@@ -54,4 +54,20 @@ class SummaryTest {
         assertEquals(listOf("Swiggy · ₹486", "Refund · +₹300", "and 4 more"), s().notifyLines)
         assertEquals(listOf("Swiggy · ₹486", "Refund · +₹300"), s(pending = 2).notifyLines)
     }
+
+    @Test
+    fun dailyAlert() {
+        val a = Summary.Alert(time = "08:30", show = true, mismatch = listOf("HDFC Savings"), count = 34, limit = 30, text = "x")
+        assertTrue(a.show)
+        assertEquals(8 to 30, a.clock)
+        assertEquals("❌ HDFC Savings doesn't match the bank", a.title)
+        assertEquals("accounts", a.route)
+        val two = a.copy(mismatch = listOf("A", "B"))
+        assertEquals("❌ 2 accounts don't match the bank", two.title)
+        val full = a.copy(mismatch = emptyList())
+        assertEquals("34 waiting in the inbox and notifications", full.title)
+        assertEquals("inbox", full.route)
+        assertEquals(null, a.copy(time = "25:00").clock)
+        assertFalse(s().alert.show) // an older engine without the alert
+    }
 }
