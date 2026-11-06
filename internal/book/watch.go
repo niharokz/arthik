@@ -17,7 +17,7 @@ type sig struct {
 // watched lists the files whose edits by other apps should be picked up.
 // money.md is output-only and deliberately not watched.
 func (b *Book) watched() []string {
-	files := []string{b.path(SettingsFile), b.path(AccountsFile), b.path(CategoriesFile), b.path(LabelsFile), b.path(DraftsFile), b.path(RulesFile)}
+	files := []string{b.path(SettingsFile), b.path(AccountsFile), b.path(CategoriesFile), b.path(DraftsFile), b.path(RulesFile)}
 	tx, _ := filepath.Glob(filepath.Join(b.Dir, TxDir, "transaction_*.md")) // includes conflict copies
 	cc, _ := filepath.Glob(filepath.Join(b.Dir, "*.sync-conflict-*.md"))
 	ic, _ := filepath.Glob(filepath.Join(b.Dir, InboxDir, "*.sync-conflict-*.md"))

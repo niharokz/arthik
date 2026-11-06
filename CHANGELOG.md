@@ -2,6 +2,33 @@
 
 Versions before 1.0.1 were pre-releases and are numbered 0.x here.
 
+## 1.0.5 — 2026-11-06
+
+- **Eye in the top bar.** One tap hides or shows every amount (the same switch as
+  *Settings → Home → Hide amounts*, saved for every device).
+- **Lock the home layout.** *Settings → Home*: hides *✎ Customize home*.
+- **Labels removed.** The Labels screen, the form field, the filter, the label report
+  and label blocks on Home are gone. `labels:` on transactions, drafts and learned rules
+  is dropped when Arthik next writes those files; `labels.md` is no longer read (delete
+  it whenever you like). A `labels` column in an old CSV is ignored on import.
+- **Calculator keys.** + − × ÷ under the amount (a phone's number pad has none);
+  `450+120` becomes `570.00` when you leave the field.
+- **Swipe in the inbox.** Right accepts a draft, left rejects it.
+- **Most used categories.** The category picker starts with your six most used
+  categories of the last 90 days, the same on every device.
+- **Running balance.** An account's transactions show the balance after each one.
+- **Month pace.** Under the period on Home: how much of the period has gone against how
+  much of the budget is spent, warm when spending runs ahead.
+- **Linked rows and quieter list.** In any transaction list the category and account
+  names open their screens; category icons sit in a soft circle of the category's
+  colour; transfers read *A → B*; Home's Assets/Owed open Accounts.
+- **Account cards.** A strip in the account's colour, the ✅ / ❌ / ○ check in the
+  corner, and a count beside each group's subtotal.
+- **Widgets follow the look.** The phone's home-screen widgets take their colours and
+  card background from *Settings → Look*; the per-phone widget look is gone.
+- **Density.** *Settings → Look*: Comfortable or Compact.
+- **Blackpink theme**, matte black with a soft pink accent.
+
 ## 1.0.4 — 2026-11-05
 
 - **Matte look.** A calmer redesign of the web app and the phone app: line icons in the

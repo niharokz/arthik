@@ -53,7 +53,6 @@ func add(t *testing.T, b *Book, e Entry) string {
 		if err != nil {
 			return err
 		}
-		tx.Labels = d.EnsureLabels(tx.Labels, ch)
 		d.SetTx(tx, ch)
 		id = tx.ID
 		return nil
@@ -84,7 +83,7 @@ func read(t *testing.T, b *Book, name string) string {
 func TestDoubleEntryAndSync(t *testing.T) {
 	b := newBook(t)
 	add(t, b, Entry{Type: model.TxIncome, Date: "2026-10-01", Title: "Pay", Amount: money.FromRupees(50000), Account: "bank", Category: "salary"})
-	add(t, b, Entry{Type: model.TxExpense, Date: "2026-10-02", Title: "Lunch", Amount: money.FromRupees(300), Account: "card", Category: "food-out", Labels: []string{"Office"}})
+	add(t, b, Entry{Type: model.TxExpense, Date: "2026-10-02", Title: "Lunch", Amount: money.FromRupees(300), Account: "card", Category: "food-out"})
 	add(t, b, Entry{Type: model.TxTransfer, Date: "2026-10-03", Title: "Pay card", Amount: money.FromRupees(1300), Account: "bank", ToAccount: "card"})
 	add(t, b, Entry{Type: model.TxExpense, Date: "2026-09-15", Title: "Backdated", Amount: money.FromRupees(200), Account: "bank", Splits: []Split{
 		{Category: "food", Amount: money.FromRupees(150)}, {Category: "food-out", Amount: money.FromRupees(50)}}})
@@ -101,9 +100,6 @@ func TestDoubleEntryAndSync(t *testing.T) {
 	}
 	if s := read(t, b, CategoriesFile); !strings.Contains(s, "total: '300.00'") { // food (Oct) = child 300
 		t.Errorf("categories.md not synced:\n%s", s)
-	}
-	if s := read(t, b, LabelsFile); !strings.Contains(s, "name: Office") || !strings.Contains(s, "count: 1") {
-		t.Errorf("labels.md not synced:\n%s", s)
 	}
 	if s := read(t, b, MoneyFile); !strings.Contains(s, "balanced: true") {
 		t.Errorf("money.md not balanced:\n%s", s)
@@ -158,7 +154,7 @@ func TestBrokenFileIsNeverOverwritten(t *testing.T) {
 
 func TestExternalEditPickedUpAndRepaired(t *testing.T) {
 	b := newBook(t)
-	// A transaction typed by hand in Obsidian: no id, wrong month file, new label.
+	// A transaction typed by hand in Obsidian: no id, wrong month file, a retired labels key.
 	p := filepath.Join(b.Dir, TxDir, "transaction_202609.md")
 	hand := "transactions:\n  - date: '2026-10-02'\n    type: expense\n    title: Hand typed\n    labels: [goa]\n    postings:\n      - account: bank\n        amount: -250\n      - category: food\n        amount: 250\n"
 	if err := os.WriteFile(p, []byte(hand), 0o644); err != nil {
@@ -173,8 +169,11 @@ func TestExternalEditPickedUpAndRepaired(t *testing.T) {
 	if s := read(t, b, filepath.Join(TxDir, "transaction_202610.md")); !strings.Contains(s, "Hand typed") || !strings.Contains(s, "id: t-20261002-") {
 		t.Errorf("not moved to its month with an id:\n%s", s)
 	}
-	if s := read(t, b, LabelsFile); !strings.Contains(s, "id: goa") {
-		t.Errorf("label not added:\n%s", s)
+	if s := read(t, b, filepath.Join(TxDir, "transaction_202610.md")); strings.Contains(s, "labels") || strings.Contains(s, "goa") {
+		t.Errorf("retired labels written back:\n%s", s)
+	}
+	if _, err := os.Stat(filepath.Join(b.Dir, "labels.md")); err == nil {
+		t.Error("labels.md created")
 	}
 }
 

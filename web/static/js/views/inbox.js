@@ -205,6 +205,7 @@ export async function render(root, ctx) {
     ${timingsCard(res)}
     <p class="inbox-foot faint">${st.ai ? "✨ AI suggests categories for new merchants · " : ""}🧠 Accepting teaches Arthik the merchant's category.</p>`);
   wireTimings(root, () => ctx.refresh());
+  if (!ro()) wireSwipe(root);
 
   const byId = (id) => items.find((x) => x.id === id);
   const act = async (fn, okMsg, kind = "ok") => {
@@ -247,4 +248,40 @@ export async function render(root, ctx) {
     if (!(await confirmSheet("Already recorded?", `“${x.title}” will be linked to “${x.same.title}” and nothing new is added.`, "Link", false))) return;
     act(() => leave(x.id).then(() => post(path(x.id, "match"), { txn: x.same.id })), "Linked");
   }));
+}
+
+// Swipe a waiting draft: right = Accept, left = Reject (the same as tapping the button,
+// so a draft with something missing still opens the form). Vertical scrolling stays.
+const SWIPE_AT = 0.32; // share of the card's width that commits
+function wireSwipe(root) {
+  root.querySelectorAll("li.dcard.pending").forEach((li) => {
+    let x0 = 0, y0 = 0, dx = 0, on = false, id = null;
+    const reset = () => { li.style.translate = ""; li.classList.remove("swiping", "sw-ok", "sw-no"); on = false; };
+    li.addEventListener("pointerdown", (e) => {
+      if (e.button || e.target.closest("button, a, details, input, select")) return;
+      x0 = e.clientX; y0 = e.clientY; dx = 0; id = e.pointerId; on = true;
+    });
+    li.addEventListener("pointermove", (e) => {
+      if (!on || e.pointerId !== id) return;
+      dx = e.clientX - x0;
+      if (!li.classList.contains("swiping")) {
+        if (Math.abs(e.clientY - y0) > Math.abs(dx)) { on = false; return; } // a scroll
+        if (Math.abs(dx) < 12) return;
+        li.classList.add("swiping");
+        li.setPointerCapture(id);
+      }
+      li.style.translate = `${dx}px 0`; // translate, not transform: the card's entry animation owns transform
+      const far = Math.abs(dx) > li.offsetWidth * SWIPE_AT;
+      li.classList.toggle("sw-ok", far && dx > 0);
+      li.classList.toggle("sw-no", far && dx < 0);
+    });
+    const end = () => {
+      if (!on) return;
+      const far = Math.abs(dx) > li.offsetWidth * SWIPE_AT, swiped = li.classList.contains("swiping");
+      reset();
+      if (swiped && far) li.querySelector(dx > 0 ? "[data-accept]" : "[data-reject]")?.click();
+    };
+    li.addEventListener("pointerup", end);
+    li.addEventListener("pointercancel", reset);
+  });
 }

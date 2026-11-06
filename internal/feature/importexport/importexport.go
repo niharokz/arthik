@@ -2,10 +2,9 @@
 // (with a dry-run preview). The export format imports back unchanged.
 //
 // Columns: id, date, time, type, title, amount, account, to_account, category,
-// labels, notes, splits.
+// notes, splits (a "labels" column from versions before 1.0.5 is ignored).
 //   - account / to_account / category are names ("Food > Groceries" for a child);
 //     ids are accepted on import too.
-//   - labels are separated by "|".
 //   - splits holds split lines "Category=amount|@Account=amount" (an @ line moves the
 //     money into that account, e.g. a loan's principal); for free-form
 //     journal entries it holds every posting "account:Name=-100|category:Name=100".
@@ -17,7 +16,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sort"
 	"strings"
 
 	"gitlab.com/niharokz/arthik/internal/book"
@@ -29,7 +27,7 @@ import (
 )
 
 // Columns is the export header.
-var Columns = []string{"id", "date", "time", "type", "title", "amount", "account", "to_account", "category", "labels", "notes", "splits"}
+var Columns = []string{"id", "date", "time", "type", "title", "amount", "account", "to_account", "category", "notes", "splits"}
 
 // Register adds the routes.
 func Register(rt *httpx.Router) {
@@ -63,14 +61,6 @@ func export(c *httpx.Ctx) error {
 		for i := len(txs) - 1; i >= 0; i-- { // oldest first
 			t := txs[i]
 			e := book.EntryOf(t)
-			var labels []string
-			for _, l := range t.Labels {
-				if lb, ok := d.Label(l); ok {
-					labels = append(labels, lb.Name)
-				} else {
-					labels = append(labels, l)
-				}
-			}
 			var splits []string
 			for _, s := range e.Splits {
 				if s.Account != "" {
@@ -101,7 +91,7 @@ func export(c *httpx.Ctx) error {
 				acc = accName(d, e.Account)
 			}
 			rows = append(rows, []string{t.ID, t.Date, t.Time, e.Type, t.Title, e.Amount.String(), acc, to, cat,
-				strings.Join(labels, "|"), t.Notes, strings.Join(splits, "|")})
+				t.Notes, strings.Join(splits, "|")})
 		}
 		return nil
 	})
@@ -125,7 +115,6 @@ type Report struct {
 	Errors     []LineErr `json:"errors"`
 	Accounts   []string  `json:"new_accounts"`
 	Categories []string  `json:"new_categories"`
-	Labels     []string  `json:"new_labels"`
 	DryRun     bool      `json:"dry_run"`
 }
 
@@ -295,7 +284,6 @@ func apply(d *book.Data, ch *book.Change, recs [][]string, create bool, rep *Rep
 			return
 		}
 	}
-	labelsBefore := len(d.Labels)
 	res := &resolver{d: d, ch: ch, create: create, rep: rep}
 	for n, row := range recs[1:] {
 		line := n + 2
@@ -336,9 +324,6 @@ func apply(d *book.Data, ch *book.Change, recs [][]string, create bool, rep *Rep
 			Amount: amt, Notes: get(row, "notes")}
 		if e.Title == "" {
 			e.Title = "(no title)"
-		}
-		if l := get(row, "labels"); l != "" {
-			e.Labels = strings.Split(l, "|")
 		}
 		kind := model.KindExpense
 		if typ == model.TxIncome {
@@ -428,12 +413,7 @@ func apply(d *book.Data, ch *book.Change, recs [][]string, create bool, rep *Rep
 			fail(err)
 			continue
 		}
-		t.Labels = d.EnsureLabels(t.Labels, ch)
 		d.SetTx(t, ch)
 		rep.Imported++
 	}
-	for _, l := range d.Labels[labelsBefore:] {
-		rep.Labels = append(rep.Labels, l.Name)
-	}
-	sort.Strings(rep.Labels)
 }

@@ -5,7 +5,6 @@ import android.appwidget.AppWidgetProvider
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
-import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -61,12 +60,8 @@ object Widget {
         }.start()
     }
 
-    /** The look chosen in Settings → Phone, for the phone's current light/dark mode. */
-    fun look(ctx: Context): WidgetLook {
-        val p = Prefs(ctx)
-        val night = ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
-        return WidgetLook.resolve(p.widgetBg, p.widgetOpacity, p.widgetText, night)
-    }
+    /** The app's look (Settings → Look), as last sent by the app. */
+    fun look(ctx: Context): WidgetLook = WidgetLook.decode(Prefs(ctx).widgetTheme) ?: WidgetLook.DEFAULT
 
     /** Draws [s] on every placed widget (null = folder not set up yet). */
     fun draw(ctx: Context, s: Summary?) {

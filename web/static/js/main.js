@@ -5,9 +5,9 @@
 
 import { html, raw, countUp, replay } from "./util.js";
 import { S, loadState, toast, ro, closeTopSheet, watchSegments } from "./ui.js";
-import { isApp, call } from "./native.js";
+import { isApp, call, haptic } from "./native.js";
 import { appGate } from "./appmode.js";
-import { get, post, flush, onQueue, queue, deviceKey, setDeviceKey } from "./api.js";
+import { get, post, put, flush, onQueue, queue, deviceKey, setDeviceKey } from "./api.js";
 import { openTx } from "./txform.js";
 import { loadPlugins, pluginScreen, pluginScreens } from "./plugins.js";
 import { icon } from "./icons.js";
@@ -20,7 +20,6 @@ import * as budgets from "./views/budgets.js";
 import * as inbox from "./views/inbox.js";
 import * as reports from "./views/reports.js";
 import * as calendar from "./views/calendar.js";
-import * as labels from "./views/labels.js";
 import * as settings from "./views/settings.js";
 import * as notifications from "./views/notifications.js";
 
@@ -54,7 +53,6 @@ const ROUTES = {
   notifications: [notifications, "notifications", "Notifications"],
   p: [pluginView, "settings", "Plugin"],
   reports: [reports, "reports", "Reports"],
-  labels: [labels, "labels", "Labels"],
   settings: [settings, "settings", "Settings"],
   more: [settings, "settings", "Settings"], // old links
 };
@@ -63,7 +61,7 @@ const ROUTES = {
 export const NAV_ITEMS = {
   home: ["Overview", "Home", "🏠"], tx: ["Transactions", "Transactions", "🧾"], accounts: ["Accounts", "Accounts", "🏦"],
   reports: ["Reports", "Reports", "📊"], calendar: ["Calendar", "Calendar", "📅"], categories: ["Categories", "Categories", "🗂️"],
-  budgets: ["Budgets", "Budgets", "🎯"], labels: ["Labels", "Labels", "🏷️"],
+  budgets: ["Budgets", "Budgets", "🎯"],
 };
 export const BOTTOM_COUNT = 4; // the first 4 go in the phone's bottom bar, the rest are listed in Settings
 
@@ -101,6 +99,7 @@ function shell() {
     </nav>
     <div class="main">
       <header class="top"><button class="ghost icon" data-back hidden aria-label="Back">‹</button><span class="top-logo"><img src="/icon.svg" alt=""></span><h1 data-title>Arthik</h1><span data-qbadge></span><span data-actions class="row"></span>
+        <button class="bell" data-eye aria-pressed="${!!st.settings.hide_amounts}" aria-label="Hide amounts" title="Hide amounts">${icon(st.settings.hide_amounts ? "eyeoff" : "eye", 20)}</button>
         <a class="bell" href="#/inbox" data-nav="inbox" aria-label="Inbox">${icon("inbox", 20)}<i class="count warm" data-inbox-count></i></a>
         <a class="bell" href="#/notifications" data-nav="notifications" aria-label="Notifications">${icon("bell", 20)}<i class="count" data-notice-count></i></a>
         ${ro() ? "" : html`<button class="primary newtx" data-add>${icon("plus", 16)}New transaction</button>`}</header>
@@ -113,6 +112,7 @@ function shell() {
   root.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => openTx({}, () => refresh())));
   root.querySelector("[data-back]").addEventListener("click", () => history.back());
   root.querySelector("[data-logout]")?.addEventListener("click", logout);
+  root.querySelector("[data-eye]").addEventListener("click", (e) => toggleAmounts(e.currentTarget));
   banners();
   queueBadge(queue().length);
   badges();
@@ -321,3 +321,16 @@ addEventListener("scroll", () => {
 
 watchSegments();
 boot();
+
+// The eye in the top bar: hide or show every amount at once (Settings → Home keeps the
+// same switch). Saved to settings.md, so every device follows; the demo only flips it here.
+async function toggleAmounts(btn) {
+  const s = S.state.settings, on = !s.hide_amounts;
+  s.hide_amounts = on;
+  document.body.classList.toggle("hide-amounts", on);
+  btn.innerHTML = String(icon(on ? "eyeoff" : "eye", 20));
+  btn.setAttribute("aria-pressed", on);
+  haptic();
+  if (ro()) return;
+  try { await put("/api/settings", s); } catch (err) { toast(err.message, true); }
+}

@@ -7,7 +7,7 @@
 //  2. an atomic rewrite of only the files that changed (definition files and the
 //     affected transaction_YYYYMM.md months), then
 //  3. a rebuild of every computed value — account balances in accounts.md,
-//     category totals in categories.md, label counts in labels.md and the overview
+//     category totals in categories.md and the overview
 //     in money.md — written back only when they actually changed.
 //
 // Transactions are the single source of truth; everything computed can be thrown
@@ -40,7 +40,6 @@ const (
 	SettingsFile   = "settings.md"
 	AccountsFile   = "accounts.md"
 	CategoriesFile = "categories.md"
-	LabelsFile     = "labels.md"
 	MoneyFile      = "money.md"
 	TxDir          = "transactions"
 	InboxDir       = "inbox"
@@ -56,7 +55,6 @@ type Data struct {
 	Settings   model.Settings
 	Accounts   []model.Account
 	Categories []model.Category
-	Labels     []model.Label
 	Drafts     []model.Draft
 	SMSImport  string // when bank SMS were last turned into drafts (stamp, kept in drafts.md)
 	Rules      []model.Rule
@@ -70,7 +68,6 @@ type Data struct {
 type index struct {
 	acc  map[string]int
 	cat  map[string]int
-	lab  map[string]int
 	dr   map[string]int
 	rule map[string]int
 	tx   map[string]int
@@ -93,8 +90,8 @@ type Problem struct {
 
 // Change marks which files a mutation touched.
 type Change struct {
-	Settings, Accounts, Categories, Labels, Drafts, Rules bool
-	Months                                                map[string]bool
+	Settings, Accounts, Categories, Drafts, Rules bool
+	Months                                        map[string]bool
 }
 
 // Month marks a transaction month file as changed.
@@ -108,7 +105,7 @@ func (c *Change) Month(key string) {
 }
 
 func (c *Change) any() bool {
-	return c.Settings || c.Accounts || c.Categories || c.Labels || c.Drafts || c.Rules || len(c.Months) > 0
+	return c.Settings || c.Accounts || c.Categories || c.Drafts || c.Rules || len(c.Months) > 0
 }
 
 // Book is one dataset.
@@ -252,9 +249,6 @@ type accountsDoc struct {
 type categoriesDoc struct {
 	Categories []model.Category `yaml:"categories"`
 }
-type labelsDoc struct {
-	Labels []model.Label `yaml:"labels"`
-}
 type draftsDoc struct {
 	SMSImport string        `yaml:"sms_imported,omitempty"`
 	Drafts    []model.Draft `yaml:"drafts"`
@@ -297,15 +291,18 @@ func (b *Book) reloadLocked() error {
 	var cd categoriesDoc
 	read(CategoriesFile, &cd)
 	d.Categories = cd.Categories
-	var ld labelsDoc
-	read(LabelsFile, &ld)
-	d.Labels = ld.Labels
 	var dd draftsDoc
 	read(DraftsFile, &dd)
 	d.Drafts, d.SMSImport = dd.Drafts, dd.SMSImport
+	for i := range d.Drafts {
+		model.DropKeys(d.Drafts[i].Extra, model.RetiredDraftKeys)
+	}
 	var rd rulesDoc
 	read(RulesFile, &rd)
 	d.Rules = rd.Rules
+	for i := range d.Rules {
+		model.DropKeys(d.Rules[i].Extra, model.RetiredRuleKeys)
+	}
 
 	// Transactions: main month files plus any Syncthing conflict copies.
 	files, _ := filepath.Glob(filepath.Join(b.Dir, TxDir, "transaction_*.md"))
@@ -372,7 +369,7 @@ func (b *Book) reloadLocked() error {
 		if err := b.persistLocked(d, &ch); err != nil {
 			log.Printf("[%s] WARN could not save repairs: %v", b.Name, err)
 		} else {
-			log.Printf("[%s] repaired data files (ids / months / labels / merges)", b.Name)
+			log.Printf("[%s] repaired data files (ids / months / merges)", b.Name)
 			b.removeConflicts(merged)
 		}
 	} else if len(merged) > 0 && b.autoWrite() {
@@ -411,6 +408,9 @@ func normSettings(s model.Settings) model.Settings {
 		s.Theme = def.Theme
 	}
 	s.Look, s.Alerts = NormLook(s.Look), NormAlerts(s.Alerts)
+	s.Home = slices.DeleteFunc(s.Home, func(h model.HomeSection) bool { // drop retired block types (labels, 1.0.5)
+		return !slices.Contains(model.HomeBuiltins, h.Type) && !slices.Contains(model.HomeCustom, h.Type)
+	})
 	if len(s.NavOrder) > 0 {
 		s.NavOrder, _ = model.NormNav(s.NavOrder) // e.g. "scheduled" from 0.2.0 → "inbox"
 	}
@@ -430,6 +430,9 @@ func NormLook(l *model.Look) *model.Look {
 	}
 	if !slices.Contains(model.CardStyles, out.Cards) {
 		out.Cards = def.Cards
+	}
+	if !slices.Contains(model.Densities, out.Density) {
+		out.Density = def.Density
 	}
 	out.Colors = map[string]string{}
 	for k, v := range l.Colors {
@@ -470,8 +473,8 @@ func NormAlerts(a *model.Alerts) *model.Alerts {
 	return &out
 }
 
-// fixup repairs missing definition ids and labels used on transactions but missing
-// from labels.md (transaction ids and months are handled by resolveTxns).
+// fixup repairs missing definition ids (transaction ids and months are handled by
+// resolveTxns).
 func (d *Data) fixup(_ *[]Problem) Change {
 	var ch Change
 	seen := map[string]bool{}
@@ -495,19 +498,6 @@ func (d *Data) fixup(_ *[]Problem) Change {
 		}
 		seen["c:"+c.ID] = true
 	}
-	labels := map[string]bool{}
-	for _, l := range d.Labels {
-		labels[l.ID] = true
-	}
-	for _, t := range d.Txns {
-		for _, l := range t.Labels {
-			if l != "" && !labels[l] {
-				labels[l] = true
-				d.Labels = append(d.Labels, model.Label{ID: l, Name: l})
-				ch.Labels = true
-			}
-		}
-	}
 	return ch
 }
 
@@ -516,7 +506,6 @@ func (c *Change) merge(o Change) {
 	c.Settings = c.Settings || o.Settings
 	c.Accounts = c.Accounts || o.Accounts
 	c.Categories = c.Categories || o.Categories
-	c.Labels = c.Labels || o.Labels
 	c.Drafts = c.Drafts || o.Drafts
 	c.Rules = c.Rules || o.Rules
 	for k := range o.Months {
@@ -531,7 +520,6 @@ const (
 	hdrSettings   = "arthik settings — safe to edit."
 	hdrAccounts   = "arthik accounts — edit freely; balance and projected_balance are computed from the transactions and rewritten by arthik.\nopening_balance is signed: money you owe (credit cards, loans) is negative."
 	hdrCategories = "arthik categories — edit freely; period and total are computed for the default period in settings.md and rewritten by arthik.\nkind: expense | income | both.  parent: id of the parent category (two levels)."
-	hdrLabels     = "arthik labels — count is computed."
 	hdrDrafts     = "arthik inbox — transactions waiting for review (from SMS, Kronos …). Managed by arthik; accept or reject them in the app."
 	hdrRules      = "arthik learned rules — what a merchant or name becomes when it shows up in the inbox. Learned when you accept a draft; edit or delete freely."
 	hdrTx         = "arthik transactions — one file per month. Each transaction's postings must sum to zero (+ debit, - credit)."
@@ -554,11 +542,6 @@ func (b *Book) persistLocked(d *Data, ch *Change) error {
 	}
 	if ch.Categories {
 		if err := w(CategoriesFile, hdrCategories, categoriesDoc{nonNil(d.Categories)}); err != nil {
-			return err
-		}
-	}
-	if ch.Labels {
-		if err := w(LabelsFile, hdrLabels, labelsDoc{nonNil(d.Labels)}); err != nil {
 			return err
 		}
 	}
@@ -635,7 +618,6 @@ func (d *Data) clone() *Data {
 		Settings:   d.Settings,
 		Accounts:   append([]model.Account(nil), d.Accounts...),
 		Categories: append([]model.Category(nil), d.Categories...),
-		Labels:     append([]model.Label(nil), d.Labels...),
 		Drafts:     append([]model.Draft(nil), d.Drafts...),
 		SMSImport:  d.SMSImport,
 		Rules:      append([]model.Rule(nil), d.Rules...),
@@ -669,7 +651,7 @@ func txLess(a, b model.Transaction) bool {
 }
 
 func (d *Data) reindex() {
-	ix := index{acc: map[string]int{}, cat: map[string]int{}, lab: map[string]int{}, dr: map[string]int{}, rule: map[string]int{}, tx: map[string]int{}, kids: map[string][]string{}}
+	ix := index{acc: map[string]int{}, cat: map[string]int{}, dr: map[string]int{}, rule: map[string]int{}, tx: map[string]int{}, kids: map[string][]string{}}
 	for i, a := range d.Accounts {
 		ix.acc[a.ID] = i
 	}
@@ -680,9 +662,6 @@ func (d *Data) reindex() {
 		if c.Parent != "" {
 			ix.kids[c.Parent] = append(ix.kids[c.Parent], c.ID)
 		}
-	}
-	for i, l := range d.Labels {
-		ix.lab[l.ID] = i
 	}
 	for i, x := range d.Drafts {
 		ix.dr[x.ID] = i
@@ -716,15 +695,6 @@ func (d *Data) Category(id string) (model.Category, bool) {
 
 // Children returns the child category ids of parent.
 func (d *Data) Children(parent string) []string { return d.idx.kids[parent] }
-
-// Label returns the label with id.
-func (d *Data) Label(id string) (model.Label, bool) {
-	i, ok := d.idx.lab[id]
-	if !ok {
-		return model.Label{}, false
-	}
-	return d.Labels[i], true
-}
 
 // Draft returns the inbox draft with id.
 func (d *Data) Draft(id string) (model.Draft, bool) {

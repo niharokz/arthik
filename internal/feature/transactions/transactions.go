@@ -83,12 +83,45 @@ func list(c *httpx.Ctx) error {
 			items = append(items, view.TxOf(all[i], d, comp))
 		}
 		out = map[string]any{"items": items, "total": len(all), "sums": s}
+		if len(f.Accounts) == 1 && c.R.URL.Query().Get("running") == "1" {
+			out["balances"] = running(d, comp, f.Accounts[0], items)
+		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
 	return c.OK(out)
+}
+
+// running is the account's balance after each listed transaction (a passbook column):
+// opening balance plus every valid posting to the account up to and including it,
+// in ledger order (date, time, id).
+func running(d *book.Data, comp *book.Computed, acc string, items []view.Tx) map[string]money.Amount {
+	a, ok := d.Account(acc)
+	if !ok {
+		return map[string]money.Amount{}
+	}
+	want := map[string]bool{}
+	for _, x := range items {
+		want[x.ID] = true
+	}
+	out := map[string]money.Amount{}
+	bal := a.OpeningBalance
+	for _, t := range d.Txns {
+		if !comp.Valid[t.ID] {
+			continue
+		}
+		for _, p := range t.Postings {
+			if p.Account == acc {
+				bal += p.Amount
+			}
+		}
+		if want[t.ID] {
+			out[t.ID] = bal
+		}
+	}
+	return out
 }
 
 func get(c *httpx.Ctx) error {
@@ -133,7 +166,6 @@ func create(c *httpx.Ctx) error {
 		if err != nil {
 			return err
 		}
-		t.Labels = d.EnsureLabels(t.Labels, ch)
 		d.SetTx(t, ch)
 		id = t.ID
 		return nil
@@ -161,7 +193,6 @@ func update(c *httpx.Ctx) error {
 			return err
 		}
 		t.Extra = old.Extra // keep fields added by hand
-		t.Labels = d.EnsureLabels(t.Labels, ch)
 		d.SetTx(t, ch)
 		return nil
 	})
@@ -185,53 +216,24 @@ func remove(c *httpx.Ctx) error {
 	return c.OK(map[string]bool{"ok": true})
 }
 
-// bulk applies one action to many transactions: delete, add_label, remove_label.
+// bulk applies one action to many transactions (delete).
 func bulk(c *httpx.Ctx) error {
 	var in struct {
 		IDs    []string `json:"ids"`
 		Action string   `json:"action"`
-		Value  string   `json:"value"`
 	}
 	if err := c.Decode(&in); err != nil {
 		return err
 	}
 	n := 0
 	err := c.Book.Mutate(func(d *book.Data, ch *book.Change) error {
-		label := ""
-		if in.Action == "add_label" {
-			ls := d.EnsureLabels([]string{in.Value}, ch)
-			if len(ls) == 0 {
-				return fmt.Errorf("enter a label")
-			}
-			label = ls[0]
+		if in.Action != "delete" {
+			return fmt.Errorf("unknown action %q", in.Action)
 		}
 		for _, id := range in.IDs {
-			t, ok := d.Tx(id)
-			if !ok {
-				continue
+			if d.DeleteTx(id, ch) {
+				n++
 			}
-			switch in.Action {
-			case "delete":
-				d.DeleteTx(id, ch)
-			case "add_label":
-				if t.HasLabel(label) {
-					continue
-				}
-				t.Labels = append(append([]string(nil), t.Labels...), label)
-				d.SetTx(t, ch)
-			case "remove_label":
-				var keep []string
-				for _, l := range t.Labels {
-					if l != in.Value {
-						keep = append(keep, l)
-					}
-				}
-				t.Labels = keep
-				d.SetTx(t, ch)
-			default:
-				return fmt.Errorf("unknown action %q", in.Action)
-			}
-			n++
 		}
 		return nil
 	})
@@ -251,7 +253,6 @@ type Suggestion struct {
 	ToAccount string       `json:"to_account,omitempty"`
 	Category  string       `json:"category,omitempty"`
 	Splits    []book.Split `json:"splits,omitempty"`
-	Labels    []string     `json:"labels,omitempty"`
 	Notes     string       `json:"notes,omitempty"`
 	Uses      int          `json:"uses"`
 	Last      string       `json:"last"` // date of the latest use
@@ -285,7 +286,7 @@ func suggest(c *httpx.Ctx) error {
 				uses = old.Uses + 1
 			}
 			byTitle[key] = &Suggestion{Title: t.Title, Type: e.Type, Amount: e.Amount, Account: e.Account,
-				ToAccount: e.ToAccount, Category: e.Category, Splits: e.Splits, Labels: e.Labels,
+				ToAccount: e.ToAccount, Category: e.Category, Splits: e.Splits,
 				Notes: e.Notes, Uses: uses, Last: t.Date}
 		}
 		for _, s := range byTitle {

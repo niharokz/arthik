@@ -50,10 +50,10 @@ internal/money/             Amount = int64 paise; Parse/String/Format(₹ Indian
 internal/dates/             Date (calendar day), AddMonths with anchor day
 internal/period/            weekly|monthly|quarterly|halfyearly|yearly|custom ranges; week/month/year start opts; Buckets; Resolve
 internal/store/             YAML .md read/write: FileError(file,line), atomic write, skip-if-unchanged, emoji unescape
-internal/model/             records as stored: Settings, Account(+AccountTypes, sms_digits), Category, Label, Posting, Transaction, Draft, Rule
+internal/model/             records as stored: Settings, Account(+AccountTypes, sms_digits), Category, Posting, Transaction, Draft, Rule
 internal/book/              the ledger engine (one Book per dataset)
   book.go                     load/reload, fixups, Mutate (copy → validate → persist touched files → recompute), DryRun
-  entry.go                    Entry (UI shape) ↔ Transaction (postings): BuildTx, EntryOf, ValidateTx, ids, EnsureLabels
+  entry.go                    Entry (UI shape) ↔ Transaction (postings): BuildTx, EntryOf, ValidateTx, ids
   compute.go                  Computed: balances, projected, net worth, period totals; writes computed fields + money.md
   schedule.go                 RunScheduler: recompute when the day changes (future-dated transactions start counting)
   digits.go                   SMS digits on accounts: CleanDigits, DigitsFree, AccountByDigits
@@ -77,14 +77,13 @@ internal/feature/<name>/    one package per feature, each with Register(rt):
   state        GET /api/state, GET /api/period
   accounts     POST/PUT/DELETE /api/accounts, /{id}/history, POST /{id}/check (bank balance check)
   categories   POST/PUT/DELETE(?move_to=) /api/categories, GET /api/categories/totals
-  labels       POST/PUT/DELETE /api/labels
-  transactions GET/POST /api/transactions, GET/PUT/DELETE /{id}, POST /bulk, GET /api/suggest
+  transactions GET/POST /api/transactions (?running=1 with one account: balance after each), GET/PUT/DELETE /{id}, POST /bulk (delete), GET /api/suggest
   review       GET /api/inbox?status=pending|done|all, POST /api/inbox/{id}/{accept,match,reject,restore,unpair},
                GET /api/inbox/rules?q=&offset=&limit= (paged, most used first), DELETE /api/inbox/rules/{id};
                drafts carry confidence high|medium|low + checks (view.go);
                GET /api/notices[?all=1], POST /api/notices/{id}/{dismiss,reopen}
   budgets      GET /api/budgets
-  reports      GET /api/reports/{cashflow,categories,trend,networth,balance-sheet,labels,accounts,calendar}
+  reports      GET /api/reports/{cashflow,categories,trend,networth,balance-sheet,accounts,calendar}
                (?bucket=daily|weekly|monthly|… ; daily only for reports)
   summary      GET /api/summary (+ `arthik summary`): month spend vs budget, inbox, net worth + 12-month trend (phone widgets/notice)
   settings     PUT /api/settings
@@ -149,7 +148,6 @@ and only when content changed (so Syncthing isn't spammed).
 | `settings.md` | user/app | — |
 | `accounts.md` | user/app | `balance`, `projected_balance` |
 | `categories.md` | user/app | `period`, `total` (default period, parents include children) |
-| `labels.md` | user/app | `count` |
 | `inbox/drafts.md` | arthik (+ your decisions from any device) | whole file managed by arthik |
 | `inbox/learned.md` | arthik (edit/delete freely) | `uses`, `updated` |
 | `inbox/kronos.md` | **Kronos only** | — (read only for arthik) |
@@ -164,9 +162,9 @@ write refused with `file line N: …`, nothing written (a broken *conflict copy*
 warning); all transaction records — main files, conflict copies, stale copies in old months —
 are resolved by id in `book/sync.go` (newest `updated`/`deleted` wins; tie → main file;
 identical duplicates collapse; different records sharing an id → second renamed); missing
-ids assigned, misfiled months moved, unknown labels added to labels.md; invalid
+ids assigned, misfiled months moved; retired keys (`status`, `labels`) dropped; invalid
 transactions → `problems`, excluded from totals. Unknown keys preserved (`Extra` inline maps). Amounts accept quoted
-strings or bare numbers. IDs: accounts/categories/labels are slugs of the name
+strings or bare numbers. IDs: accounts/categories are slugs of the name
 (`food-groceries` for a child); transactions `t-YYYYMMDD-xxxxxx`, client-created `c-…`.
 
 ### Multi-device sync (v1.1)
@@ -232,7 +230,7 @@ cookie, secret random per start so every launch needs the app). `/` redirects to
   Screens not in the bottom bar are listed at the top of Settings. Server validates keys
   against `model.NavItems`.
 - Home (`views/dashboard.js`): `settings.home` is a list of blocks `{type, ref?, title?}`:
-  built-ins (`model.HomeBuiltins`) or `account`/`category`/`label` with a `ref`; empty =
+  built-ins (`model.HomeBuiltins`) or `account`/`category` with a `ref`; empty =
   default layout. Edited with ✎ (show, hide, order, create). Only the data the chosen blocks
   need is fetched. Sections pointing at a deleted item are dropped on the next save.
 - Inbox (`views/inbox.js`): pending drafts with Accept / Edit (the transaction form in
@@ -256,10 +254,15 @@ cookie, secret random per start so every launch needs the app). `/` redirects to
   the drawing: ranked bars, donut, pie or columns for shares; bars/lines for cash flow;
   area, line or bars for net worth.
 - Look: nine base colour tokens on `:root` per palette (nss follows auto/light/dark;
-  amoled, galaxy, white, gold are fixed); every other colour is `color-mix`ed from them,
+  amoled, galaxy, white, gold, blackpink are fixed); every other colour is `color-mix`ed from them,
   so `settings.look.colors` overrides (set inline on `<html>`) flow everywhere. Card
   background (`data-cards` on `<html>`, or `data-style` on a home block): none, glass,
-  matte, opaque. Text is Plus Jakarta Sans, amounts and small labels JetBrains Mono.
+  matte, opaque. Density (`data-density`): comfortable or compact. Text is Plus Jakarta
+  Sans, amounts and small labels JetBrains Mono. In the phone app `applyLook` sends the
+  resolved card, text, muted and accent colours plus the card opacity to
+  `ArthikNative.setWidgetTheme`, so the home-screen widgets follow the look.
+- Category picker: "Most used" comes from `state.category_uses` (postings per category
+  in the last 90 days); "Recent" is this device's local list.
 - Daily alert: `settings.alerts` (time, mismatch, count) → `summary.alert` (served by
   `/api/summary` and `arthik summary`), read by the phone's daily alarm.
 - Run now from a phone in online mode: `POST /api/inbox/import` on a device that doesn't

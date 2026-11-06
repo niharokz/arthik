@@ -1,13 +1,16 @@
-// The category picker: a sheet with search, recently used categories and a grid of
-// groups that opens into their sub-categories, so a choice takes one or two taps.
+// The category picker: a sheet with search, your most used categories (last 90 days,
+// on every device), recently used ones (this device) and a grid of groups that opens
+// into their sub-categories, so a choice takes one or two taps.
 // Split lines can also pick an account the money moves into (e.g. a loan).
 
 import { html } from "./util.js";
 import { S, sheet, kids, cat, acc, catName } from "./ui.js";
 import { haptic } from "./native.js";
+import { icon } from "./icons.js";
 
 const RECENT_KEY = "arthik.recentCats";
 const RECENT_MAX = 8;
+const PINNED_MAX = 6;
 
 const recent = () => { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch { return []; } };
 const remember = (id) => {
@@ -15,6 +18,10 @@ const remember = (id) => {
 };
 
 const fits = (c, kind) => c && (c.kind === kind || c.kind === "both");
+
+// Most used categories of this kind, from the server's 90-day counts.
+const pinned = (kind) => Object.entries(S.state.category_uses || {})
+  .sort((a, b) => b[1] - a[1]).map(([id]) => cat(id)).filter((c) => fits(c, kind)).slice(0, PINNED_MAX);
 
 /** Text for a chosen line: "🍽️ Food › Dining Out", "→ LIC HomeLoan" or a prompt. */
 export function pickLabel(v, empty = "Choose category…") {
@@ -55,10 +62,12 @@ export function pickCategory(kind, opts = {}) {
           <b class="grow" style="text-align:right">${p.icon || ""} ${p.name}</b></div>
           <div class="pick-grid">${tile({ ...p, name: "All " + p.name }, "whole")}${kids(open).filter((k) => fits(k, kind)).map((k) => tile(k))}</div>`;
       }
-      const rec = recent().map(cat).filter((c) => fits(c, kind));
+      const pin = pinned(kind);
+      const rec = recent().map(cat).filter((c) => fits(c, kind) && !pin.includes(c));
+      const chip = (c) => html`<button type="button" class="chip" data-c="${c.id}">${c.icon || cat(c.parent)?.icon || ""} ${catName(c.id, true)}</button>`;
       const accounts = opts.accounts ? (S.state.accounts || []).filter((a) => !a.archived && a.id !== opts.exclude) : [];
-      return html`${rec.length ? html`<h3 class="pick-h">Recent</h3><div class="chips pick-recent">${rec.map((c) =>
-          html`<button type="button" class="chip" data-c="${c.id}">${c.icon || cat(c.parent)?.icon || ""} ${catName(c.id, true)}</button>`)}</div>` : ""}
+      return html`${pin.length ? html`<h3 class="pick-h">${icon("pin", 13)} Most used</h3><div class="chips pick-recent pick-pinned">${pin.map(chip)}</div>` : ""}
+        ${rec.length ? html`<h3 class="pick-h">Recent</h3><div class="chips pick-recent">${rec.map(chip)}</div>` : ""}
         <h3 class="pick-h">Categories</h3><div class="pick-grid">${parents.map((c) => tile(c))}</div>
         ${accounts.length ? html`<h3 class="pick-h">Or move it to an account</h3><div class="chips">${accounts.map((a) =>
           html`<button type="button" class="chip" data-a="${a.id}">→ ${a.name}</button>`)}</div>` : ""}`;

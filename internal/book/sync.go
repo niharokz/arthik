@@ -11,7 +11,7 @@ package book
 //   - every transaction carries an "updated" stamp; a deletion leaves a tombstone;
 //   - on load, all copies of a transaction (main files, conflict copies, a copy left
 //     in an old month file) are resolved by id — the newest stamp wins;
-//   - definition files (accounts, categories, labels) merge by id, the main copy
+//   - definition files (accounts, categories) merge by id, the main copy
 //     winning on the same id; inbox drafts and learned rules merge by id, newest
 //     "updated" winning;
 //   - only the main device writes the result back and deletes the conflict copies;
@@ -216,12 +216,6 @@ func (b *Book) defConflicts(d *Data, ch *Change, notes *[]Problem) []string {
 			if _, err = store.Read(f, &doc); err == nil {
 				d.Categories, added = unionByID(d.Categories, doc.Categories, func(c model.Category) string { return c.ID })
 				ch.Categories = ch.Categories || added > 0
-			}
-		case "labels":
-			var doc labelsDoc
-			if _, err = store.Read(f, &doc); err == nil {
-				d.Labels, added = unionByID(d.Labels, doc.Labels, func(l model.Label) string { return l.ID })
-				ch.Labels = ch.Labels || added > 0
 			}
 		case "settings", "money":
 			// main copy wins; money.md is rebuilt anyway

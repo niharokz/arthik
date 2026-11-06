@@ -175,7 +175,7 @@ func TestAcceptLearnsAndIsIdempotent(t *testing.T) {
 	var id string
 	mutate(t, b, func(d *book.Data, ch *book.Change) error {
 		var err error
-		id, err = Accept(d, ch, "g", book.Entry{Account: "hdfc", Category: "food", Title: "Amazon gift card", Labels: []string{"gift"}}, true)
+		id, err = Accept(d, ch, "g", book.Entry{Account: "hdfc", Category: "food", Title: "Amazon gift card"}, true)
 		return err
 	})
 	_ = b.View(func(d *book.Data, c *book.Computed) error {
@@ -200,7 +200,7 @@ func TestAcceptLearnsAndIsIdempotent(t *testing.T) {
 	})
 	// The next message from the same merchant is filled in, account from the digits.
 	ingest(t, b, spend("g2", today, 500, "9911", "GYFTR VIA SMARTBUY"))
-	if x := draft(t, b, "g2"); x.Via != model.ViaLearned || x.Category != "food" || x.Account != "hdfc" || len(x.Labels) != 1 {
+	if x := draft(t, b, "g2"); x.Via != model.ViaLearned || x.Category != "food" || x.Account != "hdfc" {
 		t.Fatalf("learned draft %+v", x)
 	}
 }

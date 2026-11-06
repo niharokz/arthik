@@ -165,20 +165,10 @@ class Prefs(ctx: Context) {
 
     // ---- widgets ----
 
-    /** Widget background: "auto" (follows light/dark) or "#rrggbb". */
-    var widgetBg: String
-        get() = sp.getString("widget_bg", "auto") ?: "auto"
-        set(v) = sp.edit().putString("widget_bg", v).apply()
-
-    /** Widget background opacity, 0 (see-through) to 100. */
-    var widgetOpacity: Int
-        get() = sp.getInt("widget_opacity", 100)
-        set(v) = sp.edit().putInt("widget_opacity", v).apply()
-
-    /** Widget text: "auto", "light" or "dark". */
-    var widgetText: String
-        get() = sp.getString("widget_text", "auto") ?: "auto"
-        set(v) = sp.edit().putString("widget_text", v).apply()
+    /** Widget colours from the app's look: "bg|opacity|text|muted|accent" (see WidgetLook). */
+    var widgetTheme: String
+        get() = sp.getString("widget_theme", "") ?: ""
+        set(v) = sp.edit().putString("widget_theme", v).apply()
 
     /** Last summary from the engine (JSON) and when it was read, so the widget draws at once. */
     var summaryJson: String

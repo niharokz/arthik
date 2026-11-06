@@ -27,12 +27,11 @@ type Computed struct {
 	Assets        money.Amount
 	Liabilities   money.Amount // negative when you owe
 
-	Period     period.Range            // the default period (settings.default_period, today)
-	CatTotals  map[string]money.Amount // category id → natural total in Period, parents include children
-	Income     money.Amount            // in Period
-	Expense    money.Amount            // in Period
-	LabelCount map[string]int
-	Problems   []Problem
+	Period    period.Range            // the default period (settings.default_period, today)
+	CatTotals map[string]money.Amount // category id → natural total in Period, parents include children
+	Income    money.Amount            // in Period
+	Expense   money.Amount            // in Period
+	Problems  []Problem
 }
 
 // Opts returns the period options from settings.
@@ -122,7 +121,7 @@ func (d *Data) CategoryTotals(c *Computed, from, to dates.Date, keep func(model.
 }
 
 // recomputeLocked rebuilds Computed and (when write is set and the data loaded
-// cleanly) writes the computed fields to accounts.md, categories.md, labels.md and
+// cleanly) writes the computed fields to accounts.md, categories.md and
 // the overview to money.md.
 func (b *Book) recomputeLocked(write bool) {
 	d := b.data
@@ -132,7 +131,6 @@ func (b *Book) recomputeLocked(write bool) {
 	c := &Computed{
 		Today: b.Today(), Valid: map[string]bool{},
 		Balance: map[string]money.Amount{}, Projected: map[string]money.Amount{},
-		LabelCount: map[string]int{},
 	}
 	for _, a := range d.Accounts {
 		c.Balance[a.ID] = a.OpeningBalance
@@ -155,11 +153,6 @@ func (b *Book) recomputeLocked(write bool) {
 			c.Projected[p.Account] += p.Amount
 			if !future {
 				c.Balance[p.Account] += p.Amount
-			}
-		}
-		if !future {
-			for _, l := range t.Labels {
-				c.LabelCount[l]++
 			}
 		}
 	}
@@ -204,13 +197,10 @@ func (b *Book) recomputeLocked(write bool) {
 		d.Categories[i].Period = c.Period.Label
 		d.Categories[i].Total = c.CatTotals[d.Categories[i].ID]
 	}
-	for i := range d.Labels {
-		d.Labels[i].Count = c.LabelCount[d.Labels[i].ID]
-	}
 	if !write || b.loadErr != nil || b.ReadOnly {
 		return
 	}
-	ch := Change{Accounts: true, Categories: true, Labels: true}
+	ch := Change{Accounts: true, Categories: true}
 	if err := b.persistLocked(d, &ch); err != nil {
 		log.Printf("[%s] WARN could not write computed files: %v", b.Name, err)
 		return

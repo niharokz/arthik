@@ -1,9 +1,10 @@
 package com.nihars.arthik
 
 /**
- * Colours of the home-screen widgets, chosen in Settings → Phone: a background colour
- * ("auto" follows light/dark), its opacity (0 = fully transparent) and the text
- * colour ("auto" picks whatever reads on that background). Pure, so it is unit tested.
+ * Colours of the home-screen widgets. They follow Settings → Look (theme, colours and
+ * card background, from settings.md): the app sends the resolved colours whenever it
+ * applies the look, encoded as "bg|opacity|text|muted|accent" (#rrggbb, opacity
+ * 0..100 from the card background: none, glass, matte, opaque). Pure, so it is unit tested.
  */
 data class WidgetLook(
     val bg: Int, // RGB of the background
@@ -11,26 +12,14 @@ data class WidgetLook(
     val text: Int, // ARGB
     val muted: Int, // ARGB, secondary text
     val accent: Int, // ARGB, sparkline and bar
-    val dark: Boolean, // light text on a dark (or see-through) background
+    val dark: Boolean, // light text (a dark theme or a see-through card)
 ) {
     companion object {
-        private const val LIGHT_BG = 0xFFFFFF
-        private const val DARK_BG = 0x1A2120
-        private const val INK = 0xFF13201E.toInt()
-        private const val PAPER = 0xFFF1F5F4.toInt()
-        private const val TEAL = 0xFF3A807A.toInt()
-        private const val TEAL_LIGHT = 0xFF6CC3B9.toInt()
+        private const val OPAQUE = 0xFF shl 24
+        private const val LIGHT_TEXT = 140 // text brighter than this reads as a dark theme
 
-        /** Ready-made looks offered in Settings: id → (background, opacity %, text). */
-        val PRESETS = linkedMapOf(
-            "auto" to Triple("auto", 100, "auto"),
-            "light" to Triple("#FFFFFF", 100, "auto"),
-            "dark" to Triple("#1A2120", 100, "auto"),
-            "amoled" to Triple("#000000", 100, "auto"),
-            "matte" to Triple("#0D1412", 92, "light"), // the app's matte card
-            "glass" to Triple("#000000", 35, "light"),
-            "clear" to Triple("#000000", 0, "light"),
-        )
+        /** Until the app has sent its look: the nss dark, matte card. */
+        val DEFAULT = WidgetLook(0x0D1412, 255, 0xFFE4EBE8.toInt(), 0xFF93A29E.toInt(), 0xFF5CBDB1.toInt(), true)
 
         /** "#1a2120" → 0x1A2120; null when it isn't a colour. */
         fun rgb(hex: String): Int? {
@@ -41,21 +30,18 @@ data class WidgetLook(
         /** Perceived brightness 0..255 of an RGB colour. */
         fun luma(rgb: Int): Int = ((rgb shr 16 and 0xFF) * 299 + (rgb shr 8 and 0xFF) * 587 + (rgb and 0xFF) * 114) / 1000
 
-        /** Resolves the saved settings; [night] is the phone's dark mode. */
-        fun resolve(bg: String, opacity: Int, text: String, night: Boolean): WidgetLook {
-            val color = if (bg == "auto") (if (night) DARK_BG else LIGHT_BG) else rgb(bg) ?: LIGHT_BG
-            val alpha = (opacity.coerceIn(0, 100) * 255 + 50) / 100
-            val dark = when (text) {
-                "light" -> true
-                "dark" -> false
-                // mostly see-through: the wallpaper decides, and light text is the safer bet
-                else -> if (opacity < 40) true else luma(color) < 140
-            }
-            val ink = if (dark) PAPER else INK
+        /** Reads what the app sent; null when it is malformed. */
+        fun decode(s: String): WidgetLook? {
+            val p = s.split("|")
+            if (p.size != 5) return null
+            val bg = rgb(p[0]) ?: return null
+            val opacity = p[1].trim().toIntOrNull()?.takeIf { it in 0..100 } ?: return null
+            val text = rgb(p[2]) ?: return null
+            val muted = rgb(p[3]) ?: return null
+            val accent = rgb(p[4]) ?: return null
             return WidgetLook(
-                bg = color, alpha = alpha, text = ink,
-                muted = (ink and 0x00FFFFFF) or (0xB3 shl 24),
-                accent = if (dark) TEAL_LIGHT else TEAL, dark = dark,
+                bg = bg, alpha = (opacity * 255 + 50) / 100, text = text or OPAQUE, muted = muted or OPAQUE,
+                accent = accent or OPAQUE, dark = luma(text) > LIGHT_TEXT,
             )
         }
     }

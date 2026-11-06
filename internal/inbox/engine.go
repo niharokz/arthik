@@ -63,7 +63,7 @@ func newDraft(d *book.Data, it Item) model.Draft {
 	x := model.Draft{
 		ID: it.ID, Source: it.Source, Status: model.DraftPending, Date: it.Date, Time: it.Time,
 		Amount: it.Amount, Merchant: it.Merchant, Digits: it.Digits, AccountHint: it.AccountHint,
-		CategoryHint: it.CategoryHint, Labels: it.Labels, Notes: it.Notes, Raw: it.Raw, Rule: it.Rule,
+		CategoryHint: it.CategoryHint, Notes: it.Notes, Raw: it.Raw, Rule: it.Rule,
 		Balance: it.Balance, Available: it.Available,
 	}
 	if it.Generic {
@@ -91,7 +91,7 @@ func newDraft(d *book.Data, it Item) model.Draft {
 	return x
 }
 
-// Categorise fills title, category (and, from a learned rule, account and labels)
+// Categorise fills title, category (and, from a learned rule, account)
 // in priority order: learned rule → a past transaction with the same name → the
 // category the source named → the fallback category in settings.
 func Categorise(d *book.Data, x *model.Draft) {
@@ -109,9 +109,6 @@ func Categorise(d *book.Data, x *model.Draft) {
 		}
 		if x.Account == "" && x.Digits == "" && validAccount(d, r.Account) {
 			x.Account = r.Account
-		}
-		if len(x.Labels) == 0 {
-			x.Labels = r.Labels
 		}
 	}
 	if x.Category == "" && key != "" {

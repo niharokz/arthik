@@ -29,12 +29,12 @@ export async function render(root, ctx) {
         const group = list.filter((a) => a.type === t.id);
         if (!group.length) return "";
         const total = group.reduce((n, a) => n + paise(a.balance), 0);
-        return html`<div class="group-h"><span>${t.icon} ${t.label}</span><span class="amt">${money(total / 100)}</span></div>
-          <ul class="list">${group.map((a) => html`<li><a class="item" href="#/account/${encodeURIComponent(a.id)}">
-            <span class="ic" style="${a.color ? `background:${a.color}22` : ""}">${a.icon}</span>
-            <span class="main-t"><span class="t">${a.name} ${checkMark(a)}${a.archived ? html`<span class="badge">archived</span>` : a.hidden ? html`<span class="badge">hidden</span>` : ""}${a.exclude_net_worth ? html` <span class="badge">not in net worth</span>` : ""}</span>
+        return html`<div class="group-h acc-group"><span>${t.icon} ${t.label} <small class="faint">${group.length}</small></span><span class="amt">${money(total / 100)}</span></div>
+          <ul class="list acc-list">${group.map((a) => html`<li><a class="item acc-item" href="#/account/${encodeURIComponent(a.id)}" style="--c:${a.color || "var(--line)"}">
+            <span class="ic">${a.icon}</span>
+            <span class="main-t"><span class="t">${a.name}${a.archived ? html`<span class="badge">archived</span>` : a.hidden ? html`<span class="badge">hidden</span>` : ""}${a.exclude_net_worth ? html` <span class="badge">not in net worth</span>` : ""}</span>
               <span class="s">${a.card ? (a.credit_limit ? `Available ${money(a.card.available)}` : "Credit card") + (a.card.due_date ? ` · due ${fmtShort(a.card.due_date)}` : "") : paise(a.projected_balance) !== paise(a.balance) ? `After scheduled: ${money(a.projected_balance)}` : t.label}</span></span>
-            <span class="end">${amt(a.balance, { cls: paise(a.balance) < 0 ? "neg" : "" })}</span></a></li>`)}</ul>`;
+            <span class="end">${amt(a.balance, { cls: paise(a.balance) < 0 ? "neg" : "" })}<span class="s ck-corner">${checkMark(a)}</span></span></a></li>`)}</ul>`;
       }) : html`<div class="empty">No accounts yet${ro() ? "" : html` — <button class="primary" data-new2>Add your first account</button>`}</div>`}
     </div>`);
   ctx.actionsEl.querySelector("[data-all]").addEventListener("click", () => { S.view.accAll = !showAll; render(root, ctx); });
@@ -51,7 +51,7 @@ async function detail(root, ctx, id) {
   root.innerHTML = String(loading());
   const [hist, tx] = await Promise.all([
     get(`/api/accounts/${encodeURIComponent(id)}/history`),
-    get("/api/transactions" + qs({ account: id, limit: 400 })),
+    get("/api/transactions" + qs({ account: id, limit: 400, running: 1 })),
   ]);
   if (!ctx.alive()) return;
   const liab = a.class === "liability";
@@ -69,7 +69,7 @@ async function detail(root, ctx, id) {
     </section>
     ${checkCard(a)}
     <section class="card"><header><h2>Transactions</h2><a href="#/tx?account=${encodeURIComponent(id)}">Filter & export</a></header>
-      <div data-list>${grouped(tx.items, { account: id, empty: "No transactions yet" })}</div></section>
+      <div data-list>${grouped(tx.items, { account: id, balances: tx.balances, empty: "No transactions yet" })}</div></section>
     ${a.card ? html`<div class="card"><header><h2>Card</h2></header>
       <div class="grid four">
         <div class="stat"><div class="label">Credit limit</div><div class="value" style="font-size:1.05rem">${a.credit_limit ? amt(a.credit_limit) : "—"}</div></div>

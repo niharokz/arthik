@@ -1,11 +1,11 @@
 // Settings → Phone (only inside the Android app): data folder or demo, file access,
 // offline/online mode (main-device switch), app lock (PIN or fingerprint/face), look
-// (Material You), the daily alert, the home-screen widgets, the nightly bank-SMS copy, the
+// (Material You), the daily alert, the home-screen widgets (they follow Settings → Look), the nightly bank-SMS copy, the
 // settings file and the engine log. Settings are stored by the app itself and
 // mirrored to arthik-phone.yaml in a folder you choose.
 
 import { html, raw, fmtShort } from "../util.js";
-import { S, sheet, toast, confirmSheet, colorField, wireColorFields, hexColor } from "../ui.js";
+import { S, sheet, toast, confirmSheet } from "../ui.js";
 import { call, config, onNative, applyAccent } from "../native.js";
 import { pickFolder, chooseSettingsFolder } from "../appmode.js";
 
@@ -84,85 +84,11 @@ function notifyBlock(c, alerts) {
 `;
 }
 
-// Widgets: what exists, how to add them, and their look (with a live preview).
-const LOOKS = { auto: "Auto", light: "Light", dark: "Dark", amoled: "AMOLED", matte: "Matte", glass: "Glass", clear: "None" };
+// Widgets: what exists and how to add them. Their colours follow Settings → Look.
 function widgetBlock(c) {
-  const w = c.widget_look || { bg: "auto", opacity: 100, text: "auto", presets: {} };
-  const preset = presetOf(w);
   return html`<div class="psec"><b>🧩 Widgets</b>
-    <div class="muted" style="font-size:.85rem">Long-press your home screen → <b>Widgets</b> → Arthik: <b>Overview</b> (4×2), <b>Budget</b>, <b>Net worth</b> and <b>Inbox</b> (2×2). Tap one to open that screen. They update hourly and whenever you leave the app.</div></div>
-    <div class="wlook" data-wlook>
-      <div class="wprev" data-wprev aria-hidden="true">${previewTiles()}</div>
-      <div class="wlook-f">
-        <span class="flabel">Background</span>
-        <div class="seg wrap" data-wpreset>${[...Object.keys(LOOKS), "custom"].map((k) =>
-          html`<button data-p="${k}" class="${k === preset ? "on" : ""}">${LOOKS[k] || "Custom"}</button>`)}</div>
-        <div class="wcustom" data-wcustom ${preset === "custom" ? "" : raw("hidden")}>
-          ${colorField("wbg", w.bg === "auto" ? "#1a2120" : w.bg, "Colour")}
-          <label class="f"><span>Opacity <b data-wopv>${w.opacity}%</b></span><input type="range" min="0" max="100" step="5" value="${w.opacity}" data-wop></label>
-          <label class="f"><span>Text</span><select data-wtext>${[["auto", "Auto"], ["light", "Light"], ["dark", "Dark"]].map(([v, l]) => html`<option value="${v}" ${w.text === v ? raw("selected") : ""}>${l}</option>`)}</select></label>
-        </div>
-        ${c.widget ? html`<button data-widget>Update widgets now</button>` : ""}
-      </div>
-    </div>`;
-}
-
-const presetOf = (w) => Object.entries(w.presets || {}).find(([, p]) => p.bg === w.bg && +p.opacity === +w.opacity && p.text === w.text)?.[0] || "custom";
-
-// Miniature widgets for the preview (made-up numbers).
-const previewTiles = () => html`
-  <div class="wtile"><div class="wt-h"><img src="/icon.svg" alt="">Net worth</div><b class="wt-big">₹7,52,496</b><span class="wt-up">▲ ₹79,008 this month</span>
-    <svg viewBox="0 0 100 30" preserveAspectRatio="none"><path class="a" d="M2,26 L20,24 L38,24 L56,18 L74,14 L98,4 L98,30 L2,30 Z"/><path d="M2,26 L20,24 L38,24 L56,18 L74,14 L98,4"/></svg></div>
-  <div class="wtile"><div class="wt-h"><img src="/icon.svg" alt="">Inbox</div><b class="wt-big"><i class="wt-dot"></i>6</b><span class="wt-m">drafts to review</span>
-    <span class="wt-m wt-s">₹4,594 out · Swiggy</span></div>`;
-
-// Same rules as WidgetLook.kt: colour, opacity, and text that reads on it.
-function previewStyle(el, w) {
-  const night = matchMedia("(prefers-color-scheme: dark)").matches;
-  const hex = w.bg === "auto" ? (night ? "#1a2120" : "#ffffff") : w.bg;
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
-  const luma = (r * 299 + g * 587 + b * 114) / 1000;
-  const dark = w.text === "light" || (w.text === "auto" && (w.opacity < 40 || luma < 140));
-  el.style.setProperty("--wbg", `rgba(${r}, ${g}, ${b}, ${w.opacity / 100})`);
-  el.style.setProperty("--wink", dark ? "#f1f5f4" : "#13201e");
-  el.style.setProperty("--wacc", dark ? "#6cc3b9" : "#3a807a");
-}
-
-// Presets, custom colour, opacity and text: preview at once, save to the phone.
-function wireWidgetLook(card, c) {
-  const box = card.querySelector("[data-wlook]");
-  if (!box) return;
-  const w = { ...(c.widget_look || { bg: "auto", opacity: 100, text: "auto", presets: {} }) };
-  const prev = box.querySelector("[data-wprev]");
-  const save = () => {
-    previewStyle(prev, w);
-    if (!call("setWidgetLook", w.bg, +w.opacity, w.text)) toast("Couldn't save the widget look", true);
-  };
-  wireColorFields(box);
-  previewStyle(prev, w);
-  box.querySelector("[data-wpreset]").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-p]");
-    if (!b) return;
-    box.querySelectorAll("[data-p]").forEach((x) => x.classList.toggle("on", x === b));
-    box.querySelector("[data-wcustom]").hidden = b.dataset.p !== "custom";
-    const p = w.presets?.[b.dataset.p];
-    if (p) Object.assign(w, { bg: p.bg, opacity: p.opacity, text: p.text });
-    else if (w.bg === "auto") w.bg = hexColor(box.querySelector("[name=wbg]").value) || "#1a2120";
-    box.querySelector("[data-wop]").value = w.opacity;
-    box.querySelector("[data-wopv]").textContent = w.opacity + "%";
-    box.querySelector("[data-wtext]").value = w.text;
-    save();
-  });
-  box.addEventListener("input", (e) => {
-    if (e.target.matches("[data-wop]")) {
-      w.opacity = +e.target.value;
-      box.querySelector("[data-wopv]").textContent = w.opacity + "%";
-      previewStyle(prev, w);
-    }
-  });
-  box.querySelector("[data-wop]").addEventListener("change", save);
-  box.querySelector("[data-wtext]").addEventListener("change", (e) => { w.text = e.target.value; save(); });
-  box.addEventListener("color", (e) => { w.bg = e.detail; save(); });
+    <div class="muted" style="font-size:.85rem">Long-press your home screen → <b>Widgets</b> → Arthik: <b>Overview</b> (4×2), <b>Budget</b>, <b>Net worth</b> and <b>Inbox</b> (2×2). Tap one to open that screen. They update hourly and whenever you leave the app, and take their colours and card background from <a href="#/settings?s=look">Settings → Look</a>.</div></div>
+    ${c.widget ? html`<div class="prow"><span class="grow"></span><button data-widget>Update widgets now</button></div>` : ""}`;
 }
 
 // Android 13+ refused without asking: explain "restricted settings".
@@ -289,7 +215,6 @@ export function wirePhoneCard(root, ctx) {
   });
   $("[data-notifynow]")?.addEventListener("click", (e) => { e.target.disabled = true; call("notifyNow"); });
   $("[data-widget]")?.addEventListener("click", () => { call("refreshWidget"); toast("Widgets updated"); });
-  wireWidgetLook(card, config());
   $("[data-locknow]")?.addEventListener("click", () => call("lockNow"));
   $("[data-cfgdir]")?.addEventListener("click", () => chooseSettingsFolder(false, redraw));
   $("[data-cfgsave]")?.addEventListener("click", () => { call("saveConfig"); toast("Settings saved"); setTimeout(redraw, 400); });

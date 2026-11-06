@@ -1,13 +1,13 @@
 // Reports: cash flow, spending and income by category (with drill-down), net worth
-// over time, balance sheet, account flow and labels. Every chart has a table view.
+// over time, balance sheet and account flow. Every chart has a table view.
 
 import { html, raw, qs, money, amt, paise, parseDate, ymd, fromPaise } from "../util.js";
-import { S, today, loading, periodState, periodQuery, periodBar, wirePeriod, catName, catIcon, accName, labelName, cat, chartType } from "../ui.js";
+import { S, today, loading, periodState, periodQuery, periodBar, wirePeriod, catName, catIcon, accName, cat, chartType } from "../ui.js";
 import { get } from "../api.js";
 import { incomeExpense, line, share, wireTips } from "../charts.js";
 
 const TABS = [["cashflow", "Cash flow"], ["spending", "Spending"], ["income", "Income"], ["networth", "Net worth"],
-  ["sheet", "Balance sheet"], ["accounts", "Accounts"], ["labels", "Labels"]];
+  ["sheet", "Balance sheet"], ["accounts", "Accounts"]];
 
 const PRESETS = [["6m", "Last 6 months"], ["12m", "Last 12 months"], ["ytd", "This year"], ["ly", "Last year"], ["24m", "Last 24 months"], ["custom", "Custom"]];
 
@@ -132,14 +132,5 @@ export async function render(root, ctx) {
     wirePeriod(body, p, d, rerender);
   }
 
-  if (tab === "labels") {
-    const d = await get("/api/reports/labels" + qs(periodQuery(p)));
-    if (!ctx.alive()) return;
-    body.innerHTML = String(html`${periodBar(p, d.range)}
-      <div class="card scroll-x">${d.rows.length ? html`<table class="tbl"><thead><tr><th>Label</th><th class="r">Transactions</th><th class="r">Income</th><th class="r">Expense</th></tr></thead>
-        <tbody>${d.rows.map((x) => html`<tr><td><a href="#/tx?label=${encodeURIComponent(x.label)}">#${labelName(x.label)}</a></td><td class="r">${x.count}</td><td class="r">${amt(x.income)}</td><td class="r">${amt(x.expense)}</td></tr>`)}</tbody></table>`
-        : html`<div class="empty">No labelled transactions in this period</div>`}</div>`);
-    wirePeriod(body, p, d, rerender);
-  }
   wireTips(body);
 }

@@ -1,5 +1,5 @@
 // The transaction sheet: add / edit / duplicate an expense, income or transfer,
-// with Bluecoins' calculator amount, remembered items, splits, labels and
+// with Bluecoins' calculator amount, remembered items, splits and
 // past/future dates. It also reviews inbox drafts: saving accepts the draft.
 
 import { html, raw, calc, fromPaise, paise, money, todayStr, nowTime, newId, debounce, qs, fmtShort } from "./util.js";
@@ -8,6 +8,9 @@ import { get, post, txWrite } from "./api.js";
 import { haptic } from "./native.js";
 import { pickCategory, pickLabel } from "./picker.js";
 import { formHooks } from "./plugins.js";
+
+// Operator keys under the amount (a phone's number pad has no + or ×).
+const OPS = [["+", "Plus"], ["-", "Minus"], ["*", "Times"], ["/", "Divide"]];
 
 const lastAcc = () => { try { return localStorage.getItem("arthik.lastAccount") || ""; } catch { return ""; } };
 const setLastAcc = (id) => { try { localStorage.setItem("arthik.lastAccount", id); } catch { /* ignore */ } };
@@ -39,7 +42,6 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
     splits: (tx.splits || []).map((s) => ({ category: s.category || "", account: s.account || "", amount: s.amount })),
     date: tx.date || today(),
     time: tx.time || (editing ? "" : nowTime()),
-    labels: [...(tx.labels || [])],
     notes: tx.notes || "",
     remember: askDigits,
   };
@@ -70,7 +72,7 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
     ${st.splits.length ? "" : html`
       <label class="f"><span>Amount (₹) — you can type 120+45</span>
         <input name="amount" class="amount-in" inputmode="decimal" autocomplete="off" value="${st.amount}" placeholder="0.00" ${editing ? raw("autofocus") : ""}></label>
-      <div class="calc-hint" data-calc></div>`}
+      <div class="calc-row"><span class="calc-hint grow" data-calc></span>${OPS.map(([k, t]) => html`<button type="button" class="calc-op" data-op="${k}" aria-label="${t}">${k === "*" ? "×" : k === "/" ? "÷" : k === "-" ? "−" : k}</button>`)}</div>`}
     ${st.type === "transfer" ? html`
       <div class="fields two">
         <label class="f"><span>From account</span><select name="account">${choose}${accOptions(st.account)}</select></label>
@@ -87,12 +89,6 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
       <label class="f"><span>Date ${st.date > today() ? html`<span class="badge warn">future — posts on this date</span>` : ""}</span><input type="date" name="date" value="${st.date}"></label>
       <label class="f"><span>Time</span><input type="time" name="time" value="${st.time}"></label>
     </div>
-    <label class="f"><span>Labels</span>
-      <div class="chips" data-labels>${(S.state.labels || []).map((l) =>
-        html`<button type="button" class="chip ${st.labels.includes(l.id) ? "on" : ""}" data-label="${l.id}">${l.name}</button>`)}
-        ${st.labels.filter((l) => !(S.state.labels || []).some((x) => x.id === l)).map((l) => html`<button type="button" class="chip on" data-label="${l}">${l}</button>`)}
-      </div>
-      <input name="newlabel" placeholder="New label, press Enter" style="margin-top:8px"></label>
     ${askDigits ? html`<label class="check"><input type="checkbox" name="remember" ${st.remember ? raw("checked") : ""}> Remember …${draft.digits} for this account</label>` : ""}
     <label class="f"><span>Notes</span><textarea name="notes">${st.notes}</textarea></label>
     <p class="faint" style="font-size:.78rem;margin:0" data-entry></p>`;
@@ -181,14 +177,16 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
         if (document.activeElement === d.querySelector("#tx-title")) acShow();
       } catch { acItems = []; acHide(); } // offline web app: no suggestions
     }, 150);
-    // Picking a remembered transaction completes the title and takes its category;
-    // everything else (account, amount, date, labels, notes) stays as it is.
+    // Fills the form from a remembered transaction — everything except the amount,
+    // which stays what you typed (or what the SMS said). Date and time stay too.
     const acPick = (x) => {
       if (!x) return;
       pull();
-      st.title = x.title;
-      const c = cat(x.category || x.splits?.find((sp) => sp.category)?.category);
-      if (c && (c.kind === st.type || c.kind === "both") && !st.splits.length) st.category = c.id;
+      Object.assign(st, {
+        type: x.type, title: x.title, notes: x.notes || "",
+        account: x.account || st.account, to: x.to_account || "", category: x.category || "",
+        splits: (x.splits || []).map((sp) => ({ category: sp.category || "", account: sp.account || "", amount: "" })), // lines only
+      });
       acHide();
       render(); // not redraw: that would read the old fields back over st
       haptic("tick");
@@ -204,7 +202,23 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
         if (st.category && cat(st.category) && cat(st.category).kind !== st.type && cat(st.category).kind !== "both") st.category = "";
         redraw();
       }));
-      d.querySelector('[name="amount"]')?.addEventListener("input", hint);
+      const amt = d.querySelector('[name="amount"]');
+      amt?.addEventListener("input", hint);
+      amt?.addEventListener("blur", () => { // 450+120 becomes 570.00 when you leave the field
+        if (!/[+\-*/()]/.test(amt.value.replace(/^-/, ""))) return;
+        const v = calc(amt.value);
+        if (!Number.isNaN(v)) { amt.value = fromPaise(v); hint(); }
+      });
+      d.querySelectorAll("[data-op]").forEach((b) => {
+        b.addEventListener("pointerdown", (e) => e.preventDefault()); // keep the keyboard and the cursor
+        b.addEventListener("click", () => {
+          const at = amt.selectionStart ?? amt.value.length;
+          amt.value = amt.value.slice(0, at) + b.dataset.op + amt.value.slice(amt.selectionEnd ?? at);
+          amt.focus();
+          amt.setSelectionRange(at + 1, at + 1);
+          hint();
+        });
+      });
       if (hooks.length) d.querySelector('[name="amount"]')?.addEventListener("input", debounce(refreshHooks, 250));
       const title = d.querySelector('[name="title"]');
       title.addEventListener("input", () => suggest(title.value));
@@ -253,18 +267,6 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
       wireHooks();
       d.querySelectorAll("[data-sdel]").forEach((b) => b.addEventListener("click", () => { pull(); st.splits.splice(+b.dataset.sdel, 1); redraw(); }));
       d.querySelectorAll("[data-samt]").forEach((el) => el.addEventListener("change", redraw));
-      d.querySelectorAll("[data-label]").forEach((b) => b.addEventListener("click", () => {
-        const id = b.dataset.label;
-        st.labels = st.labels.includes(id) ? st.labels.filter((x) => x !== id) : [...st.labels, id];
-        b.classList.toggle("on");
-      }));
-      const nl = d.querySelector('[name="newlabel"]');
-      nl.addEventListener("keydown", (e) => {
-        if (e.key !== "Enter") return;
-        e.preventDefault();
-        const v = nl.value.trim();
-        if (v && !st.labels.includes(v)) { pull(); st.labels.push(v); redraw(); }
-      });
       hint();
     }
     wire();
@@ -272,7 +274,7 @@ export function openTx(tx = {}, onSaved = () => {}, opts = {}) {
     const save = async () => {
       pull();
       const e = { type: st.type, title: st.title.trim(), account: st.account, date: st.date, time: st.time,
-        labels: st.labels, notes: st.notes.trim() };
+        notes: st.notes.trim() };
       if (!e.title) return toast("Enter a title", true);
       if (!e.date) return toast("Choose a date", true);
       if (!e.account) return toast(st.type === "transfer" ? "Choose the account it came from" : "Choose an account", true);

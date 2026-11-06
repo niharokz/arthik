@@ -48,7 +48,6 @@ type Item struct {
 	Digits       string
 	AccountHint  string
 	CategoryHint string
-	Labels       []string
 	Notes        string
 	Raw          string
 	Rule         string
@@ -117,7 +116,6 @@ type kronosDraft struct {
 	Amount   money.Amount `yaml:"amount"`
 	Account  string       `yaml:"account"`
 	Category string       `yaml:"category"`
-	Labels   []string     `yaml:"labels"`
 	Notes    string       `yaml:"notes"`
 }
 
@@ -175,7 +173,7 @@ func ReadKronos(dir string) ([]Item, []error) {
 		items = append(items, Item{
 			ID: draftID("kronos-", k.ID), Source: SourceKronos, Date: k.Date, Kind: kind, Amount: k.Amount,
 			Title: strings.TrimSpace(k.Title), Merchant: strings.TrimSpace(k.Title), AccountHint: strings.TrimSpace(k.Account),
-			CategoryHint: strings.TrimSpace(k.Category), Labels: k.Labels, Notes: strings.TrimSpace(k.Notes), Rule: k.Source,
+			CategoryHint: strings.TrimSpace(k.Category), Notes: strings.TrimSpace(k.Notes), Rule: k.Source,
 		})
 	}
 	return items, errs

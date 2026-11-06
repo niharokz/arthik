@@ -40,7 +40,6 @@ class Bridge(private val a: MainActivity) {
         put("notify", notifyJson())
         put("accent", accentJson())
         put("widget", Widget.placed(a))
-        put("widget_look", widgetLookJson())
         put("config", configJson())
     }.toString()
 
@@ -71,15 +70,6 @@ class Bridge(private val a: MainActivity) {
             put("light", hex(a.getColor(android.R.color.system_accent1_600)))
             put("dark", hex(a.getColor(android.R.color.system_accent1_200)))
         }
-    }
-
-    private fun widgetLookJson() = JSONObject().apply {
-        put("bg", prefs.widgetBg)
-        put("opacity", prefs.widgetOpacity)
-        put("text", prefs.widgetText)
-        put("presets", JSONObject().apply {
-            WidgetLook.PRESETS.forEach { (id, p) -> put(id, JSONObject().put("bg", p.first).put("opacity", p.second).put("text", p.third)) }
-        })
     }
 
     private fun hex(c: Int) = String.format("#%06X", c and 0xFFFFFF)
@@ -286,14 +276,12 @@ class Bridge(private val a: MainActivity) {
     @JavascriptInterface
     fun accent(): String = accentJson().toString()
 
-    /** Saves the widget look and redraws the widgets; false when a value is invalid. */
+    /** Takes the app's look for the widgets ("bg|opacity|text|muted|accent") and redraws them when it changed; false when malformed. */
     @JavascriptInterface
-    fun setWidgetLook(bg: String, opacity: Int, text: String): Boolean {
-        if (bg != "auto" && WidgetLook.rgb(bg) == null) return false
-        if (text !in listOf("auto", "light", "dark")) return false
-        prefs.widgetBg = bg.lowercase()
-        prefs.widgetOpacity = opacity.coerceIn(0, 100)
-        prefs.widgetText = text
+    fun setWidgetTheme(theme: String): Boolean {
+        if (WidgetLook.decode(theme) == null) return false
+        if (theme == prefs.widgetTheme) return true
+        prefs.widgetTheme = theme
         Widget.draw(a.applicationContext, Summary.cached(a))
         return true
     }

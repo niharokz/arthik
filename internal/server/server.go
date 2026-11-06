@@ -14,7 +14,6 @@ import (
 	"gitlab.com/niharokz/arthik/internal/feature/budgets"
 	"gitlab.com/niharokz/arthik/internal/feature/categories"
 	"gitlab.com/niharokz/arthik/internal/feature/importexport"
-	"gitlab.com/niharokz/arthik/internal/feature/labels"
 	"gitlab.com/niharokz/arthik/internal/feature/reports"
 	"gitlab.com/niharokz/arthik/internal/feature/review"
 	"gitlab.com/niharokz/arthik/internal/feature/settings"
@@ -48,7 +47,6 @@ func New(a *auth.Auth, o Options) http.Handler {
 	state.Register(rt)
 	accounts.Register(rt)
 	categories.Register(rt)
-	labels.Register(rt)
 	transactions.Register(rt)
 	review.Register(rt)
 	budgets.Register(rt)

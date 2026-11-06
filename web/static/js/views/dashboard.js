@@ -1,10 +1,10 @@
 // Home: the blocks you chose, in your order (Settings are saved in settings.md as
 // `home`): net worth with its trend, the period's income/expense/savings, inbox,
 // spending, budgets, upcoming, credit cards, accounts, recent transactions, cash flow,
-// and blocks of your own for any account, category or label.
+// and blocks of your own for any account or category.
 
 import { html, raw, money, money0, amt, paise, qs, fmtShort, relDay, parseDate, ymd, addDays, replay, countUp } from "../util.js";
-import { S, periodState, periodQuery, periodBar, wirePeriod, catName, catIcon, today, loading, ro, acc, accName, cat, label, sheet, toast, celebrate, chartType } from "../ui.js";
+import { S, periodState, periodQuery, periodBar, wirePeriod, catName, catIcon, today, loading, ro, acc, accName, cat, sheet, toast, celebrate, chartType } from "../ui.js";
 import { get, put } from "../api.js";
 import { haptic } from "../native.js";
 import { incomeExpense, share, spark, wireTips } from "../charts.js";
@@ -20,21 +20,22 @@ const BLOCKS = {
   accounts: ["Accounts", "🏦"], recent: ["Recent transactions", "🧾"], cashflow: ["Cash flow · 6 months", "📊"],
 };
 // Blocks of your own: type → [name, icon].
-const CUSTOM = { account: ["Account", "🏦"], category: ["Category", "🗂️"], label: ["Label", "🏷️"] };
+const CUSTOM = { account: ["Account", "🏦"], category: ["Category", "🗂️"] };
 const DEFAULT = Object.keys(BLOCKS).map((type) => ({ type }));
 
 /** The saved layout, or the default one. */
 const layout = () => (S.state.settings.home?.length ? S.state.settings.home : DEFAULT);
 
-// A block whose account, category or label is gone is skipped.
-const exists = (b) => BLOCKS[b.type] || (b.type === "account" && acc(b.ref)) || (b.type === "category" && cat(b.ref)) || (b.type === "label" && label(b.ref));
+// A block whose account or category is gone is skipped.
+const exists = (b) => BLOCKS[b.type] || (b.type === "account" && acc(b.ref)) || (b.type === "category" && cat(b.ref));
 
 export async function render(root, ctx) {
   const st = S.state;
   const p = periodState("dash");
   const blocks = layout().filter(exists);
   const has = (t) => blocks.some((b) => b.type === t);
-  ctx.actions(ro() ? "" : html`<button class="ghost icon" data-customize aria-label="Customize home" title="Customize home">${icon("edit", 18)}</button>`);
+  const locked = ro() || st.settings.home_locked; // Settings → Home → Lock the layout
+  ctx.actions(locked ? "" : html`<button class="ghost icon" data-customize aria-label="Customize home" title="Customize home">${icon("edit", 18)}</button>`);
   root.innerHTML = String(loading());
   const sixAgo = parseDate(today());
   sixAgo.setMonth(sixAgo.getMonth() - 5, 1);
@@ -44,7 +45,7 @@ export async function render(root, ctx) {
   const range = tot.range;
   const custom = blocks.filter((b) => CUSTOM[b.type]);
   const [bud, up, recent, flow, box, ...own] = await Promise.all([
-    has("budgets") ? get("/api/budgets" + qs(periodQuery(p))) : none,
+    has("budgets") || has("period") ? get("/api/budgets" + qs(periodQuery(p))) : none,
     has("upcoming") ? get("/api/transactions" + qs({ when: "scheduled", to: ahead, limit: 50 })) : none,
     has("recent") ? get("/api/transactions" + qs({ limit: 8, when: "posted" })) : none,
     has("cashflow") ? get("/api/reports/cashflow" + qs({ from: ymd(sixAgo), to: today() })) : none,
@@ -55,7 +56,7 @@ export async function render(root, ctx) {
   if (!ctx.alive()) return;
   const data = { st, p, tot, bud, up, recent, flow, box, own: new Map(custom.map((b, i) => [b, own[i]])) };
   root.innerHTML = String(html`<div class="home">${blocks.map((b) => block(b, data))}</div>
-    ${ro() ? "" : html`<div class="home-foot"><button class="ghost" data-customize>✎ Customize home</button></div>`}`);
+    ${locked ? "" : html`<div class="home-foot"><button class="ghost" data-customize>✎ Customize home</button></div>`}`);
   wire(root, ctx, blocks, data);
 }
 
@@ -64,6 +65,20 @@ function block(b, d) {
   if (!out) return "";
   const wide = BLOCKS[b.type]?.[2];
   return html`<div class="home-b ${wide ? "wide" : ""}" data-block="${b.type}${b.ref ? "/" + b.ref : ""}" ${b.style ? raw(`data-style="${b.style}"`) : ""}>${out}</div>`;
+}
+
+// Month pace: how much of the period has gone against how much of the budget is
+// spent; warm when spending runs ahead. Only for the current period with budgets.
+function pace(range, bud) {
+  const t = today();
+  if (!bud || !paise(bud.total?.budget) || t < range.from || t > range.to) return "";
+  const day = 86400000, from = parseDate(range.from), to = parseDate(range.to);
+  const time = Math.min(100, Math.round(((parseDate(t) - from) / day + 1) * 100 / ((to - from) / day + 1)));
+  const spent = Math.round(paise(bud.total.spent) * 100 / paise(bud.total.budget));
+  const ahead = spent > time + 5;
+  return html`<a class="pace ${ahead ? "ahead" : ""}" href="#/budgets" title="Share of the period gone, and of the budget spent">
+    <div class="pace-bar"><i class="spent" style="width:${Math.min(100, spent)}%"></i><b class="now" style="left:${time}%"></b></div>
+    <span>${time}% of ${range.label} gone · <b>${spent}% of the budget spent</b>${ahead ? " — ahead of pace" : ""}</span></a>`;
 }
 
 // The headline amount with its paise set smaller (₹12,41,566.90).
@@ -84,11 +99,12 @@ const BUILT = {
           html`<button data-span="${k}" class="${k === span() ? "on" : ""}" aria-pressed="${k === span()}">${v.label}</button>`)}</div>
       </div>
       <div class="hero-spark" data-spark><div class="sk spark-sk"></div></div>
-      <div class="hero-foot"><span>Assets ${amt(st.summary.assets)}</span><span>Owed ${amt(String(-paise(st.summary.liabilities) / 100))}</span>
+      <div class="hero-foot"><a href="#/accounts">Assets ${amt(st.summary.assets)}</a><a href="#/accounts">Owed ${amt(String(-paise(st.summary.liabilities) / 100))}</a>
         ${st.summary.excluded_ids?.length ? html`<span title="${st.summary.excluded_ids.map(accName).join(", ")}">Not counted ${amt(st.summary.excluded, { signed: true })}</span>` : ""}</div>
       ${st.summary.checks_off || st.summary.unchecked ? html`<a class="hero-check" href="#/accounts">${st.summary.checks_off ? `❌ ${st.summary.checks_off} don't match the bank` : ""}${st.summary.checks_off && st.summary.unchecked ? " · " : ""}${st.summary.unchecked ? `${st.summary.unchecked} not checked in ${st.settings.balance_check_days} days` : ""}</a>` : ""}
     </section>`,
-  period: (b, { p, tot }) => html`<div data-period>${periodBar(p, tot.range)}
+  period: (b, { p, tot, bud }) => html`<div data-period>${periodBar(p, tot.range)}
+    ${pace(tot.range, bud)}
     <div class="stat-chips">
       <div class="stat-chip"><span>Income</span>${amt(tot.income, { cls: "pos" })}</div>
       <div class="stat-chip"><span>Expense</span>${amt(tot.expense, { cls: "neg" })}</div>
@@ -163,12 +179,6 @@ const OWN = {
       ${bu ? html`<div class="bar ${pct > 100 ? "over" : pct > 85 ? "near" : ""}" style="margin-bottom:8px"><i style="width:${Math.min(100, pct)}%"></i></div>` : ""}
       <div data-own="${b.type}/${b.ref}">${grouped(own.get(b).items, { empty: "Nothing in this period" })}</div></section>`;
   },
-  label: (b, { own, tot }) => {
-    const l = label(b.ref), r = own.get(b);
-    return html`<section class="card own">${head(b, html`# ${l.name}`, `#/tx?label=${encodeURIComponent(l.id)}`)}
-      <div class="own-big">${amt(r.sums.expense, { cls: "neg" })}<small>spent · ${tot.range.label}${paise(r.sums.income) ? html` · received ${money(r.sums.income)}` : ""}</small></div>
-      <div data-own="${b.type}/${b.ref}">${grouped(r.items, { empty: "Nothing in this period" })}</div></section>`;
-  },
 };
 
 function wire(root, ctx, blocks, d) {
@@ -199,16 +209,15 @@ function wire(root, ctx, blocks, d) {
 // ---- customize: show, hide, order and create blocks ----
 
 const nameOf = (b) => b.title || (BLOCKS[b.type] ? BLOCKS[b.type][0]
-  : b.type === "account" ? acc(b.ref)?.name : b.type === "category" ? catName(b.ref) : "# " + (label(b.ref)?.name || b.ref));
-const iconOf = (b) => (BLOCKS[b.type] ? BLOCKS[b.type][1] : b.type === "account" ? acc(b.ref)?.icon || "🏦" : b.type === "category" ? catIcon(b.ref) : "🏷️");
+  : b.type === "account" ? acc(b.ref)?.name : catName(b.ref));
+const iconOf = (b) => (BLOCKS[b.type] ? BLOCKS[b.type][1] : b.type === "account" ? acc(b.ref)?.icon || "🏦" : catIcon(b.ref));
 
 function customize(ctx) {
   const st = S.state;
   let list = layout().filter(exists).map((b) => ({ ...b }));
   let kind = "account", moved = -1;
   const options = (k) => k === "account" ? st.accounts.filter((a) => !a.archived).map((a) => [a.id, `${a.icon} ${a.name}`])
-    : k === "category" ? st.categories.map((c) => [c.id, `${catIcon(c.id)} ${catName(c.id, true)}`])
-      : st.labels.map((l) => [l.id, "# " + l.name]);
+    : st.categories.map((c) => [c.id, `${catIcon(c.id)} ${catName(c.id, true)}`]);
   const body = () => html`
     <p class="muted" style="margin-top:0">Top to bottom, as on the home screen. Saved in settings.md, so the phone and the web match.</p>
     <ol class="list home-edit">${list.map((b, i) => html`<li class="menu-row ${i === moved ? "moved" : ""}">

@@ -26,7 +26,6 @@ type Entry struct {
 	ToAccount string          `json:"to_account,omitempty"`
 	Category  string          `json:"category,omitempty"`
 	Splits    []Split         `json:"splits,omitempty"`
-	Labels    []string        `json:"labels,omitempty"`
 	Notes     string          `json:"notes,omitempty"`
 	Postings  []model.Posting `json:"postings,omitempty"` // journal type only
 }
@@ -72,9 +71,6 @@ func (d *Data) UniqueCategoryID(name, parent string) string {
 	}
 	return uniqueID(base, func(s string) bool { _, ok := d.idx.cat[s]; return ok })
 }
-func (d *Data) UniqueLabelID(name string) string {
-	return uniqueID(Slug(name), func(s string) bool { _, ok := d.idx.lab[s]; return ok })
-}
 
 // NewTxID returns "t-YYYYMMDD-<6 hex>" (random part, retried if taken).
 func NewTxID(date string, taken func(string) bool) string {
@@ -111,11 +107,6 @@ func (d *Data) BuildTx(e Entry) (model.Transaction, error) {
 		ID: e.ID, Date: strings.TrimSpace(e.Date), Time: strings.TrimSpace(e.Time),
 		Type: e.Type, Title: strings.TrimSpace(e.Title),
 		Notes: strings.TrimSpace(e.Notes),
-	}
-	for _, l := range e.Labels {
-		if l = strings.TrimSpace(l); l != "" && !contains(t.Labels, l) {
-			t.Labels = append(t.Labels, l)
-		}
 	}
 	switch e.Type {
 	case model.TxExpense, model.TxIncome:
@@ -235,8 +226,7 @@ func (d *Data) ValidateTx(t model.Transaction) error {
 
 // EntryOf turns a stored transaction back into the UI form.
 func EntryOf(t model.Transaction) Entry {
-	e := Entry{ID: t.ID, Type: t.Type, Date: t.Date, Time: t.Time, Title: t.Title, Labels: t.Labels,
-		Notes: t.Notes}
+	e := Entry{ID: t.ID, Type: t.Type, Date: t.Date, Time: t.Time, Title: t.Title, Notes: t.Notes}
 	var accs, cats []model.Posting
 	for _, p := range t.Postings {
 		if p.Account != "" {
@@ -314,37 +304,4 @@ func contains(s []string, v string) bool {
 		}
 	}
 	return false
-}
-
-// EnsureLabels maps label names/ids to ids, creating labels that do not exist yet
-// (so typing a new label on a transaction adds it to labels.md automatically).
-func (d *Data) EnsureLabels(in []string, ch *Change) []string {
-	var out []string
-	for _, l := range in {
-		l = strings.TrimSpace(l)
-		if l == "" {
-			continue
-		}
-		id := ""
-		if _, ok := d.idx.lab[l]; ok {
-			id = l
-		} else {
-			for _, x := range d.Labels {
-				if strings.EqualFold(x.Name, l) {
-					id = x.ID
-					break
-				}
-			}
-		}
-		if id == "" {
-			id = d.UniqueLabelID(l)
-			d.Labels = append(d.Labels, model.Label{ID: id, Name: l})
-			d.idx.lab[id] = len(d.Labels) - 1
-			ch.Labels = true
-		}
-		if !contains(out, id) {
-			out = append(out, id)
-		}
-	}
-	return out
 }

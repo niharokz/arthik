@@ -18,8 +18,7 @@ type Filter struct {
 	Types      []string
 	Accounts   []string
 	Categories []string // a parent matches its children too
-	Labels     []string // any of
-	Text       string   // title, notes, labels, amount
+	Text       string   // title, notes, amount
 	Min, Max   money.Amount
 	HasMin     bool
 	HasMax     bool
@@ -40,12 +39,11 @@ func list(v url.Values, name string) []string {
 }
 
 // Parse reads a filter from URL query parameters:
-// from, to, type, account, category, label, q, min, max, when.
+// from, to, type, account, category, q, min, max, when.
 func Parse(v url.Values) Filter {
 	f := Filter{
 		Types: list(v, "type"), Accounts: list(v, "account"), Categories: list(v, "category"),
-		Labels: list(v, "label"),
-		Text:   strings.TrimSpace(v.Get("q")), When: v.Get("when"),
+		Text: strings.TrimSpace(v.Get("q")), When: v.Get("when"),
 	}
 	if d, err := dates.Parse(v.Get("from")); err == nil {
 		f.From = d
@@ -132,18 +130,6 @@ func (m *Matcher) match(t model.Transaction, stored bool) bool {
 	if len(f.Types) > 0 && !in(f.Types, t.Type) {
 		return false
 	}
-	if len(f.Labels) > 0 {
-		ok := false
-		for _, l := range f.Labels {
-			if t.HasLabel(l) {
-				ok = true
-				break
-			}
-		}
-		if !ok {
-			return false
-		}
-	}
 	if m.accs != nil || m.cats != nil {
 		accOK, catOK := m.accs == nil, m.cats == nil
 		for _, p := range t.Postings {
@@ -166,7 +152,7 @@ func (m *Matcher) match(t model.Transaction, stored bool) bool {
 		return false
 	}
 	if m.text != "" {
-		hay := strings.ToLower(t.Title + " " + t.Notes + " " + strings.Join(t.Labels, " ") + " " + amt.Abs().String())
+		hay := strings.ToLower(t.Title + " " + t.Notes + " " + amt.Abs().String())
 		for _, p := range t.Postings {
 			if a, ok := m.d.Account(p.Account); ok {
 				hay += " " + strings.ToLower(a.Name)

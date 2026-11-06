@@ -11,7 +11,7 @@ class AppConfigTest {
     private val values = mapOf<String, Any?>(
         "mode" to "folder", "folder" to "/storage/emulated/0/Notes/data/finance", "primary" to false,
         "lock_mode" to "device", "lock_after" to 300, "sms_enabled" to true, "sms_enabled_at" to 1760900000000L,
-        "sms_hour" to 1, "sms_minute" to 30, "widget_bg" to "#000000", "widget_text" to "say \"hi\" \\ there",
+        "sms_hour" to 1, "sms_minute" to 30, "sms_device" to "say \"hi\" \\ there",
         "pin_hash" to "v1:60000:salt:hash", "left_at" to 123L, // never written
     )
 

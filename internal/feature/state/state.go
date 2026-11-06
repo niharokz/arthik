@@ -1,10 +1,11 @@
 // Package state serves GET /api/state: everything the app needs at start-up in one
-// call (settings, accounts with balances, categories, labels, the inbox and reminder counts,
+// call (settings, accounts with balances, categories with recent use, the inbox and reminder counts,
 // the overview numbers and any data problems). The PWA caches this for offline use.
 package state
 
 import (
 	"gitlab.com/niharokz/arthik/internal/book"
+	"gitlab.com/niharokz/arthik/internal/dates"
 	"gitlab.com/niharokz/arthik/internal/httpx"
 	"gitlab.com/niharokz/arthik/internal/inbox"
 	"gitlab.com/niharokz/arthik/internal/model"
@@ -73,7 +74,6 @@ func Register(rt *httpx.Router) {
 			out["settings"] = d.Settings
 			out["accounts"] = accs
 			out["categories"] = cats
-			out["labels"] = nonNil(d.Labels)
 			pending := 0
 			for _, x := range d.Drafts {
 				if x.Status == model.DraftPending {
@@ -87,7 +87,9 @@ func Register(rt *httpx.Router) {
 			out["period_kinds"] = period.Kinds
 			out["look_options"] = map[string]any{ // what Settings → Look offers
 				"palettes": model.Palettes, "cards": model.CardStyles, "colors": model.LookColors, "charts": model.Charts,
+				"densities": model.Densities,
 			}
+			out["category_uses"] = categoryUses(d, comp)
 			s := summary{
 				NetWorth: comp.NetWorth, Assets: comp.Assets, Liabilities: comp.Liabilities,
 				Period: comp.Period, Income: comp.Income, Expense: comp.Expense, Net: comp.Income - comp.Expense,
@@ -117,4 +119,30 @@ func nonNil[T any](s []T) []T {
 		return []T{}
 	}
 	return s
+}
+
+// pinWindow is how far back category use is counted for the picker's pinned row.
+const pinWindow = 90
+
+// categoryUses counts, per category, the transactions using it in the last pinWindow
+// days (the category picker pins the most used ones).
+func categoryUses(d *book.Data, comp *book.Computed) map[string]int {
+	from := comp.Today.AddDays(-pinWindow)
+	out := map[string]int{}
+	for i := len(d.Txns) - 1; i >= 0; i-- {
+		t := d.Txns[i]
+		td, err := dates.Parse(t.Date)
+		if err != nil || td.After(comp.Today) {
+			continue
+		}
+		if td.Before(from) {
+			break // sorted by date
+		}
+		for _, p := range t.Postings {
+			if p.Category != "" {
+				out[p.Category]++
+			}
+		}
+	}
+	return out
 }

@@ -1,19 +1,19 @@
-// Transactions: search, period, filters (type, accounts, categories, labels,
+// Transactions: search, period, filters (type, accounts, categories,
 // amount, posted/scheduled), totals of the filtered list, bulk actions and CSV export.
 
 import { html, raw, qs, money, amt, paise, debounce } from "../util.js";
-import { S, PERIODS, sheet, toast, confirmSheet, accName, catName, labelName, ro, today, loading, formData } from "../ui.js";
+import { S, PERIODS, sheet, toast, confirmSheet, accName, catName, ro, today, loading, formData } from "../ui.js";
 import { get, post } from "../api.js";
 import { grouped, wireRows, pendingCreates } from "../txlist.js";
 import { openTx } from "../txform.js";
 
 function filters(ctx) {
-  if (!S.view.tx) S.view.tx = { period: "all", date: today(), from: "", to: "", q: "", type: [], account: [], category: [], label: [], when: "", min: "", max: "" };
+  if (!S.view.tx) S.view.tx = { period: "all", date: today(), from: "", to: "", q: "", type: [], account: [], category: [], when: "", min: "", max: "" };
   const f = S.view.tx;
   const p = ctx.params;
-  if ([...p.keys()].length) { // a link like #/tx?label=goa-trip resets the filters to it
-    Object.assign(f, { period: "all", q: "", type: [], account: [], category: [], label: [], when: "", min: "", max: "" });
-    for (const k of ["account", "category", "label", "type"]) if (p.get(k)) f[k] = p.get(k).split(",");
+  if ([...p.keys()].length) { // a link like #/tx?category=food resets the filters to it
+    Object.assign(f, { period: "all", q: "", type: [], account: [], category: [], when: "", min: "", max: "" });
+    for (const k of ["account", "category", "type"]) if (p.get(k)) f[k] = p.get(k).split(",");
     if (p.get("q")) f.q = p.get("q");
     if (p.get("from") && p.get("to")) Object.assign(f, { period: "custom", from: p.get("from"), to: p.get("to") });
     history.replaceState(null, "", "#/tx");
@@ -21,7 +21,7 @@ function filters(ctx) {
   return f;
 }
 
-const activeCount = (f) => ["type", "account", "category", "label"].reduce((n, k) => n + (f[k].length ? 1 : 0), 0) + (f.when ? 1 : 0) + (f.min || f.max ? 1 : 0);
+const activeCount = (f) => ["type", "account", "category"].reduce((n, k) => n + (f[k].length ? 1 : 0), 0) + (f.when ? 1 : 0) + (f.min || f.max ? 1 : 0);
 
 let selecting = false;
 const selected = new Set();
@@ -33,7 +33,7 @@ export async function render(root, ctx) {
     rangeReply = await get("/api/period" + qs(f.period === "custom" ? { period: "custom", from: f.from, to: f.to } : { period: f.period, date: f.date }));
     range = rangeReply.range;
   }
-  const query = { from: range?.from, to: range?.to, q: f.q, type: f.type, account: f.account, category: f.category, label: f.label, when: f.when, min: f.min, max: f.max };
+  const query = { from: range?.from, to: range?.to, q: f.q, type: f.type, account: f.account, category: f.category, when: f.when, min: f.min, max: f.max };
   if (!root.querySelector("[data-txlist]")) root.innerHTML = String(loading());
   const res = await get("/api/transactions" + qs({ ...query, limit: 1000 }));
   if (!ctx.alive()) return;
@@ -63,7 +63,7 @@ export async function render(root, ctx) {
         : html`<div class="card stat"><div class="label">Net</div><div class="value">${amt(s.net, { signed: true })}</div></div>`}
     </div>
     ${selecting ? html`<div class="card row wrap" data-bulk><b>${selected.size} selected</b><span class="grow"></span>
-      <button data-b="add_label">Add label</button><button class="danger" data-b="delete">Delete</button></div>` : ""}
+      <button class="danger" data-b="delete">Delete</button></div>` : ""}
     <div class="card" data-txlist>${grouped(items, { account: f.account.length === 1 ? f.account[0] : undefined, empty: f.q || activeCount(f) ? "Nothing matches these filters" : "No transactions yet — tap ＋ to add one" })}
       ${res.total > res.items.length ? html`<p class="muted" style="text-align:center">Showing the newest 1000 of ${res.total}. Narrow the period to see older ones.</p>` : ""}</div>`);
 
@@ -112,7 +112,6 @@ function chips(f) {
   f.type.forEach((v) => add("type", v, v));
   f.account.forEach((v) => add("account", v, accName(v)));
   f.category.forEach((v) => add("category", v, catName(v, true)));
-  f.label.forEach((v) => add("label", v, "#" + labelName(v)));
   if (f.when) add("when", "", f.when === "posted" ? "posted only" : "scheduled only");
   if (f.min || f.max) { out.push(html`<span class="chip on">${f.min ? money(f.min) : "₹0"} – ${f.max ? money(f.max) : "∞"}</span>`); }
   return out.length ? html`<div class="chips" style="margin-bottom:12px">${out}</div>` : "";
@@ -126,7 +125,6 @@ function filterSheet(f, rerender) {
     <h3>Accounts</h3><div class="chips" style="margin:6px 0 14px">${st.accounts.map((a) => box("account", a.id, a.name, f.account.includes(a.id)))}</div>
     <h3>Categories</h3><div class="chips" style="margin:6px 0 14px">${st.categories.filter((c) => !c.parent).map((c) => [box("category", c.id, (c.icon || "") + " " + c.name, f.category.includes(c.id)),
       st.categories.filter((k) => k.parent === c.id).map((k) => box("category", k.id, "› " + k.name, f.category.includes(k.id)))])}</div>
-    ${st.labels.length ? html`<h3>Labels</h3><div class="chips" style="margin:6px 0 14px">${st.labels.map((l) => box("label", l.id, "#" + l.name, f.label.includes(l.id)))}</div>` : ""}
     <div class="fields two">
       <label class="f"><span>Min amount</span><input name="min" inputmode="decimal" value="${f.min}"></label>
       <label class="f"><span>Max amount</span><input name="max" inputmode="decimal" value="${f.max}"></label>
@@ -137,14 +135,14 @@ function filterSheet(f, rerender) {
   sheet("Filters", body, html`<button data-clear>Clear all</button><span class="grow"></span><button class="primary" data-apply>Apply</button>`, (d, close) => {
     d.querySelectorAll("label.chip").forEach((l) => l.addEventListener("change", () => l.classList.toggle("on", l.querySelector("input").checked)));
     d.querySelector("[data-apply]").addEventListener("click", () => {
-      for (const k of ["type", "account", "category", "label"]) f[k] = [...d.querySelectorAll(`[data-f="${k}"]:checked`)].map((x) => x.value);
+      for (const k of ["type", "account", "category"]) f[k] = [...d.querySelectorAll(`[data-f="${k}"]:checked`)].map((x) => x.value);
       const v = formData(d);
       Object.assign(f, { min: v.min.trim(), max: v.max.trim(), when: v.when });
       close();
       rerender();
     });
     d.querySelector("[data-clear]").addEventListener("click", () => {
-      Object.assign(f, { type: [], account: [], category: [], label: [], when: "", min: "", max: "" });
+      Object.assign(f, { type: [], account: [], category: [], when: "", min: "", max: "" });
       close();
       rerender();
     });
@@ -154,19 +152,9 @@ function filterSheet(f, rerender) {
 async function bulk(action, ctx) {
   if (!selected.size) return toast("Select some transactions first");
   const ids = [...selected];
-  let body;
-  if (action === "delete") {
-    if (!(await confirmSheet(`Delete ${ids.length} transaction(s)?`, "They will be removed from every balance and total."))) return;
-    body = { ids, action: "delete" };
-  } else {
-    const name = await new Promise((resolve) => {
-      sheet("Add label", html`<label class="f"><span>Label</span><input name="l" list="lbls" autofocus><datalist id="lbls">${S.state.labels.map((l) => html`<option value="${l.name}">`)}</datalist></label>`,
-        html`<span class="grow"></span><button data-close>Cancel</button><button class="primary" data-ok>Add</button>`,
-        (d, close) => d.querySelector("[data-ok]").addEventListener("click", () => { const v = d.querySelector("[name=l]").value.trim(); close(); resolve(v); }));
-    });
-    if (!name) return;
-    body = { ids, action: "add_label", value: name };
-  }
+  if (action !== "delete") return;
+  if (!(await confirmSheet(`Delete ${ids.length} transaction(s)?`, "They will be removed from every balance and total."))) return;
+  const body = { ids, action: "delete" };
   try {
     const r = await post("/api/transactions/bulk", body);
     toast(`${r.updated} updated`);

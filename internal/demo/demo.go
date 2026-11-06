@@ -1,6 +1,6 @@
 // Package demo generates the read-only demo dataset: about six months of realistic,
 // made-up finances (salary, rent, groceries, two credit cards, a car loan, a SIP,
-// market gains/losses, budgets, labels, a few future-dated items and an inbox of
+// market gains/losses, budgets, a few future-dated items and an inbox of
 // drafts as if they came from SMS and Kronos).
 //
 // The data is generated relative to today and refreshed once a month (on start-up
@@ -43,7 +43,7 @@ func Seed(dir string) error {
 	if err := os.MkdirAll(filepath.Join(dir, book.TxDir), 0o755); err != nil {
 		return err
 	}
-	for _, f := range []string{book.SettingsFile, book.AccountsFile, book.CategoriesFile, book.LabelsFile, book.MoneyFile, book.DraftsFile, book.RulesFile, "reminders.md"} {
+	for _, f := range []string{book.SettingsFile, book.AccountsFile, book.CategoriesFile, book.MoneyFile, book.DraftsFile, book.RulesFile, "reminders.md"} {
 		_ = os.Remove(filepath.Join(dir, f))
 	}
 	old, _ := filepath.Glob(filepath.Join(dir, book.TxDir, "transaction_*.md"))
@@ -59,11 +59,10 @@ func Seed(dir string) error {
 	rng := rand.New(rand.NewSource(int64(today.Year()*100 + int(today.Month()))))
 
 	err = b.Mutate(func(d *book.Data, ch *book.Change) error {
-		ch.Settings, ch.Accounts, ch.Categories, ch.Labels, ch.Drafts, ch.Rules = true, true, true, true, true, true
+		ch.Settings, ch.Accounts, ch.Categories, ch.Drafts, ch.Rules = true, true, true, true, true
 		d.Settings = model.DefaultSettings()
 		d.Accounts = accounts(start)
 		d.Categories = categories()
-		d.Labels = []model.Label{{ID: "home", Name: "home"}, {ID: "office", Name: "office"}, {ID: "goa-trip", Name: "Goa trip", Color: "#d08a3a"}, {ID: "reimbursable", Name: "reimbursable"}}
 		d.Reindex()
 		if err := daily(d, ch, rng, start, today); err != nil {
 			return err
@@ -159,11 +158,11 @@ func bills() []bill {
 	return []bill{
 		{1, 1, 0, book.Entry{Title: "Salary", Type: inc, Amount: amt(128500), Account: "salary", Category: "salary-in"}},
 		{2, 1, 0, book.Entry{Title: "Move to savings", Type: tr, Amount: amt(75000), Account: "salary", ToAccount: "savings"}},
-		{3, 1, 0, book.Entry{Title: "Rent", Type: exp, Amount: amt(24000), Account: "savings", Category: "housing-rent", Labels: []string{"home"}}},
+		{3, 1, 0, book.Entry{Title: "Rent", Type: exp, Amount: amt(24000), Account: "savings", Category: "housing-rent"}},
 		{5, 1, 0, book.Entry{Title: "Index fund SIP", Type: tr, Amount: amt(15000), Account: "salary", ToAccount: "mutual-funds"}},
 		{10, 1, 0, book.Entry{Title: "Car loan EMI", Type: tr, Amount: amt(12500), Account: "savings", ToAccount: "car-loan"}},
 		{10, 1, 0, book.Entry{Title: "Car loan interest", Type: exp, Amount: amt(2950), Account: "car-loan", Category: "loan-interest"}},
-		{12, 1, 0, book.Entry{Title: "Fibre internet", Type: exp, Amount: amt(799), Account: "rewards-card", Category: "housing-internet", Labels: []string{"home"}}},
+		{12, 1, 0, book.Entry{Title: "Fibre internet", Type: exp, Amount: amt(799), Account: "rewards-card", Category: "housing-internet"}},
 		{15, 1, 0, book.Entry{Title: "Streaming subscription", Type: exp, Amount: amt(649), Account: "rewards-card", Category: "entertainment-subscriptions"}},
 		{20, 1, 0, book.Entry{Title: "Mobile recharge", Type: exp, Amount: amt(299), Account: "wallet", Category: "bills-mobile"}},
 		{8, 3, 0, book.Entry{Title: "Gym membership", Type: exp, Amount: amt(4500), Account: "savings", Category: "health-gym"}},
@@ -189,7 +188,6 @@ func monthly(d *book.Data, ch *book.Change, start, today dates.Date) error {
 			if err != nil {
 				return fmt.Errorf("%s %s: %w", e.Date, e.Title, err)
 			}
-			t.Labels = d.EnsureLabels(t.Labels, ch)
 			d.SetTx(t, ch)
 		}
 	}
@@ -198,7 +196,7 @@ func monthly(d *book.Data, ch *book.Change, start, today dates.Date) error {
 // inboxDrafts fills the review inbox with what the phone and Kronos would send.
 func inboxDrafts(d *book.Data, ch *book.Change, today dates.Date) {
 	d.SetRule(model.Rule{ID: "swiggy", Match: "swiggy", Title: "Swiggy", Category: "food-restaurants", Uses: 6}, ch)
-	d.SetRule(model.Rule{ID: "ramesh-kumar", Match: "ramesh kumar", Title: "Milk (Ramesh)", Category: "food-groceries", Labels: []string{"home"}, Uses: 11}, ch)
+	d.SetRule(model.Rule{ID: "ramesh-kumar", Match: "ramesh kumar", Title: "Milk (Ramesh)", Category: "food-groceries", Uses: 11}, ch)
 	day := func(n int) string { return today.AddDays(-n).String() }
 	sms := func(id, date, tm, raw string) inbox.Item {
 		return inbox.Item{ID: "sms-demo-" + id, Source: inbox.SourceSMS, Date: date, Time: tm, Raw: raw}
@@ -228,7 +226,6 @@ type pick struct {
 	category string
 	min, max int64
 	accounts []string
-	labels   []string
 }
 
 // daily adds everyday spending, card bill payments, top-ups and market moves.
@@ -250,31 +247,31 @@ func daily(d *book.Data, ch *book.Change, rng *rand.Rand, start, today dates.Dat
 		return amt(v)
 	}
 	weekly := []pick{
-		{"Big Basket order", "food-groceries", 900, 2600, []string{"rewards-card", "savings"}, []string{"home"}},
-		{"Vegetables & fruits", "food-groceries", 180, 650, []string{"cash", "wallet"}, nil},
-		{"Fuel", "transport-fuel", 1200, 2600, []string{"rewards-card"}, nil},
-		{"Metro card recharge", "transport-metro", 300, 500, []string{"wallet"}, []string{"office"}},
+		{"Big Basket order", "food-groceries", 900, 2600, []string{"rewards-card", "savings"}},
+		{"Vegetables & fruits", "food-groceries", 180, 650, []string{"cash", "wallet"}},
+		{"Fuel", "transport-fuel", 1200, 2600, []string{"rewards-card"}},
+		{"Metro card recharge", "transport-metro", 300, 500, []string{"wallet"}},
 	}
 	often := []pick{
-		{"Coffee", "food-coffee", 120, 380, []string{"wallet", "cash"}, nil},
-		{"Lunch", "food-restaurants", 220, 650, []string{"wallet"}, []string{"office"}},
-		{"Cab", "transport-cab", 140, 560, []string{"wallet", "travel-card"}, nil},
-		{"Dinner out", "food-restaurants", 900, 3200, []string{"rewards-card", "travel-card"}, nil},
-		{"Pharmacy", "health-medicine", 150, 900, []string{"wallet", "cash"}, nil},
-		{"Snacks", "food-coffee", 60, 240, []string{"cash"}, nil},
+		{"Coffee", "food-coffee", 120, 380, []string{"wallet", "cash"}},
+		{"Lunch", "food-restaurants", 220, 650, []string{"wallet"}},
+		{"Cab", "transport-cab", 140, 560, []string{"wallet", "travel-card"}},
+		{"Dinner out", "food-restaurants", 900, 3200, []string{"rewards-card", "travel-card"}},
+		{"Pharmacy", "health-medicine", 150, 900, []string{"wallet", "cash"}},
+		{"Snacks", "food-coffee", 60, 240, []string{"cash"}},
 	}
 	rare := []pick{
-		{"T-shirts", "shopping-clothes", 900, 3200, []string{"rewards-card"}, nil},
-		{"Headphones", "shopping-electronics", 1800, 7500, []string{"rewards-card"}, nil},
-		{"Plants & pots", "shopping-home", 400, 1600, []string{"wallet"}, []string{"home"}},
-		{"Movie tickets", "entertainment-movies", 500, 1400, []string{"travel-card"}, nil},
-		{"Birthday gift", "gifts", 800, 3500, []string{"savings", "rewards-card"}, nil},
-		{"House cleaning supplies", "housing-maintenance", 300, 1100, []string{"cash"}, []string{"home"}},
+		{"T-shirts", "shopping-clothes", 900, 3200, []string{"rewards-card"}},
+		{"Headphones", "shopping-electronics", 1800, 7500, []string{"rewards-card"}},
+		{"Plants & pots", "shopping-home", 400, 1600, []string{"wallet"}},
+		{"Movie tickets", "entertainment-movies", 500, 1400, []string{"travel-card"}},
+		{"Birthday gift", "gifts", 800, 3500, []string{"savings", "rewards-card"}},
+		{"House cleaning supplies", "housing-maintenance", 300, 1100, []string{"cash"}},
 	}
 	use := func(p pick, day dates.Date) error {
 		return add(book.Entry{Type: model.TxExpense, Date: day.String(), Time: fmt.Sprintf("%02d:%02d", 8+rng.Intn(13), rng.Intn(60)),
 			Title: p.title, Amount: between(p.min, p.max), Account: p.accounts[rng.Intn(len(p.accounts))],
-			Category: p.category, Labels: p.labels})
+			Category: p.category})
 	}
 	for day := start; !day.After(today); day = day.AddDays(1) {
 		wd := int(day.Weekday())
@@ -301,7 +298,7 @@ func daily(d *book.Data, ch *book.Change, rng *rand.Rand, start, today dates.Dat
 		switch day.Day() {
 		case 6:
 			if err := add(book.Entry{Type: model.TxExpense, Date: day.String(), Title: "Electricity bill", Amount: between(1100, 2400),
-				Account: "savings", Category: "housing-electricity", Labels: []string{"home"}}); err != nil {
+				Account: "savings", Category: "housing-electricity"}); err != nil {
 				return err
 			}
 		case 7, 22:
@@ -344,14 +341,14 @@ func daily(d *book.Data, ch *book.Change, rng *rand.Rand, start, today dates.Dat
 			}
 		}
 	}
-	// One trip with a label and a split bill.
+	// One trip with a split bill.
 	trip := today.AddDays(-40)
 	if trip.After(start) {
-		_ = add(book.Entry{Type: model.TxExpense, Date: trip.String(), Title: "Flights to Goa", Amount: amt(9800), Account: "travel-card", Category: "travel", Labels: []string{"goa-trip"}})
-		_ = add(book.Entry{Type: model.TxExpense, Date: trip.AddDays(1).String(), Title: "Beach shack dinner", Account: "travel-card", Labels: []string{"goa-trip"},
+		_ = add(book.Entry{Type: model.TxExpense, Date: trip.String(), Title: "Flights to Goa", Amount: amt(9800), Account: "travel-card", Category: "travel"})
+		_ = add(book.Entry{Type: model.TxExpense, Date: trip.AddDays(1).String(), Title: "Beach shack dinner", Account: "travel-card",
 			Splits: []book.Split{{Category: "food-restaurants", Amount: amt(2400)}, {Category: "entertainment-movies", Amount: amt(600)}}})
-		_ = add(book.Entry{Type: model.TxExpense, Date: trip.AddDays(2).String(), Title: "Scooter rental", Amount: amt(1500), Account: "cash", Category: "travel", Labels: []string{"goa-trip"}})
-		_ = add(book.Entry{Type: model.TxIncome, Date: trip.AddDays(9).String(), Title: "Team lunch refund", Amount: amt(1850), Account: "salary", Category: "other-income", Labels: []string{"reimbursable"}})
+		_ = add(book.Entry{Type: model.TxExpense, Date: trip.AddDays(2).String(), Title: "Scooter rental", Amount: amt(1500), Account: "cash", Category: "travel"})
+		_ = add(book.Entry{Type: model.TxIncome, Date: trip.AddDays(9).String(), Title: "Team lunch refund", Amount: amt(1850), Account: "salary", Category: "other-income"})
 	}
 	return nil
 }

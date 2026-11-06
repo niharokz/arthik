@@ -133,14 +133,14 @@ func TestAPI(t *testing.T) {
 		t.Errorf("weekly budget = %v", got)
 	}
 	// CSRF header required
-	req, _ = http.NewRequest("POST", o.srv.URL+"/api/labels", strings.NewReader(`{"name":"x"}`))
+	req, _ = http.NewRequest("POST", o.srv.URL+"/api/categories", strings.NewReader(`{"name":"x","kind":"expense"}`))
 	res, _ = o.c.Do(req)
 	res.Body.Close()
 	if res.StatusCode != 403 {
 		t.Errorf("missing CSRF header = %d", res.StatusCode)
 	}
 	// every report answers
-	for _, p := range []string{"cashflow", "categories", "networth", "balance-sheet", "labels", "accounts", "calendar", "trend?category=food"} {
+	for _, p := range []string{"cashflow", "categories", "networth", "balance-sheet", "accounts", "calendar", "trend?category=food"} {
 		mustOK("GET", "/api/reports/"+p, "")
 	}
 	mustOK("GET", "/api/period?period=quarterly", "")
@@ -240,10 +240,9 @@ func TestSuggest(t *testing.T) {
 		}
 	}
 	o.do("POST", "/api/categories", `{"name":"Food","kind":"expense"}`)
-	o.do("POST", "/api/labels", `{"name":"home"}`)
 	for _, b := range []string{
 		`{"type":"expense","date":"2026-10-01","title":"Milk","amount":"30","account":"bank","category":"food"}`,
-		`{"type":"expense","date":"2026-10-03","title":"Milk","amount":"32","account":"wallet","category":"food","labels":["home"],"notes":"1 litre"}`,
+		`{"type":"expense","date":"2026-10-03","title":"Milk","amount":"32","account":"wallet","category":"food","notes":"1 litre"}`,
 		`{"type":"expense","date":"2026-10-02","title":"Almond milk","amount":"180","account":"bank","category":"food"}`,
 		`{"type":"transfer","date":"2026-10-02","title":"Cash withdrawal","amount":"500","account":"bank","to_account":"wallet"}`,
 	} {
@@ -269,12 +268,9 @@ func TestSuggest(t *testing.T) {
 	if len(got) != 2 || got[0]["title"] != "Milk" || got[1]["title"] != "Almond milk" {
 		t.Fatalf("q=mil order = %v", got)
 	}
-	m := got[0] // the latest Milk wins: wallet, ₹32, label, notes; used twice
+	m := got[0] // the latest Milk wins: wallet, ₹32, notes; used twice
 	if m["account"] != "wallet" || m["amount"] != "32.00" || m["notes"] != "1 litre" || m["uses"].(float64) != 2 {
 		t.Errorf("milk = %v", m)
-	}
-	if l, _ := m["labels"].([]any); len(l) != 1 || l[0] != "home" {
-		t.Errorf("milk labels = %v", m["labels"])
 	}
 	if got := list("q=cash"); len(got) != 1 || got[0]["type"] != "transfer" || got[0]["to_account"] != "wallet" {
 		t.Errorf("transfer = %v", got)
@@ -297,14 +293,14 @@ func TestNavOrder(t *testing.T) {
 	if code, _ := o.do("PUT", "/api/settings", string(b)); code != 400 {
 		t.Errorf("unknown item = %d", code)
 	}
-	s["nav_order"] = []string{"home", "tx", "calendar", "inbox", "reports", "accounts", "tx"} // inbox moved to the top bar
+	s["nav_order"] = []string{"home", "tx", "calendar", "inbox", "reports", "labels", "accounts", "tx"} // inbox moved to the top bar, labels removed
 	b, _ = json.Marshal(s)
 	if code, out := o.do("PUT", "/api/settings", string(b)); code != 200 {
 		t.Fatalf("put %d %v", code, out)
 	}
 	_, st = o.do("GET", "/api/state", "")
 	got, _ := json.Marshal(st["settings"].(map[string]any)["nav_order"])
-	want := `["home","tx","calendar","reports","accounts","categories","budgets","labels"]`
+	want := `["home","tx","calendar","reports","accounts","categories","budgets"]`
 	if string(got) != want {
 		t.Errorf("nav_order = %s", got)
 	}
@@ -385,7 +381,7 @@ func TestHomeLayout(t *testing.T) {
 		t.Errorf("custom section without ref = %d", code)
 	}
 	// repeats are dropped; a section for a missing account is left out
-	if code, out := put(`[{"type":"networth"},{"type":"account","ref":"wallet","title":"Cash"},{"type":"networth"},{"type":"label","ref":"gone"}]`); code != 200 {
+	if code, out := put(`[{"type":"networth"},{"type":"account","ref":"wallet","title":"Cash"},{"type":"networth"},{"type":"category","ref":"gone"}]`); code != 200 {
 		t.Fatalf("put %d %v", code, out)
 	}
 	_, st = o.do("GET", "/api/state", "")
@@ -461,7 +457,7 @@ func TestLookAndAlerts(t *testing.T) {
 	o, _ := setup(t)
 	_, st := o.do("GET", "/api/state", "")
 	s := st["settings"].(map[string]any)
-	if l := s["look"].(map[string]any); l["palette"] != "nss" || l["cards"] != "matte" {
+	if l := s["look"].(map[string]any); l["palette"] != "nss" || l["cards"] != "matte" || l["density"] != "comfortable" {
 		t.Fatalf("default look = %v", l)
 	}
 	if a := s["alerts"].(map[string]any); a["time"] != "09:00" || a["count"].(float64) != 30 || a["mismatch"] != true {
@@ -477,13 +473,14 @@ func TestLookAndAlerts(t *testing.T) {
 		{"palette": "gold", "cards": "shiny"},
 		{"palette": "gold", "cards": "glass", "colors": map[string]string{"accent": "red"}},
 		{"palette": "gold", "cards": "glass", "charts": map[string]string{"spending": "radar"}},
+		{"palette": "blackpink", "cards": "glass", "density": "tiny"},
 	} {
 		s["look"] = bad
 		if code := put(); code != 400 {
 			t.Errorf("look %v = %d", bad, code)
 		}
 	}
-	s["look"] = map[string]any{"palette": "gold", "cards": "glass", "colors": map[string]string{"accent": "#C9A45C"}, "charts": map[string]string{"spending": "donut"}}
+	s["look"] = map[string]any{"palette": "blackpink", "cards": "glass", "density": "compact", "colors": map[string]string{"accent": "#C9A45C"}, "charts": map[string]string{"spending": "donut"}}
 	s["alerts"] = map[string]any{"time": "7:30", "mismatch": false, "count": 12}
 	if code := put(); code != 200 {
 		t.Fatalf("good look = %d", code)
@@ -493,8 +490,38 @@ func TestLookAndAlerts(t *testing.T) {
 	put()
 	_, st = o.do("GET", "/api/state", "")
 	got, _ := json.Marshal([]any{st["settings"].(map[string]any)["look"], st["settings"].(map[string]any)["alerts"]})
-	want := `[{"cards":"glass","charts":{"spending":"donut"},"colors":{"accent":"#c9a45c"},"palette":"gold"},{"count":12,"mismatch":false,"time":"07:30"}]`
+	want := `[{"cards":"glass","charts":{"spending":"donut"},"colors":{"accent":"#c9a45c"},"density":"compact","palette":"blackpink"},{"count":12,"mismatch":false,"time":"07:30"}]`
 	if string(got) != want {
 		t.Errorf("kept = %s", got)
+	}
+}
+
+// An account's list can carry the balance after each transaction (passbook).
+func TestRunningBalance(t *testing.T) {
+	o, _ := setup(t)
+	o.do("POST", "/api/accounts", `{"name":"Bank","type":"bank","opening_balance":"1000"}`)
+	o.do("POST", "/api/accounts", `{"name":"Wallet","type":"cash","opening_balance":"0"}`)
+	o.do("POST", "/api/categories", `{"name":"Food","kind":"expense"}`)
+	for _, b := range []string{
+		`{"type":"expense","date":"2026-10-01","title":"A","amount":"100","account":"bank","category":"food"}`,
+		`{"type":"transfer","date":"2026-10-02","title":"B","amount":"300","account":"bank","to_account":"wallet"}`,
+		`{"type":"expense","date":"2026-10-03","title":"C","amount":"50","account":"wallet","category":"food"}`,
+		`{"type":"income","date":"2026-10-04","title":"D","amount":"20","account":"bank","category":"food"}`,
+	} {
+		if code, out := o.do("POST", "/api/transactions", b); code != 200 {
+			t.Fatalf("add %d %v", code, out)
+		}
+	}
+	_, out := o.do("GET", "/api/transactions?account=bank&running=1", "")
+	bal := out["balances"].(map[string]any)
+	got := []string{}
+	for _, it := range out["items"].([]any) { // newest first
+		got = append(got, it.(map[string]any)["title"].(string)+"="+bal[it.(map[string]any)["id"].(string)].(string))
+	}
+	if want := "D=620.00 B=600.00 A=900.00"; strings.Join(got, " ") != want {
+		t.Errorf("running = %s, want %s", strings.Join(got, " "), want)
+	}
+	if _, out := o.do("GET", "/api/transactions?account=bank", ""); out["balances"] != nil {
+		t.Error("balances sent without running=1")
 	}
 }

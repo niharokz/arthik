@@ -41,9 +41,7 @@ func Accept(d *book.Data, ch *book.Change, id string, e book.Entry, rememberDigi
 		if err != nil {
 			return "", err
 		}
-		t.Labels = d.EnsureLabels(t.Labels, ch)
 		d.SetTx(t, ch)
-		e.Labels = t.Labels
 	}
 	if rememberDigits && x.Digits != "" {
 		target := e.Account
@@ -126,9 +124,6 @@ func fill(e *book.Entry, x model.Draft) {
 	if e.Category == "" && len(e.Splits) == 0 {
 		e.Category = x.Category
 	}
-	if e.Labels == nil {
-		e.Labels = x.Labels
-	}
 	if e.Notes == "" {
 		e.Notes = x.Notes
 	}
@@ -138,7 +133,7 @@ func fill(e *book.Entry, x model.Draft) {
 func settle(d *book.Data, ch *book.Change, x model.Draft, e book.Entry, status, txID string) {
 	if status != model.DraftRejected {
 		x.Type, x.Date, x.Time, x.Title, x.Amount = e.Type, e.Date, e.Time, e.Title, e.Amount
-		x.Account, x.ToAccount, x.Category, x.Labels, x.Notes = e.Account, e.ToAccount, e.Category, e.Labels, e.Notes
+		x.Account, x.ToAccount, x.Category, x.Notes = e.Account, e.ToAccount, e.Category, e.Notes
 	}
 	x.Status, x.Txn, x.Edited = status, txID, true
 	d.SetDraft(x, ch)
@@ -159,7 +154,7 @@ func learn(d *book.Data, ch *book.Change, x model.Draft, e book.Entry) {
 	}
 	r, _ := d.Rule(key)
 	r.ID, r.Match = book.Slug(key), key
-	r.Title, r.Category, r.Labels = e.Title, e.Category, e.Labels
+	r.Title, r.Category = e.Title, e.Category
 	r.Account = ""
 	if x.Digits == "" { // the source names no account: remember the one you chose
 		r.Account = e.Account

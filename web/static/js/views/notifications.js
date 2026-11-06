@@ -54,6 +54,6 @@ export async function render(root, ctx) {
   root.querySelectorAll("[data-reopen]").forEach((b) => b.addEventListener("click", () => act(`/api/notices/${encodeURIComponent(b.dataset.reopen)}/reopen`, "Reopened")));
   root.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => {
     const n = items.find((x) => x.id === b.dataset.add);
-    openTx({ type: n.type, title: n.title, amount: n.amount, account: n.account, category: n.category, date: n.date <= today() ? n.date : today(), labels: n.labels, _prefill: true }, () => ctx.refresh());
+    openTx({ type: n.type, title: n.title, amount: n.amount, account: n.account, category: n.category, date: n.date <= today() ? n.date : today(), _prefill: true }, () => ctx.refresh());
   }));
 }

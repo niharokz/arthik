@@ -21,7 +21,6 @@ object AppConfig {
         "sms_lookback" to Kind.INT, "sms_device" to Kind.STR,
         "notify_enabled" to Kind.BOOL, "notify_hour" to Kind.INT, "notify_minute" to Kind.INT,
         "material_you" to Kind.BOOL,
-        "widget_bg" to Kind.STR, "widget_opacity" to Kind.INT, "widget_text" to Kind.STR,
     )
 
     /** File text for the given values (keys outside KEYS are left out). */

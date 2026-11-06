@@ -19,16 +19,16 @@ plus an **inbox** that turns bank SMS and due subscriptions into drafts you acce
 | Area | What you get |
 |---|---|
 | Accounts | Bank, cash, wallet, investment, deposit, property, receivable, credit card, loan, payable … Balance (today) and projected balance (incl. future-dated). Credit cards: limit, available, statement/due dates, billed/unbilled. Hide, archive, leave out of net worth (their total is shown as *not counted*). Bank balance check: record what the bank shows and see ✅, or ❌ with the difference. |
-| Transactions | Expense, income, transfer, splits (category lines, and account lines such as a loan's principal), refunds. Category picker with search, recent and group grid. Calculator amount field (`120+45*2`). Remembered transactions: type a few letters of a title and tap a past entry to take its title and category (the account and everything else stay as you set them). Labels, notes, time. Every saved transaction has happened; past dates fix history; future dates count from their day. Duplicate, bulk label/delete. |
+| Transactions | Expense, income, transfer, splits (category lines, and account lines such as a loan's principal), refunds. Category picker with search, your most used categories (last 90 days, every device), recent ones and a group grid. Calculator amount field (`120+45*2`, with + − × ÷ keys on the phone; worked out when you leave the field). Remembered transactions: type a few letters of a title and tap a past entry to take its title and category (the account and everything else stay as you set them). Notes, time. Every saved transaction has happened; past dates fix history; future dates count from their day. Duplicate, bulk delete. In a list, the category and account names open their screens; an account's list shows the balance after each transaction. |
 | Categories | Two levels (parent › child) for expense, income, and “both ways” (e.g. *Market* gains and losses). Totals for a week, month, quarter, half-year, year or any custom range; the default period is a setting. Delete with “move transactions to …”. |
 | Budgets | Per category, weekly → yearly, scaled to the period you view, reset every period, with on-pace progress. |
-| Inbox | Drafts from bank SMS (the phone app). Accept, edit, “same as” an entry you already made, or reject. Accounts are found from the card/account digits in the SMS; the category from what you taught it (🧠), a past transaction with that name (↺), the local AI (✨, optional) or your fallback. A debit plus a matching card payment become one transfer. The bank's reported balance is checked against yours. Accepting teaches the merchant. |
+| Inbox | Drafts from bank SMS (the phone app). Accept, edit, “same as” an entry you already made, or reject. Accounts are found from the card/account digits in the SMS; the category from what you taught it (🧠), a past transaction with that name (↺), the local AI (✨, optional) or your fallback. A debit plus a matching card payment become one transfer. The bank's reported balance is checked against yours. Accepting teaches the merchant. Swipe a draft right to accept, left to reject. |
 | Notifications | 🔔 Reminders from Kronos (bills and subscriptions due). Never a transaction by themselves: each shows *Paid ✓* when a payment with the same amount is recorded near its due date, or that its SMS waits in the inbox. Dismiss, reopen, or add the payment. |
 | Plugins | Personal add-ons switched on by their own data file. **Loans** (`loans.md`): lender summary, repayment schedule (paste the lender's table each year; estimate to payoff), EMIs left, interest still to pay, this financial year's principal and interest, *Record EMI* and *Split as EMI*. |
-| Reports | Cash flow, spending and income by category with drill-down, category trend, net worth over time, balance sheet at any date, account flow, labels, calendar. Every chart has a table. |
-| Search & data | Full-text search plus filters (dates, type, accounts, categories, labels, amount, posted/future); totals of the filtered list; CSV export of exactly what you filtered; CSV import with a dry-run preview. |
-| Home | Your blocks, in your order: net worth with its trend, the period's income/expense/savings, inbox, spending, budgets, upcoming, credit cards, accounts, recent, cash flow, plus blocks you create for any account, category or label. ✎ on the home screen. |
-| Settings | Default period, week start, month start day (salary cycles), year start month (e.g. April for the Indian FY), look-ahead days, look (themes nss · AMOLED · Galaxy · White · Gold, any element's colour, card background none/glass/matte/opaque, chart type per chart), the phone's daily alert (bank mismatch ❌, inbox + notifications above a count), hide amounts, menu order (which four screens sit in the phone's bottom bar), inbox fallback categories, learned rules. |
+| Reports | Cash flow, spending and income by category with drill-down, category trend, net worth over time, balance sheet at any date, account flow, calendar. Every chart has a table. |
+| Search & data | Full-text search plus filters (dates, type, accounts, categories, amount, posted/future); totals of the filtered list; CSV export of exactly what you filtered; CSV import with a dry-run preview. |
+| Home | Your blocks, in your order: net worth with its trend, the period's income/expense/savings with the month's pace against the budget, inbox, spending, budgets, upcoming, credit cards, accounts, recent, cash flow, plus blocks you create for any account or category. ✎ on the home screen (or lock the layout in Settings). The eye in the top bar hides every amount. |
+| Settings | Default period, week start, month start day (salary cycles), year start month (e.g. April for the Indian FY), look-ahead days, look (themes nss · AMOLED · Galaxy · White · Gold · Blackpink, any element's colour, card background none/glass/matte/opaque, comfortable or compact, chart type per chart — the phone's widgets follow it), the phone's daily alert (bank mismatch ❌, inbox + notifications above a count), hide amounts, lock the home layout, menu order (which four screens sit in the phone's bottom bar), inbox fallback categories, learned rules. |
 
 ## Quick start (Docker)
 
@@ -88,7 +88,7 @@ The server and the phone share the folder through Syncthing. Each transaction re
 it last changed (`updated`) and a deletion leaves a tombstone (`deleted:`), so when both
 sides changed the same month file while apart, the main instance merges Syncthing's
 `.sync-conflict-…` copy by id — newest change wins — and removes the copy. Definition
-files (accounts, categories, labels) merge by id with the main copy winning; inbox
+files (accounts, categories) merge by id with the main copy winning; inbox
 drafts and learned rules merge by id, newest change winning.
 Only the main instance writes balances and imports the inbox.
 
@@ -99,7 +99,6 @@ Only the main instance writes balances and imports the inbox.
   settings.md                     preferences, look (theme, cards, colours, charts) and the daily alert
   accounts.md                     accounts + computed balance / projected_balance
   categories.md                   category tree + budgets + computed total for the default period
-  labels.md                       labels + computed count
   money.md                        computed overview (net worth, period totals, ledger check) — output only
   loans.md                        optional, yours: the Loans plugin (read only by Arthik)
   transactions/transaction_YYYYMM.md   one file per month
@@ -120,7 +119,6 @@ transactions:
     date: '2026-10-01'
     type: expense            # expense | income | transfer | journal
     title: Groceries
-    labels: [home]
     postings:
       - account: wallet
         amount: '-540.00'
@@ -131,8 +129,7 @@ transactions:
 **Transactions are the only source of truth.** Every balance and total in the other
 files is recomputed after each change and rewritten only when it actually changed.
 You can edit any file by hand; Arthik notices within seconds, repairs what it safely
-can (missing ids, a transaction saved in the wrong month file, labels that don't exist
-yet) and rebuilds everything. A file that does not parse is never overwritten — changes
+can (missing ids, a transaction saved in the wrong month file) and rebuilds everything. A file that does not parse is never overwritten — changes
 are paused and the app shows the file and line until it is fixed. Entries that don't
 balance or point at unknown accounts are listed as problems and left out of totals.
 Unknown keys you add to any record are kept.

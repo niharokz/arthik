@@ -1,6 +1,6 @@
 // Package reports is the Reports feature (Bluecoins "Reports" tab): cash flow,
 // income/expense by category with drill-down, category trend, net worth over time,
-// balance sheet, label report, account flow and the calendar.
+// balance sheet, account flow and the calendar.
 package reports
 
 import (
@@ -22,7 +22,6 @@ func Register(rt *httpx.Router) {
 	rt.Handle("GET /api/reports/trend", trend)
 	rt.Handle("GET /api/reports/networth", networth)
 	rt.Handle("GET /api/reports/balance-sheet", balanceSheet)
-	rt.Handle("GET /api/reports/labels", labels)
 	rt.Handle("GET /api/reports/accounts", accountFlow)
 	rt.Handle("GET /api/reports/calendar", calendar)
 }
@@ -53,12 +52,12 @@ func bucketKind(c *httpx.Ctx) period.Kind {
 	return k
 }
 
-// filtered returns a keep-func from the shared filter (account/label/q),
+// filtered returns a keep-func from the shared filter (account/type/q),
 // so every report can be narrowed the same way as the transaction list.
 func filtered(c *httpx.Ctx, d *book.Data, comp *book.Computed) func(model.Transaction) bool {
 	f := query.Parse(c.R.URL.Query())
 	f.From, f.To = dates.Date{}, dates.Date{}
-	if len(f.Accounts)+len(f.Labels)+len(f.Types) == 0 && f.Text == "" {
+	if len(f.Accounts)+len(f.Types) == 0 && f.Text == "" {
 		return nil
 	}
 	f.Categories = nil
@@ -325,57 +324,6 @@ func balanceSheet(c *httpx.Ctx) error {
 			groups = append(groups, g)
 		}
 		out = map[string]any{"date": at, "groups": nonNil(groups), "assets": assets, "liabilities": liabs, "net_worth": assets + liabs}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	return c.OK(out)
-}
-
-type labelRow struct {
-	Label   string       `json:"label"`
-	Income  money.Amount `json:"income"`
-	Expense money.Amount `json:"expense"`
-	Count   int          `json:"count"`
-}
-
-// labels: income, expense and count per label in the range.
-func labels(c *httpx.Ctx) error {
-	var out map[string]any
-	err := c.Book.View(func(d *book.Data, comp *book.Computed) error {
-		r := span(c, d, comp)
-		rows := map[string]*labelRow{}
-		for _, t := range d.Txns {
-			td, err := dates.Parse(t.Date)
-			if err != nil || !comp.Effective(t) || !td.InRange(r.From, r.To) || len(t.Labels) == 0 {
-				continue
-			}
-			var inc, exp money.Amount
-			for _, p := range t.Postings {
-				if p.Category != "" {
-					cat, _ := d.Category(p.Category)
-					i, e := book.IncomeExpense(cat.Kind, p.Amount)
-					inc, exp = inc+i, exp+e
-				}
-			}
-			for _, l := range t.Labels {
-				lr := rows[l]
-				if lr == nil {
-					lr = &labelRow{Label: l}
-					rows[l] = lr
-				}
-				lr.Income += inc
-				lr.Expense += exp
-				lr.Count++
-			}
-		}
-		list := []labelRow{}
-		for _, v := range rows {
-			list = append(list, *v)
-		}
-		sort.Slice(list, func(i, j int) bool { return list[i].Expense+list[i].Income > list[j].Expense+list[j].Income })
-		out = map[string]any{"range": r, "rows": list, "prev": r.Shift(-1, d.Opts()), "next": r.Shift(1, d.Opts())}
 		return nil
 	})
 	if err != nil {

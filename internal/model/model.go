@@ -68,6 +68,7 @@ type Settings struct {
 	CheckDays      int      `yaml:"balance_check_days,omitempty" json:"balance_check_days"` // a bank balance check older than this is stale
 	Theme          string   `yaml:"theme" json:"theme"`                                     // auto|light|dark
 	HideAmounts    bool     `yaml:"hide_amounts" json:"hide_amounts"`
+	HomeLocked     bool     `yaml:"home_locked" json:"home_locked"`            // hides "Customize home"
 	NavOrder       []string `yaml:"nav_order,omitempty,flow" json:"nav_order"` // menu order; first 4 = phone bottom bar
 	// Home screen sections, top to bottom (empty = the default layout).
 	Home []HomeSection `yaml:"home,omitempty" json:"home"`
@@ -89,13 +90,15 @@ type Settings struct {
 type Look struct {
 	Palette string            `yaml:"palette" json:"palette"`                   // nss|amoled|galaxy|white|gold
 	Cards   string            `yaml:"cards" json:"cards"`                       // none|glass|matte|opaque
+	Density string            `yaml:"density,omitempty" json:"density"`         // comfortable|compact
 	Colors  map[string]string `yaml:"colors,omitempty" json:"colors,omitempty"` // element → #rrggbb
 	Charts  map[string]string `yaml:"charts,omitempty" json:"charts,omitempty"` // chart → type
 }
 
 // Palettes, card backgrounds, colour elements and charts a Look may name.
 var (
-	Palettes   = []string{"nss", "amoled", "galaxy", "white", "gold"}
+	Palettes   = []string{"nss", "amoled", "galaxy", "white", "gold", "blackpink"}
+	Densities  = []string{"comfortable", "compact"}
 	CardStyles = []string{"none", "glass", "matte", "opaque"}
 	LookColors = []string{"accent", "bg", "surface", "text", "muted", "line", "income", "expense", "warn"}
 	// Charts maps each chart to its allowed types; the first is the default.
@@ -130,7 +133,7 @@ func HexColor(s string) bool {
 }
 
 // DefaultLook and DefaultAlerts fill a settings file that has none.
-func DefaultLook() *Look     { return &Look{Palette: "nss", Cards: "matte"} }
+func DefaultLook() *Look     { return &Look{Palette: "nss", Cards: "matte", Density: "comfortable"} }
 func DefaultAlerts() *Alerts { return &Alerts{Time: "09:00", Mismatch: true, Count: 30} }
 
 // HomeSection is one block of the home screen: a built-in one, or an account,
@@ -145,15 +148,15 @@ type HomeSection struct {
 // HomeBuiltins are the built-in home sections, in the default order.
 var HomeBuiltins = []string{"networth", "period", "inbox", "spending", "budgets", "upcoming", "cards", "accounts", "recent", "cashflow"}
 
-// HomeCustom are the section types that show one of your accounts, categories or labels.
-var HomeCustom = []string{"account", "category", "label"}
+// HomeCustom are the section types that show one of your accounts or categories.
+var HomeCustom = []string{"account", "category"}
 
 // NavItems are the screens that can be ordered in the menu (Settings always stays last;
 // the inbox has its own button in the top bar).
-var NavItems = []string{"home", "tx", "accounts", "reports", "calendar", "categories", "budgets", "labels"}
+var NavItems = []string{"home", "tx", "accounts", "reports", "calendar", "categories", "budgets"}
 
 // retiredNav renames or drops ("") menu items from older versions.
-var retiredNav = map[string]string{"scheduled": "", "inbox": ""}
+var retiredNav = map[string]string{"scheduled": "", "inbox": "", "labels": ""}
 
 // NormNav cleans a menu order: renames retired items, drops repeats and appends
 // missing items in default order. unknown is the first item it did not recognise
@@ -269,18 +272,6 @@ type Category struct {
 	Extra map[string]any `yaml:",inline" json:"-"`
 }
 
-// Label is one entry of labels.md (Bluecoins "labels" = free tags on transactions).
-type Label struct {
-	ID    string `yaml:"id" json:"id"`
-	Name  string `yaml:"name" json:"name"`
-	Color string `yaml:"color,omitempty" json:"color,omitempty"`
-
-	// computed
-	Count int `yaml:"count" json:"count"`
-
-	Extra map[string]any `yaml:",inline" json:"-"`
-}
-
 // Transaction types (informational; the postings are what count).
 const (
 	TxExpense  = "expense"
@@ -306,7 +297,6 @@ type Transaction struct {
 	Time     string         `yaml:"time,omitempty" json:"time,omitempty"`
 	Type     string         `yaml:"type,omitempty" json:"type"`
 	Title    string         `yaml:"title,omitempty" json:"title"`
-	Labels   []string       `yaml:"labels,omitempty,flow" json:"labels,omitempty"`
 	Notes    string         `yaml:"notes,omitempty" json:"notes,omitempty"`
 	Postings []Posting      `yaml:"postings,omitempty" json:"postings"`
 	Updated  string         `yaml:"updated,omitempty" json:"updated,omitempty"` // UTC time of the last change (newest wins on merge)
@@ -317,7 +307,9 @@ type Transaction struct {
 // Retired keys of older versions, dropped on load so they are not written back.
 var (
 	RetiredAccountKeys = []string{"cleared_balance"}
-	RetiredTxKeys      = []string{"status"}
+	RetiredTxKeys      = []string{"status", "labels"} // labels: removed in 1.0.5
+	RetiredDraftKeys   = []string{"labels"}
+	RetiredRuleKeys    = []string{"labels"}
 )
 
 // DropKeys removes retired keys from an Extra map.
@@ -365,7 +357,6 @@ type Draft struct {
 	ToAccount string       `yaml:"to_account,omitempty" json:"to_account,omitempty"`
 	Category  string       `yaml:"category,omitempty" json:"category,omitempty"`
 	Title     string       `yaml:"title" json:"title"`
-	Labels    []string     `yaml:"labels,omitempty,flow" json:"labels,omitempty"`
 	Notes     string       `yaml:"notes,omitempty" json:"notes,omitempty"`
 	Via       string       `yaml:"via,omitempty" json:"via,omitempty"` // how the category was chosen
 
@@ -389,14 +380,13 @@ type Draft struct {
 
 // Rule is one entry of inbox/learned.md: what a merchant (or Kronos name) becomes.
 type Rule struct {
-	ID       string   `yaml:"id" json:"id"`
-	Match    string   `yaml:"match" json:"match"` // normalised merchant key
-	Title    string   `yaml:"title,omitempty" json:"title,omitempty"`
-	Category string   `yaml:"category,omitempty" json:"category,omitempty"`
-	Account  string   `yaml:"account,omitempty" json:"account,omitempty"` // only when the source names no account digits
-	Labels   []string `yaml:"labels,omitempty,flow" json:"labels,omitempty"`
-	Uses     int      `yaml:"uses,omitempty" json:"uses,omitempty"`
-	Updated  string   `yaml:"updated,omitempty" json:"updated,omitempty"`
+	ID       string `yaml:"id" json:"id"`
+	Match    string `yaml:"match" json:"match"` // normalised merchant key
+	Title    string `yaml:"title,omitempty" json:"title,omitempty"`
+	Category string `yaml:"category,omitempty" json:"category,omitempty"`
+	Account  string `yaml:"account,omitempty" json:"account,omitempty"` // only when the source names no account digits
+	Uses     int    `yaml:"uses,omitempty" json:"uses,omitempty"`
+	Updated  string `yaml:"updated,omitempty" json:"updated,omitempty"`
 
 	Extra map[string]any `yaml:",inline" json:"-"`
 }
@@ -408,14 +398,4 @@ func (t Transaction) Sum() money.Amount {
 		s += p.Amount
 	}
 	return s
-}
-
-// HasLabel reports whether the transaction carries label id.
-func (t Transaction) HasLabel(id string) bool {
-	for _, l := range t.Labels {
-		if l == id {
-			return true
-		}
-	}
-	return false
 }

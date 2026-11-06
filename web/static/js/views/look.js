@@ -3,7 +3,7 @@
 // at once and are saved with one button; leaving without saving restores the page.
 
 import { html, raw } from "../util.js";
-import { S, toast, ro, applyLook, LOOK_TOKENS } from "../ui.js";
+import { S, toast, ro, applyLook, LOOK_TOKENS, tokenHex } from "../ui.js";
 import { put } from "../api.js";
 import { isApp, call } from "../native.js";
 
@@ -14,22 +14,14 @@ const PALETTES = {
   galaxy: ["Galaxy", ["#111325", "#9fb3f8", "#c3b3f2"]],
   white: ["White", ["#ffffff", "#2f6f69", "#161a19"]],
   gold: ["Gold", ["#15120c", "#c9a45c", "#ece5d6"]],
+  blackpink: ["Blackpink", ["#0b0a0b", "#e3a1b6", "#ece6e9"]],
 };
 const CARDS = { none: "None", glass: "Glass", matte: "Matte", opaque: "Opaque" };
+const DENSITY = { comfortable: "Comfortable", compact: "Compact" };
 const COLOR_NAMES = { accent: "Accent", bg: "Background", surface: "Cards", text: "Text", muted: "Secondary text", line: "Lines", income: "Income", expense: "Expense", warn: "Warning" };
 const CHART_NAMES = { spending: "Spending (home)", budgets: "Budgets", cashflow: "Cash flow", networth: "Net worth", reports: "Reports: spending & income" };
 const CHART_TYPES = { hbar: "Ranked bars", donut: "Donut", pie: "Pie", bar: "Columns", line: "Line", area: "Area" };
 const MODES = [["auto", "Follow the device"], ["light", "Light"], ["dark", "Dark"]];
-
-// The colour a token has right now (after palette and mode), as #rrggbb.
-function current(token) {
-  const probe = document.createElement("i");
-  probe.style.color = `var(${token})`;
-  document.body.append(probe);
-  const m = getComputedStyle(probe).color.match(/\d+(\.\d+)?/g) || [0, 0, 0];
-  probe.remove();
-  return "#" + m.slice(0, 3).map((n) => Math.round(+n).toString(16).padStart(2, "0")).join("");
-}
 
 /** Saves part of the settings (the rest as they are). */
 export async function saveSettings(patch, msg) {
@@ -52,10 +44,12 @@ export function lookCard() {
       <label class="f" data-modef ${(l.palette || "nss") === "nss" ? "" : raw("hidden")}><span>nss mode</span><select data-mode ${dis}>${MODES.map(([k, n]) => html`<option value="${k}" ${k === s.theme ? raw("selected") : ""}>${n}</option>`)}</select></label>
       <div class="f"><span class="flabel">Card background</span>
         <div class="seg" data-cards>${(opt.cards || Object.keys(CARDS)).map((k) => html`<button type="button" data-card="${k}" class="${k === (l.cards || "matte") ? "on" : ""}" ${dis}>${CARDS[k]}</button>`)}</div></div>
+      <div class="f"><span class="flabel">Density</span>
+        <div class="seg" data-dens>${(opt.densities || Object.keys(DENSITY)).map((k) => html`<button type="button" data-den="${k}" class="${k === (l.density || "comfortable") ? "on" : ""}" ${dis}>${DENSITY[k]}</button>`)}</div></div>
     </div>
     <details class="set-more" ${l.colors && Object.keys(l.colors).length ? raw("open") : ""}><summary>Colours <small class="faint">change any element of the theme</small></summary>
       <div class="col-grid">${(opt.colors || Object.keys(COLOR_NAMES)).map((k) => html`<label class="col-f">
-        <input type="color" data-col="${k}" value="${l.colors?.[k] || current(LOOK_TOKENS[k])}" ${dis}>
+        <input type="color" data-col="${k}" value="${l.colors?.[k] || tokenHex(LOOK_TOKENS[k])}" ${dis}>
         <span class="grow">${COLOR_NAMES[k]}</span>
         <button type="button" class="ghost icon reset" data-uncol="${k}" title="Back to the theme's colour" ${l.colors?.[k] ? "" : raw("hidden")} ${dis}>↺</button></label>`)}</div></details>
     <details class="set-more"><summary>Charts <small class="faint">how each chart is drawn</small></summary>
@@ -73,12 +67,16 @@ export function wireLook(root, ctx) {
   const draft = structuredClone(saved);
   const dirty = () => JSON.stringify(draft) !== JSON.stringify(saved);
   const preview = () => {
-    applyLook({ ...S.state.settings, ...draft });
+    applyLook({ ...S.state.settings, ...draft, preview: true }); // widgets change on save
     card.querySelector("[data-looksave]").disabled = !dirty();
-    card.querySelectorAll("[data-col]").forEach((x) => { if (!draft.look.colors?.[x.dataset.col]) x.value = current(LOOK_TOKENS[x.dataset.col]); });
+    card.querySelectorAll("[data-col]").forEach((x) => { if (!draft.look.colors?.[x.dataset.col]) x.value = tokenHex(LOOK_TOKENS[x.dataset.col]); });
   };
   card.addEventListener("click", (e) => {
-    const p = e.target.closest("[data-pal]"), c = e.target.closest("[data-card]"), u = e.target.closest("[data-uncol]");
+    const p = e.target.closest("[data-pal]"), c = e.target.closest("[data-card]"), u = e.target.closest("[data-uncol]"), n = e.target.closest("[data-den]");
+    if (n) {
+      draft.look.density = n.dataset.den;
+      card.querySelectorAll("[data-den]").forEach((x) => x.classList.toggle("on", x === n));
+    }
     if (p) {
       draft.look.palette = p.dataset.pal;
       card.querySelectorAll("[data-pal]").forEach((x) => { x.classList.toggle("on", x === p); x.setAttribute("aria-checked", x === p); });
@@ -92,7 +90,7 @@ export function wireLook(root, ctx) {
       delete draft.look.colors?.[u.dataset.uncol];
       u.hidden = true;
     }
-    if (p || c || u) preview();
+    if (p || c || u || n) preview();
   });
   card.addEventListener("input", (e) => {
     const k = e.target.dataset.col;
@@ -112,12 +110,13 @@ export function wireLook(root, ctx) {
     card.querySelector("[data-modef]").hidden = pal !== "nss";
     card.querySelector("[data-mode]").value = draft.theme;
     card.querySelectorAll("[data-card]").forEach((x) => x.classList.toggle("on", x.dataset.card === draft.look.cards));
+    card.querySelectorAll("[data-den]").forEach((x) => x.classList.toggle("on", x.dataset.den === draft.look.density));
     card.querySelectorAll("[data-uncol]").forEach((x) => (x.hidden = !draft.look.colors?.[x.dataset.uncol]));
     card.querySelectorAll("[data-chart]").forEach((x) => (x.value = draft.look.charts?.[x.dataset.chart] || x.options[0].value));
   };
   card.querySelector("[data-lookreset]").addEventListener("click", () => {
     draft.theme = "auto";
-    draft.look = { palette: "nss", cards: "matte" };
+    draft.look = { palette: "nss", cards: "matte", density: "comfortable" };
     sync();
     preview();
   });

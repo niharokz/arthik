@@ -3,7 +3,7 @@
 
 import { html, raw, todayStr, reducedMotion } from "./util.js";
 import { get } from "./api.js";
-import { syncBars, haptic, applyAccent } from "./native.js";
+import { syncBars, haptic, applyAccent, isApp, call } from "./native.js";
 
 /** App-wide state, loaded from GET /api/state. */
 export const S = {
@@ -24,7 +24,7 @@ export async function loadState() {
 }
 
 // Palettes with a fixed mode; nss follows the theme setting (auto, light, dark).
-const FIXED_MODE = { amoled: "dark", galaxy: "dark", gold: "dark", white: "light" };
+const FIXED_MODE = { amoled: "dark", galaxy: "dark", gold: "dark", white: "light", blackpink: "dark" };
 // Settings → Look colour element → CSS token.
 export const LOOK_TOKENS = { accent: "--teal", bg: "--bg", surface: "--surface", text: "--text", muted: "--muted", line: "--line", income: "--income", expense: "--expense", warn: "--warn" };
 
@@ -35,10 +35,32 @@ export function applyLook(s) {
   if (pal === "nss") delete r.dataset.palette; else r.dataset.palette = pal;
   if (mode && mode !== "auto") r.dataset.theme = mode; else delete r.dataset.theme;
   r.dataset.cards = look.cards || "matte";
+  r.dataset.density = look.density || "comfortable";
   for (const [k, token] of Object.entries(LOOK_TOKENS)) {
     const v = look.colors?.[k];
     if (v) r.style.setProperty(token, v); else r.style.removeProperty(token);
   }
+  if (!s.preview) lookToWidgets(look);
+}
+
+/** A colour token as it resolves right now (palette, mode, overrides) → "#rrggbb". */
+export function tokenHex(token) {
+  const probe = document.createElement("i");
+  probe.style.color = `var(${token})`;
+  document.body.append(probe);
+  const m = getComputedStyle(probe).color.match(/\d+(\.\d+)?/g) || [0, 0, 0];
+  probe.remove();
+  return "#" + m.slice(0, 3).map((n) => Math.round(+n).toString(16).padStart(2, "0")).join("");
+}
+
+// Card background → widget opacity (%), and which surface the card uses.
+const WIDGET_CARD = { none: [0, "--surface"], glass: [55, "--surface"], matte: [100, "--surface"], opaque: [100, "--surface-2"] };
+
+// The phone's home-screen widgets follow the look: send its resolved colours.
+function lookToWidgets(look) {
+  if (!isApp) return;
+  const [opacity, surface] = WIDGET_CARD[look.cards] || WIDGET_CARD.matte;
+  call("setWidgetTheme", [tokenHex(surface), opacity, tokenHex("--text"), tokenHex("--muted"), tokenHex("--teal")].join("|"));
 }
 
 /** The chart type chosen for a chart (spending, budgets, cashflow, networth, reports). */
@@ -52,7 +74,6 @@ export const today = () => (S.state && S.state.today) || todayStr();
 // ---- lookups ----
 export const acc = (id) => (S.state.accounts || []).find((a) => a.id === id);
 export const cat = (id) => (S.state.categories || []).find((c) => c.id === id);
-export const label = (id) => (S.state.labels || []).find((l) => l.id === id);
 export const accName = (id) => acc(id)?.name || id || "—";
 export function catName(id, full = false) {
   const c = cat(id);
@@ -61,7 +82,6 @@ export function catName(id, full = false) {
   return c.name;
 }
 export const catIcon = (id) => { const c = cat(id); return c?.icon || (c?.parent ? cat(c.parent)?.icon : "") || "🏷️"; };
-export const labelName = (id) => label(id)?.name || id;
 export const kids = (id) => (S.state.categories || []).filter((c) => c.parent === id);
 
 /** <option>s of categories grouped parent → children, for a transaction kind. */

@@ -279,8 +279,8 @@ func check(demoSet bool) error {
 	}
 	problems := b.Problems()
 	_ = b.View(func(d *book.Data, c *book.Computed) error {
-		fmt.Printf("%s: %d accounts, %d categories, %d labels, %d drafts, %d transactions\n",
-			dir, len(d.Accounts), len(d.Categories), len(d.Labels), len(d.Drafts), len(d.Txns))
+		fmt.Printf("%s: %d accounts, %d categories, %d drafts, %d transactions\n",
+			dir, len(d.Accounts), len(d.Categories), len(d.Drafts), len(d.Txns))
 		fmt.Printf("net worth %s (assets %s, liabilities %s)\n", c.NetWorth.Format(), c.Assets.Format(), c.Liabilities.Format())
 		return nil
 	})

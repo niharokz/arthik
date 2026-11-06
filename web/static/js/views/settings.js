@@ -50,7 +50,8 @@ export async function render(root, ctx) {
       <div class="set-sec stack" id="set-home">
         <form class="card" data-homeprefs><header><h2>Home</h2><a href="#/home">Customize blocks on Home ✎</a></header>
           <label class="f"><span>Look-ahead for upcoming (days)</span><input name="upcoming_days" type="number" min="1" max="365" value="${s.upcoming_days}" ${dis}></label>
-          <label class="check"><input type="checkbox" name="hide_amounts" ${s.hide_amounts ? raw("checked") : ""} ${dis}> Hide amounts (blurred — tap an amount to peek)</label>
+          <label class="check"><input type="checkbox" name="hide_amounts" ${s.hide_amounts ? raw("checked") : ""} ${dis}> Hide amounts (blurred — tap an amount to peek; the eye in the top bar switches it too)</label>
+          <label class="check"><input type="checkbox" name="home_locked" ${s.home_locked ? raw("checked") : ""} ${dis}> Lock the home layout (hides ✎ Customize home)</label>
           ${saveBtn("Save home")}
         </form>
         ${menuCard()}
@@ -92,7 +93,10 @@ export async function render(root, ctx) {
     for (const k of Object.keys(S.view)) if (S.view[k] && S.view[k].period) S.view[k].period = f.default_period.value;
     return { default_period: f.default_period.value, week_start: f.week_start.value, month_start_day: +f.month_start_day.value, year_start_month: +f.year_start_month.value };
   }, "Periods saved");
-  form("[data-homeprefs]", (f) => ({ upcoming_days: +f.upcoming_days.value, hide_amounts: f.hide_amounts.checked }), "Home saved");
+  form("[data-homeprefs]", (f) => {
+    document.body.classList.toggle("hide-amounts", f.hide_amounts.checked);
+    return { upcoming_days: +f.upcoming_days.value, hide_amounts: f.hide_amounts.checked, home_locked: f.home_locked.checked };
+  }, "Home saved");
   form("[data-accprefs]", (f) => ({ balance_check_days: +f.balance_check_days.value }), "Accounts saved");
   wireInboxSettings(root, async (patch, msg) => { await saveSettings(patch, msg); ctx.refresh(); });
   wireLook(root, ctx);
@@ -172,7 +176,7 @@ function rulesCard(el) {
 function importSheet(ctx) {
   let text = "";
   sheet("Import CSV", html`
-    <p class="muted" style="margin-top:0">Columns: <code>date, title, amount, type, account, to_account, category, labels, notes, splits</code> (only date and amount are required; without a type, negative amounts are expenses). Use “Parent &gt; Child” for sub-categories. Rows whose id already exists are skipped.</p>
+    <p class="muted" style="margin-top:0">Columns: <code>date, title, amount, type, account, to_account, category, notes, splits</code> (only date and amount are required; without a type, negative amounts are expenses). Use “Parent &gt; Child” for sub-categories. Rows whose id already exists are skipped.</p>
     <input type="file" accept=".csv,text/csv" data-file>
     <label class="check"><input type="checkbox" data-create checked> Create missing accounts and categories</label>
     <div data-preview></div>`,
@@ -204,7 +208,6 @@ function report(r, dry) {
     <p style="margin-top:0"><b>${r.rows}</b> rows · <b class="pos">${r.imported}</b> ${dry ? "would be imported" : "imported"} · ${r.skipped} already present · <b class="${r.errors.length ? "neg" : ""}">${r.errors.length}</b> with errors</p>
     ${r.new_accounts?.length ? html`<p>New accounts: ${r.new_accounts.join(", ")}</p>` : ""}
     ${r.new_categories?.length ? html`<p>New categories: ${r.new_categories.join(", ")}</p>` : ""}
-    ${r.new_labels?.length ? html`<p>New labels: ${r.new_labels.join(", ")}</p>` : ""}
     ${r.errors.length ? html`<ul style="max-height:200px;overflow:auto;padding-left:18px">${r.errors.slice(0, 50).map((e) => html`<li>line ${e.line}: ${e.msg}</li>`)}</ul>` : ""}</div>`;
 }
 

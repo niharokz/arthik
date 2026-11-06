@@ -688,29 +688,6 @@ section.card:has(> .drafts) { background: transparent; border: 0; box-shadow: no
   .sheet-h::before { content: ""; position: absolute; top: 7px; left: 50%; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--line); }
 }
 
-/* Settings → Phone → Widgets: live preview on a wallpaper-like backdrop */
-.wlook { display: grid; gap: 14px; padding: 6px 0 12px; }
-@media (min-width: 640px) { .wlook { grid-template-columns: 300px 1fr; align-items: start; } }
-.wprev { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; border-radius: 18px;
-  background: radial-gradient(circle at 20% 15%, #f2b27a 0, transparent 45%), radial-gradient(circle at 85% 80%, #5a7fd6 0, transparent 50%), linear-gradient(135deg, #2f5f5a, #8a5cc2);
-  --wbg: #fff; --wink: #13201e; --wacc: #3a807a; }
-.wtile { aspect-ratio: 1; border-radius: 18px; padding: 10px; background: var(--wbg); color: var(--wink); display: flex; flex-direction: column; min-width: 0;
-  transition: background-color .25s ease, color .25s ease; overflow: hidden; }
-.wt-h { display: flex; align-items: center; gap: 5px; font-size: .68rem; font-weight: 700; }
-.wt-h img { width: 13px; height: 13px; }
-.wt-big { font-size: 1.15rem; margin-top: 4px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-.wt-up { font-size: .62rem; color: #4cc792; font-weight: 600; }
-.wt-m { font-size: .62rem; opacity: .72; }
-.wt-s { margin-top: auto; }
-.wt-dot { width: 8px; height: 8px; border-radius: 50%; background: #e0a640; display: inline-block; }
-.wtile svg { margin-top: auto; width: 100%; height: 34%; }
-.wtile svg path { fill: none; stroke: var(--wacc); stroke-width: 2.4; vector-effect: non-scaling-stroke; stroke-linecap: round; stroke-linejoin: round; }
-.wtile svg path.a { fill: var(--wacc); fill-opacity: .2; stroke: none; }
-.wlook-f .flabel { display: block; font-size: .8rem; color: var(--muted); margin-bottom: 6px; }
-.wlook-f > .seg { margin-bottom: 12px; }
-.wcustom { padding-top: 4px; }
-.wlook input[type=range] { width: 100%; accent-color: var(--teal); padding: 0; min-height: 28px; border: 0; box-shadow: none; background: none; }
-
 /* ======================================================================
    1.3.1 — calmer surfaces and a little more motion
    ====================================================================== */
@@ -752,7 +729,6 @@ details > summary { transition: color .15s; }
 @media (prefers-reduced-motion: reduce) {
   .seg > .thumb.anim, .fab, .item, .card { transition: none !important; }
 }
-.wlook input[type=range]:focus { outline: none; box-shadow: none; }
 
 .inbox-foot { font-size: .8rem; text-align: center; line-height: 1.6; }
 button.link { background: none; border: 0; padding: 0; min-height: 0; color: var(--teal); font: inherit; cursor: pointer; }
@@ -928,8 +904,9 @@ button.primary, .btn.primary { font-weight: 650; }
 .hero-value { font-weight: 700; letter-spacing: -.03em; font-size: clamp(1.9rem, 6.4vw, 2.6rem); }
 .hero-value .amt { font-weight: 700; }
 .hero-foot { gap: 8px; margin-top: 4px; }
-.hero-foot > span { font-family: var(--mono); font-size: .72rem; padding: 5px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); }
-.hero-foot > span .amt { font-weight: 600; }
+.hero-foot > span, .hero-foot > a { color: var(--text); font-family: var(--mono); font-size: .72rem; padding: 5px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); }
+.hero-foot > span .amt, .hero-foot > a .amt { font-weight: 600; }
+.hero-foot > a:hover { border-color: var(--teal); }
 .hero-check { font-family: var(--mono); font-size: .74rem; display: inline-block; padding: 4px 10px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); background: color-mix(in srgb, var(--warn) 8%, transparent); }
 .stat-chip { padding: 12px 14px; border-radius: 14px; }
 .stat-chip .amt { font-size: 1.05rem; margin-top: 4px; }
@@ -1010,3 +987,83 @@ select.mini { width: auto; min-height: 30px; padding: 3px 8px; font-size: .78rem
 .flabel { display: block; margin-bottom: 6px; color: var(--muted); }
 @media (min-width: 900px) { .fab { display: none; } }
 @media (max-width: 520px) { .stat-chip { padding: 9px 10px; } .stat-chip .amt { font-size: .8rem; letter-spacing: -.03em; } .hero { padding: 16px 16px 12px; } }
+
+/* ======================================================================
+   1.0.5 — Blackpink, density, month pace, linked rows, account cards,
+   swipe in the inbox, calculator keys
+   ====================================================================== */
+:root[data-palette="blackpink"] {
+  color-scheme: dark;
+  --teal: #e3a1b6; --bg: #0b0a0b; --surface: #131113; --text: #ece6e9; --muted: #a3979d;
+  --line: #262024; --income: #8fbfa6; --expense: #d0866a; --warn: #d6a75a; --lav: #c9b3d9;
+  --grid: color-mix(in srgb, #e3a1b6 3%, transparent);
+  --on-accent: #1a0d12;
+  --surface-2: color-mix(in srgb, var(--surface) 90%, var(--text) 6%, var(--teal) 4%);
+  --teal-soft: color-mix(in srgb, var(--teal) 13%, var(--surface));
+  --teal-strong: color-mix(in srgb, var(--teal) 85%, var(--text));
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-up: 0 6px 22px rgba(0, 0, 0, 0.55);
+}
+
+/* month pace on Home */
+.pace { display: block; width: 100%; flex-basis: 100%; margin: 10px 0 2px; color: var(--muted); font-size: .76rem; font-family: var(--mono); }
+.pace-bar { position: relative; height: 6px; border-radius: 999px; background: var(--line); margin-bottom: 6px; }
+.pace-bar .spent { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: color-mix(in srgb, var(--teal) 75%, var(--surface)); }
+.pace-bar .now { position: absolute; top: -3px; width: 2px; height: 12px; border-radius: 2px; background: var(--text); opacity: .55; transform: translateX(-1px); }
+.pace b { color: var(--text); font-weight: 600; }
+.pace.ahead .spent { background: color-mix(in srgb, var(--warn) 80%, var(--surface)); }
+.pace.ahead b { color: var(--warn); }
+
+/* transaction rows: tinted category circle, tappable names, quiet arrows, passbook balance */
+.item .ic.tx-ic { border-radius: 50%; }
+.item .ic.tx-ic[style] { background: color-mix(in oklab, var(--c) 20%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--c) 30%, transparent); }
+.go { cursor: pointer; text-decoration: underline transparent; text-underline-offset: 3px; transition: text-decoration-color .15s, color .15s; }
+.go:hover { color: var(--teal); text-decoration-color: currentColor; }
+.arr { color: var(--faint); margin: 0 2px; }
+.run { font-family: var(--mono); font-size: .7rem; color: var(--faint); }
+.day .amt.pos { color: var(--income); }
+
+/* accounts: colour strip, check mark in the corner, group count */
+.acc-item { position: relative; padding-left: 12px; }
+.acc-item::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: color-mix(in oklab, var(--c) 70%, var(--surface)); }
+.acc-item .ic { background: color-mix(in oklab, var(--c) 14%, var(--surface)); }
+.acc-item .end { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.ck-corner { font-size: .72rem; line-height: 1; }
+.acc-group small { font-family: var(--mono); font-weight: 500; margin-left: 4px; }
+
+/* inbox swipe: right accepts, left rejects */
+li.dcard.pending { touch-action: pan-y; position: relative; }
+li.dcard.pending > .item { -webkit-user-select: none; user-select: none; }
+li.dcard.swiping { transition: none; z-index: 1; box-shadow: var(--shadow-up); }
+li.dcard:not(.swiping) { transition: translate .2s var(--ease), box-shadow .2s; }
+li.dcard.sw-ok { box-shadow: inset 4px 0 0 var(--income), var(--shadow-up); }
+li.dcard.sw-no { box-shadow: inset -4px 0 0 var(--expense), var(--shadow-up); }
+li.dcard.sw-ok::after, li.dcard.sw-no::after { position: absolute; top: 12px; font-family: var(--mono); font-size: .7rem; padding: 3px 8px; border-radius: 999px; }
+li.dcard.sw-ok::after { content: "Accept"; left: 12px; background: color-mix(in srgb, var(--income) 18%, var(--surface)); color: var(--income); }
+li.dcard.sw-no::after { content: "Reject"; right: 12px; background: color-mix(in srgb, var(--expense) 18%, var(--surface)); color: var(--expense); }
+
+/* calculator keys under the amount */
+.calc-row { display: flex; align-items: center; gap: 6px; margin: -6px 0 12px; }
+.calc-row .calc-hint { margin: 0; }
+.calc-op { min-height: 32px; min-width: 40px; padding: 2px 10px; border-radius: 10px; font-family: var(--mono); font-size: 1rem; color: var(--muted); background: var(--surface-2); }
+.calc-op:active { color: var(--teal); }
+
+/* picker: most used */
+.pick-h .i { display: inline-block; vertical-align: -2px; color: var(--teal); }
+
+/* density: compact fits more on screen */
+:root[data-density="compact"] { --radius: 12px; }
+:root[data-density="compact"] .card { padding: 12px 14px; }
+:root[data-density="compact"] .item { padding: 6px 2px; gap: 10px; }
+:root[data-density="compact"] .item .ic { flex-basis: 30px; width: 30px; height: 30px; font-size: .95rem; }
+:root[data-density="compact"] .item .t { font-size: .9rem; }
+:root[data-density="compact"] .item .s, :root[data-density="compact"] .day { font-size: .74rem; }
+:root[data-density="compact"] .day { padding-top: 8px; }
+:root[data-density="compact"] .card > header { margin-bottom: 6px; }
+:root[data-density="compact"] .card > header h2 { font-size: .9rem; }
+:root[data-density="compact"] .hero-value { font-size: clamp(1.6rem, 5.4vw, 2.2rem); }
+:root[data-density="compact"] .stat-chip { padding: 8px 10px; }
+:root[data-density="compact"] .home, :root[data-density="compact"] .set-grid { gap: 10px; }
+
+/* narrow top bar: the screen's own buttons win over the logo */
+@media (max-width: 520px) { .top:has([data-actions]:not(:empty)) .top-logo { display: none; } }

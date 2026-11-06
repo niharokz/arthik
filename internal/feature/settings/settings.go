@@ -134,6 +134,12 @@ func look(l *model.Look) error {
 	if !slices.Contains(model.CardStyles, l.Cards) {
 		return fmt.Errorf("card background must be one of %s", strings.Join(model.CardStyles, ", "))
 	}
+	if l.Density == "" {
+		l.Density = "comfortable"
+	}
+	if !slices.Contains(model.Densities, l.Density) {
+		return fmt.Errorf("density must be one of %s", strings.Join(model.Densities, ", "))
+	}
 	for k, v := range l.Colors {
 		if !slices.Contains(model.LookColors, k) {
 			return fmt.Errorf("unknown colour %q", k)
@@ -233,8 +239,6 @@ func homeRefs(d *book.Data, home []model.HomeSection) []model.HomeSection {
 			_, ok = d.Account(h.Ref)
 		case "category":
 			_, ok = d.Category(h.Ref)
-		case "label":
-			_, ok = d.Label(h.Ref)
 		}
 		if ok {
 			out = append(out, h)
