@@ -50,7 +50,8 @@ cp android/.env.example android/.env  # set ARTHIK_KEYSTORE_PASSWORD
 ./android/build.sh                    # → android/dist/arthik-<version>.apk
 ```
 
-The first build downloads the Android SDK, Gradle and Go modules (a few minutes, cached
+Releases are built on gtlbrunner (README → "Releases and the Android APK"); this is the
+same build on any machine with Docker. The first build downloads the Android SDK, Gradle and Go modules (a few minutes, cached
 in `android/.cache` afterwards — keep that folder). Each build runs the Go tests and the
 Android unit tests before it packages anything, and prints how long each step took.
 
@@ -179,8 +180,9 @@ import/export (saved to *Downloads*) — is the same as on the web.
 ```
 android/
   build.sh                      one-command build (Docker)
-  Dockerfile                    toolchain image: JDK 17, Android SDK 34, Go
   scripts/build-in-container.sh Go tests → engine per CPU → unit tests → APK
+../docker/builder/Dockerfile    toolchain image arthik-builder: JDK 17, Android SDK 34, Go
+../scripts/build-in-container.sh  the same build on gtlbrunner (release job, local build) → dist/release/
   app/build.gradle.kts          version = cmd/arthik version; signing from env
   app/src/main/java/com/nihars/arthik/
     MainActivity.kt   the screen: WebView, start-up flow, picker, back, downloads, bars

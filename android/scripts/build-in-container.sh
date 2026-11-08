@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Runs inside the builder container (see build.sh):
+# Runs inside the builder image (android/build.sh, or scripts/build-in-container.sh on gtlbrunner):
 # Go checks → engine for each phone CPU → Android unit tests → APK in android/dist/.
 # ARTHIK_QUICK=1 skips the checks; ARTHIK_ABIS picks the phone CPUs (default: all three).
 set -euo pipefail
 MODE="${1:-release}"
 QUICK="${ARTHIK_QUICK:-0}"
 ABIS="${ARTHIK_ABIS:-arm64-v8a armeabi-v7a x86_64}"
-cd /src
+cd "$(dirname "$0")/../.."                    # repo root
 took() { echo "   ($((SECONDS - T0))s)"; T0=$SECONDS; } # time of the step just finished
 T0=$SECONDS
 

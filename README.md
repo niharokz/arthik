@@ -201,20 +201,22 @@ sh scripts/release.sh "v1.0.2 customizable home, inbox bell"
 
 It sets `VERSION`, adds a changelog section if there is none, runs the tests and
 `scripts/check-public.sh`, commits, tags and pushes. GitLab CI ([.gitlab-ci.yml](.gitlab-ci.yml))
-then tests on a shared runner, builds the **signed APK on your own runner** (no CI minutes
-used, the key never leaves your server), uploads it to the package registry and creates the
-release with that version's notes. The newest APK is always at
+then tests on a shared runner and builds the **signed APK on your own Docker runner,
+gtlbrunner** (job `release-files`, tag `arthik-app`, inside the `arthik-builder` image from
+[docker/builder/](docker/builder/Dockerfile); no CI minutes used, the key never leaves your
+server), uploads it with `SHA256SUMS` to the package registry and creates the release with
+that version's notes. The newest APK is always at
 `/-/releases/permalink/latest/downloads/arthik.apk`, linked from the start page.
 
-Set up the runner once, on the machine with Docker and the signing key:
+The release job runs [scripts/build-in-container.sh](scripts/build-in-container.sh) inside
+the image, with the build cache at `BUILD_CACHE` and the key folder at `KEY_DIR`
+(`arthik.jks` + `keystore.env` with `ARTHIK_KEYSTORE_PASSWORD`), then
+[scripts/upload-release.sh](scripts/upload-release.sh). Setting gtlbrunner up for Arthik
+(`./build.sh -new arthik …`, the key, `./build.sh -gitlab arthik glrt-…`) is in
+gtlbrunner's own guide. If `docker/builder/Dockerfile` changes, bump `arthik-builder:N`
+in `.gitlab-ci.yml` and the same tag in gtlbrunner.
 
-1. Install [GitLab Runner](https://docs.gitlab.com/runner/install/linux-repository/) to run as **your user** (it needs Docker and `$KEYS_HOME/.arthik-keys`):
-   `sudo gitlab-runner uninstall && sudo gitlab-runner install --user "$USER" --working-directory "$HOME/.gitlab-runner" && sudo gitlab-runner start`
-2. GitLab → the project → **Settings → CI/CD → Runners → New project runner**: tag `arthik-apk`, untick *Run untagged jobs*. Then `sudo gitlab-runner register --url https://gitlab.com --token <token> --executor shell`.
-3. Put the keystore password next to the key:
-   `printf 'ARTHIK_KEYSTORE_PASSWORD=%s\n' '<password>' > "$KEYS_HOME/.arthik-keys/arthik.env" && chmod 600 "$KEYS_HOME/.arthik-keys/arthik.env"`
-
-A local build works the same way: `./android/build.sh` (all phones) or `./android/build.sh quick`
+A local build without gtlbrunner works too: `./android/build.sh` (all phones) or `./android/build.sh quick`
 (64-bit phones, no tests). Install `scripts/check-public.sh` as a pre-push hook to keep `.env`,
 keys, patch zips and words listed in `.private-words` out of the public repo:
 `ln -s ../../scripts/check-public.sh .git/hooks/pre-push`.

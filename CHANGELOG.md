@@ -28,6 +28,11 @@ Versions before 1.0.1 were pre-releases and are numbered 0.x here.
   card background from *Settings → Look*; the per-phone widget look is gone.
 - **Density.** *Settings → Look*: Comfortable or Compact.
 - **Blackpink theme**, matte black with a soft pink accent.
+- **Releases build on gtlbrunner.** The signed APK is built by the Docker runner
+  (job `release-files`, tag `arthik-app`) inside `arthik-builder`
+  (`docker/builder/Dockerfile`, moved from `android/Dockerfile`), with
+  `scripts/build-in-container.sh` and `scripts/upload-release.sh`; the release also
+  carries `SHA256SUMS`. The old shell runner (tag `arthik-apk`) is no longer used.
 
 ## 1.0.4 — 2026-11-05
 

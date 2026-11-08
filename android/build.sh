@@ -24,7 +24,7 @@ mkdir -p android/.cache/home android/dist "$KEYS_DIR"
 echo "== builder image =="
 # The Dockerfile copies nothing, so it is sent alone (no build context): sending
 # android/ would upload the multi-GB caches in android/.cache on every run.
-docker build -t "$IMAGE" - < android/Dockerfile
+docker build -t "$IMAGE" - < docker/builder/Dockerfile
 
 # Runs a command in the builder as you (files stay yours), with caches kept in android/.cache.
 run() {
