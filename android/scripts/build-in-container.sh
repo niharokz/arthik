@@ -29,7 +29,7 @@ rm -rf "$LIBS"
 engine() { # engine <abi> <env…>
   local abi=$1; shift
   mkdir -p "$LIBS/$abi"
-  env CGO_ENABLED=0 "$@" go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$LIBS/$abi/libarthik.so" ./cmd/arthik
+  env CGO_ENABLED=0 "$@" go build -trimpath -buildvcs=false -ldflags "-s -w -X main.version=$VERSION" -o "$LIBS/$abi/libarthik.so" ./cmd/arthik
   echo "  $abi  $(du -h "$LIBS/$abi/libarthik.so" | cut -f1)"
 }
 for abi in $ABIS; do
