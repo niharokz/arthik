@@ -2,12 +2,13 @@
 // keeps its data as YAML .md files.
 //
 //	arthik serve            run the web app (default)
-//	arthik hash-password    print a bcrypt hash for ARTHIK_PASSWORD
+//	arthik hash-password    print a bcrypt hash for ARTHIK_PASSWORD_HASH
 //	arthik check [--demo]   validate the data files, list problems (exit 1 if any)
 //	arthik rebuild          re-read everything and rewrite all computed values
 //	arthik demo-seed        regenerate the demo dataset now
 //	arthik health           exit 0 if the running server answers (Docker healthcheck)
 //	arthik summary          month spend vs budget and the inbox, as JSON (phone widget)
+//	arthik parse-sms TEXT   show how the inbox would read an SMS
 //	arthik bans             list banned addresses
 //	arthik unban IP|all     lift a ban
 //	arthik version
@@ -91,7 +92,7 @@ const usage = `
 usage: arthik <command>
 
   serve            run the web app (default)
-  hash-password    print a bcrypt hash to use as ARTHIK_PASSWORD
+  hash-password    print a bcrypt hash to use as ARTHIK_PASSWORD_HASH
   check [--demo]   validate the data files and list problems
   rebuild          re-read all files and rewrite every computed value
   demo-seed        regenerate the demo dataset
@@ -253,7 +254,7 @@ func hashPassword() error {
 		return err
 	}
 	fmt.Println(h)
-	fmt.Fprintln(os.Stderr, "Put it in .env in single quotes so $ is kept: ARTHIK_PASSWORD='"+h+"'")
+	fmt.Fprintln(os.Stderr, "Put it in .env in single quotes so $ is kept: ARTHIK_PASSWORD_HASH='"+h+"'")
 	return nil
 }
 
@@ -336,7 +337,6 @@ func health() error {
 	return nil
 }
 
-// parseSMS shows what the inbox would read from a message (for writing SMS rules).
 // printSummary prints the widget/notification summary without changing any file.
 func printSummary() error {
 	dir, _ := dataDir(false)
@@ -355,6 +355,7 @@ func printSummary() error {
 	return json.NewEncoder(os.Stdout).Encode(s)
 }
 
+// parseSMS shows what the inbox would read from a message (for writing SMS rules).
 func parseSMS(args []string) error {
 	text := strings.Join(args, " ")
 	if text == "" {

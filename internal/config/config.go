@@ -1,8 +1,8 @@
-// Package config reads Arthik's settings from the environment. In Docker these come
-// from the gitlab-ignored .env via env_file; when run by hand, a .env file in the
-// working directory is read too (real environment variables win).
+// Package config reads Arthik's settings from the environment. In Docker,
+// docker-compose.yml passes the ARTHIK_* values of the git-ignored .env; when run by
+// hand, a .env file in the working directory is read too (real environment variables win).
 //
-// Only container-side values live here. Host paths, UID/GID and the published port
+// Only container-side values live here. Host paths, UID/GID and the network name
 // are used by docker-compose.yml alone.
 package config
 

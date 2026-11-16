@@ -6,7 +6,7 @@
 
 **Self-hosted, double-entry personal finance over plain YAML files.** The everyday feel of a
 phone money tracker (accounts, categories, budgets, reports) with every transaction balanced,
-plus an **inbox** that turns bank SMS and due subscriptions into drafts you accept with one tap.
+plus an **inbox** that turns bank SMS into drafts you accept with one tap, and reminders for the bills that fall due.
 
 - **Web app (PWA)** with offline adds, and an **Android app** that runs fully offline over the folder Syncthing keeps in sync ([android/README.md](android/README.md), [download the APK](https://gitlab.com/niharokz/arthik/-/releases/permalink/latest/downloads/arthik.apk)).
 - **Plain files.** Data is YAML in `.md` files, readable in Obsidian or any editor; edits made there are picked up within seconds.
@@ -54,7 +54,7 @@ For a quick local test add `ports: ["8080:8080"]`, or run `sh scripts/dev.sh` (n
 | `PUID`, `PGID` | compose | User the container runs as (must own `FINANCE_PATH` and `STATE_PATH`). |
 | `ARTHIK_NETWORK` | compose | Docker network of your reverse proxy (`homelab`). |
 | `TZ` | app | Time zone that decides “today”. |
-| `ARTHIK_USER`, `ARTHIK_PASSWORD_HASH` | app | Your sign-in; the hash comes from `arthik hash-password`. `ARTHIK_PASSWORD` (plain text) also works. |
+| `ARTHIK_USER`, `ARTHIK_PASSWORD_HASH` | app | Your sign-in (the user defaults to `admin`); the hash comes from `arthik hash-password`. `ARTHIK_PASSWORD` (plain text) also works. One of the two passwords is required. |
 | `ARTHIK_SECRET` | app | Signs session cookies; set it so you stay signed in across restarts. |
 | `ARTHIK_SESSION_HOURS` | app | How long a sign-in lasts without the device key (12). |
 | `ARTHIK_DEVICE_KEY` | app | Typed once on a device (sign-in screen or Settings → This device): that device stays signed in until it signs out. Change it to sign all such devices out. ≥ 24 characters, e.g. `openssl rand -hex 32`. |
@@ -64,7 +64,7 @@ For a quick local test add `ports: ["8080:8080"]`, or run `sh scripts/dev.sh` (n
 | `ARTHIK_DEMO_USER`, `ARTHIK_DEMO_PASSWORD` | app | Optional read-only demo login, shown on the start page (data in `<FINANCE_PATH>/demouser`, regenerated monthly). Both empty = no demo. |
 | `ARTHIK_WATCH_SECONDS` | app | How often to look for edits made by other apps (default 3). |
 | `ARTHIK_PRIMARY` | app | `true` (default): this instance writes computed files, imports the inbox and merges Syncthing conflict copies. Set `false` on any second instance sharing the folder. |
-| `ARTHIK_INBOX_MAX_AGE_DAYS`, `ARTHIK_INBOX_KEEP_DAYS`, `ARTHIK_INBOX_PAIR_DAYS` | app | Inbox: ignore older source items (30), forget reviewed drafts (120), pair a debit with a matching credit within N days (2). |
+| `ARTHIK_INBOX_MAX_AGE_DAYS`, `ARTHIK_INBOX_KEEP_DAYS`, `ARTHIK_INBOX_PAIR_DAYS` | app | Inbox: ignore older source items (30), forget reviewed drafts (120), pair a debit with a matching credit within N days (2). `KEEP` must be larger than `MAX_AGE`; Arthik refuses to start otherwise. |
 | `ARTHIK_INBOX_RESCAN_MINUTES` | app | Re-read the inbox files at least this often, even when no file change was noticed (10). |
 | `ARTHIK_AI_URL`, `ARTHIK_AI_MODEL`, `ARTHIK_AI_TIMEOUT_SECONDS` | app | Optional Ollama that suggests categories for new merchants, e.g. `http://ollama:11434` and `qwen2.5:7b-instruct-q4_K_M`. Empty = off. |
 
@@ -137,14 +137,15 @@ Unknown keys you add to any record are kept.
 ## Inbox
 
 Producers each own one file in `inbox/`, so no two programs ever write the same file.
-The main instance adds a draft for every new item (ids are stable, so nothing is
-drafted twice; items older than `ARTHIK_INBOX_MAX_AGE_DAYS` are ignored):
+The main instance adds a draft for every new bank SMS and a reminder for every new Kronos
+bill (ids are stable, so nothing is added twice; items older than
+`ARTHIK_INBOX_MAX_AGE_DAYS` are ignored):
 
 | Step | When | Run it now |
 |---|---|---|
 | Phone copies bank SMS → `inbox/sms_<device>.md` | daily, time set in the app (Settings → Phone) | *Copy now* (app) |
 | SMS → drafts | *as soon as they arrive*, or *every day at HH:MM* (`inbox_sms_time`, Settings → Inbox) | *Run now* (server) · *Run on server* (phone, online mode) |
-| Kronos subscriptions → drafts | as soon as Kronos writes `inbox/kronos.md` | *Run now* |
+| Kronos bills → reminders (🔔 Notifications, never drafts) | as soon as Kronos writes `inbox/kronos.md` | *Run now* |
 
 On the phone, *online mode* (the server is the main device) asks the server through
 the synced folder: the request lands in `inbox/run_request.md`, the server imports on its
@@ -182,8 +183,8 @@ arthik check [--demo]   validate the data files and list problems
 arthik rebuild          re-read everything and rewrite all computed values
 arthik demo-seed        regenerate the demo data now
 arthik health           exit 0 when the server answers (Docker health check)
-arthik summary          this month's spending vs budget and the inbox, as JSON (read-only)
-arthik parse-sms TEXT   show how the inbox would read an SMS
+arthik summary          this month's spending vs budget, the inbox, net worth and the daily alert, as JSON (read-only)
+arthik parse-sms TEXT   show how the inbox would read an SMS (or pipe the text in)
 arthik bans             list banned addresses (and until when)
 arthik unban IP|all     lift a ban; the running server notices at once
 arthik version
@@ -235,11 +236,16 @@ is plain ES modules and CSS embedded in the binary — no build step, no CDN.
 cmd/arthik/          the binary: serve, CLI commands
 internal/book/       data files: load, validate, compute, write, merge Syncthing conflicts
 internal/feature/…   one package per screen's API (accounts, transactions, review = inbox, …)
-internal/inbox/      SMS + Kronos drafts, learned rules, confidence
+internal/inbox/      SMS drafts, Kronos reminders, learned rules, confidence, the import runner
+internal/plugin/     personal plugins (loans)
 internal/auth/       users, sessions, device key       internal/guard/  IP bans
 web/static/          the app (ES modules, CSS) and the start page
 android/             the Android app (Kotlin WebView shell + the same engine)
+docker/builder/      the image that builds the APK      scripts/  release, build, checks, dev
 ```
+
+How the pieces fit — the engine, the file and sync contract, the inbox pipeline, every API
+route, known issues — is in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 Issues and merge requests use the templates in `.gitlab/`. Security reports: [SECURITY.md](SECURITY.md).
 

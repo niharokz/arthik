@@ -70,7 +70,7 @@ const navIcon = (k, emoji, size) => icon(k, size) || html`<span class="emo">${em
 
 /** Menu order from settings (unknown keys dropped, missing ones appended). */
 export function navOrder() {
-  const saved = (S.state?.settings?.nav_order || []).map((k) => (k === "scheduled" ? "inbox" : k)).filter((k) => NAV_ITEMS[k]);
+  const saved = (S.state?.settings?.nav_order || []).filter((k) => NAV_ITEMS[k]);
   return [...new Set([...saved, ...Object.keys(NAV_ITEMS)])];
 }
 

@@ -156,11 +156,35 @@ func remove(c *httpx.Ctx) error {
 			if a.ID == id {
 				d.Accounts = append(d.Accounts[:i:i], d.Accounts[i+1:]...)
 				ch.Accounts = true
+				forget(d, ch, id)
 				return nil
 			}
 		}
 		return httpx.NotFound("account")
 	}))
+}
+
+// forget takes a deleted account off open drafts, reminders and learned rules.
+func forget(d *book.Data, ch *book.Change, id string) {
+	for _, x := range d.Drafts {
+		open := x.Status == model.DraftPending || x.Status == model.DraftNotice
+		if !open || (x.Account != id && x.ToAccount != id) {
+			continue
+		}
+		if x.Account == id {
+			x.Account = ""
+		}
+		if x.ToAccount == id {
+			x.ToAccount = ""
+		}
+		d.SetDraft(x, ch)
+	}
+	for _, r := range d.Rules {
+		if r.Account == id {
+			r.Account = ""
+			d.SetRule(r, ch)
+		}
+	}
 }
 
 type point struct {

@@ -361,7 +361,7 @@ func (b *Book) reloadLocked() error {
 		problems = append(problems, Problem{File: filepath.Base(path), Level: LevelInfo, Msg: fmt.Sprintf("conflict copy merged (%d transaction(s) taken)", n)})
 	}
 	merged = append(merged, b.defConflicts(d, &ch, &problems)...)
-	fx := d.fixup(&problems)
+	fx := d.fixup()
 	ch.merge(fx)
 	d.sortTxns()
 	d.reindex()
@@ -475,7 +475,7 @@ func NormAlerts(a *model.Alerts) *model.Alerts {
 
 // fixup repairs missing definition ids (transaction ids and months are handled by
 // resolveTxns).
-func (d *Data) fixup(_ *[]Problem) Change {
+func (d *Data) fixup() Change {
 	var ch Change
 	seen := map[string]bool{}
 	for i := range d.Accounts {

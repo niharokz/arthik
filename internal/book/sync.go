@@ -46,7 +46,7 @@ func stamp() string { return Stamp(Now()) }
 // Stamp formats a time the way Arthik stores change times.
 func Stamp(t time.Time) string { return t.UTC().Format(stampLayout) }
 
-// ParseStamp reads a stored stamp (zero time when empty or unreadable).
+// ParseStamp reads a stored stamp; empty or unreadable is the zero time ("very old").
 func ParseStamp(s string) time.Time {
 	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {
@@ -58,21 +58,12 @@ func ParseStamp(s string) time.Time {
 // stampLayout is RFC 3339 with milliseconds, e.g. 2026-10-10T18:10:12.345Z.
 const stampLayout = "2006-01-02T15:04:05.000Z07:00"
 
-// parseStamp reads a stored stamp; anything unreadable counts as "very old".
-func parseStamp(s string) time.Time {
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Time{}
-	}
-	return t
-}
-
 // version is the time a record last changed (deletion time for tombstones).
 func version(t model.Transaction) time.Time {
 	if t.IsTombstone() {
-		return parseStamp(t.Deleted)
+		return ParseStamp(t.Deleted)
 	}
-	return parseStamp(t.Updated)
+	return ParseStamp(t.Updated)
 }
 
 // monthFileRe matches transaction_YYYYMM.md and its Syncthing conflict copies.
@@ -160,7 +151,7 @@ func resolveTxns(all []loadedTx, now time.Time, purge bool) txResolution {
 			r.dirty[w.month], r.dirty[target] = true, true
 		}
 		if w.t.IsTombstone() {
-			if purge && now.Sub(parseStamp(w.t.Deleted)) > TombstoneTTL {
+			if purge && now.Sub(ParseStamp(w.t.Deleted)) > TombstoneTTL {
 				r.dirty[w.month] = true // old enough to forget
 				continue
 			}
@@ -296,7 +287,7 @@ func newestByID[T any](main, other []T, key func(T) (string, string)) ([]T, int)
 			taken++
 			continue
 		}
-		if _, cur := key(main[i]); parseStamp(st).After(parseStamp(cur)) {
+		if _, cur := key(main[i]); ParseStamp(st).After(ParseStamp(cur)) {
 			main[i] = o
 			taken++
 		}

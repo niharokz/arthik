@@ -60,7 +60,7 @@ func uniqueID(base string, taken func(string) bool) string {
 	return id
 }
 
-// UniqueAccountID / UniqueCategoryID / UniqueLabelID make a fresh id from a name.
+// UniqueAccountID / UniqueCategoryID make a fresh id from a name.
 func (d *Data) UniqueAccountID(name string) string {
 	return uniqueID(Slug(name), func(s string) bool { _, ok := d.idx.acc[s]; return ok })
 }

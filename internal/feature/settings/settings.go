@@ -92,7 +92,7 @@ func validate(s *model.Settings) error {
 		return fmt.Errorf("upcoming days must be 1–365")
 	}
 	if s.CheckDays < 0 || s.CheckDays > 365 {
-		return fmt.Errorf("balance check days must be 1–365")
+		return fmt.Errorf("balance check days must be 1–365 (0 keeps the saved value)")
 	}
 	if s.NavOrder != nil {
 		order, err := navOrder(s.NavOrder)
@@ -226,7 +226,7 @@ func homeLayout(in []model.HomeSection) ([]model.HomeSection, error) {
 	return out, nil
 }
 
-// homeRefs drops custom sections whose account, category or label no longer exists.
+// homeRefs drops custom sections whose account or category no longer exists.
 func homeRefs(d *book.Data, home []model.HomeSection) []model.HomeSection {
 	if home == nil {
 		return nil

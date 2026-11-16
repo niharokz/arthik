@@ -595,3 +595,61 @@ func TestRunnerRequest(t *testing.T) {
 		t.Fatal("request file not deleted")
 	}
 }
+
+// A replica never registers as an importer: "Run now" there must ask the main
+// device through inbox/run_request.md instead of importing by itself.
+func TestReplicaNeverImports(t *testing.T) {
+	b, err := book.OpenWith(t.TempDir(), book.Options{Name: "phone", Replica: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r := &Runner{Book: b, Cfg: config.Inbox{MaxAgeDays: 30, KeepDays: 120, PairDays: 2}}
+	done := make(chan struct{})
+	go func() { r.Run(ctx, time.Hour); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the runner keeps running on a replica")
+	}
+	if Runs(b.Dir) {
+		t.Fatal("a replica reports that it imports the inbox")
+	}
+	if _, ok, _ := ImportFor(b.Dir); ok {
+		t.Fatal("a replica imported the inbox")
+	}
+}
+
+// With no daily time set, a re-scan that finds nothing new must not rewrite
+// drafts.md (every rewrite is a new version for Syncthing to carry).
+func TestRescanLeavesDraftsAlone(t *testing.T) {
+	b := newBook(t)
+	dir := filepath.Join(b.Dir, book.InboxDir)
+	_ = os.MkdirAll(dir, 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "sms_phone.md"), []byte("device: phone\nmessages:\n"+
+		`  - {id: "bbbbbbbbbbbbbbbb", from: "AX-HDFCBK", at: "2026-10-11T20:00:00+05:30", body: "Spent Rs.50 On HDFC Bank Card 4111 At TEA On 2026-10-11:20:00:00."}`+"\n"), 0o644)
+	clock := time.Date(2026, 10, 11, 21, 0, 0, 0, time.UTC)
+	r := &Runner{Book: b, Cfg: config.Inbox{MaxAgeDays: 30, KeepDays: 120, PairDays: 2, Rescan: 10 * time.Minute}, Loc: time.UTC, Now: func() time.Time { return clock }}
+	if n, err := r.Import(); err != nil || n != 1 {
+		t.Fatalf("first import: %d drafts, %v", n, err)
+	}
+	drafts := filepath.Join(b.Dir, book.DraftsFile)
+	before, err := os.ReadFile(drafts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		clock = clock.Add(11 * time.Minute)
+		if n, err := r.Import(); err != nil || n != 0 {
+			t.Fatalf("re-scan %d: %d drafts, %v", i, n, err)
+		}
+	}
+	after, _ := os.ReadFile(drafts)
+	if string(before) != string(after) {
+		t.Fatalf("drafts.md was rewritten by a re-scan that found nothing:\n%s\n---\n%s", before, after)
+	}
+	if st := StatusOf(b.Dir); !st.LastSMS.IsZero() { // no Run loop here, so no status either
+		t.Fatalf("unexpected status %v", st.LastSMS)
+	}
+}

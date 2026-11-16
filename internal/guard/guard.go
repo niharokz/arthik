@@ -27,6 +27,9 @@ const FileName = "bans.json"
 // failWindow is how long a failed sign-in counts towards a ban.
 const failWindow = 24 * time.Hour
 
+// sweepAt is how many addresses with failures are kept before old ones are dropped.
+const sweepAt = 1000
+
 // Ban is one banned address.
 type Ban struct {
 	Until  time.Time `json:"until"`
@@ -98,6 +101,9 @@ func (g *Guard) Fail(ip, reason string) bool {
 	keep = append(keep, now)
 	if len(keep) < g.max {
 		g.fails[ip] = keep
+		if len(g.fails) > sweepAt {
+			g.sweep(now)
+		}
 		return false
 	}
 	delete(g.fails, ip)
@@ -108,6 +114,15 @@ func (g *Guard) Fail(ip, reason string) bool {
 	}
 	log.Printf("SECURITY banned %s until %s after %d failed sign-ins (%s)", ip, now.Add(g.term).Format(time.RFC3339), g.max, reason)
 	return true
+}
+
+// sweep forgets addresses whose failures are all older than the window. Call with mu held.
+func (g *Guard) sweep(now time.Time) {
+	for ip, ts := range g.fails {
+		if len(ts) == 0 || now.Sub(ts[len(ts)-1]) >= failWindow {
+			delete(g.fails, ip)
+		}
+	}
 }
 
 // Left is how many more failures ip may make before it is banned.

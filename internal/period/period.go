@@ -192,7 +192,7 @@ func labelled(r Range, o Opts) Range {
 	return r
 }
 
-// MonthlyEquivalent converts an amount-per-period into "per month" numerator/denominator
+// MonthlyFactor converts an amount-per-period into "per month" numerator/denominator
 // factors used by budgets: per-month = amount * num / den.
 func MonthlyFactor(k Kind) (num, den int64) {
 	switch k {

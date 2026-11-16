@@ -22,7 +22,7 @@ show the same books.
 
 - The APK contains the **same Go engine** as the server (built from `cmd/arthik`) plus
   a thin Kotlin shell. The engine starts when you open the app and stops when you
-  close it. The only background work is the optional nightly SMS copy (below);
+  close it. The only background work is the optional daily SMS copy and the optional daily alert (below);
   nothing is sent anywhere except through your Syncthing folder.
 - The phone is a **replica**: it saves what you enter (and your inbox decisions), but
   leaves writing balances, importing the inbox and merging sync conflicts to the server
@@ -90,7 +90,7 @@ To update, install the new APK over the old one. Settings and data are kept.
 | **SMS** (optional) | Settings → Phone → Bank SMS → *Allow* | the nightly copy of bank SMS |
 | **Allow restricted settings** (Android 13+, once) | App info → ⋮ → *Allow restricted settings* | Android blocks SMS for apps not from the Play Store until you do this; the app shows the steps and opens App info |
 | **Alarms & reminders** (optional, Android 12+) | Settings → Phone → Bank SMS → *Allow exact time* | run at the exact minute; without it Android runs it within ~15 minutes |
-| **Notifications** (optional, Android 13+ asks) | Settings → Phone → Inbox notice → switch on | the morning inbox notice |
+| **Notifications** (optional, Android 13+ asks) | Settings → Phone → Daily alert → *Alert on this phone* | the daily alert |
 | **Battery: Unrestricted** (recommended) | App info → Battery → *Unrestricted* | some phones (Xiaomi, OnePlus, Samsung) otherwise skip background alarms |
 | Fingerprint/face | nothing to grant | uses what is enrolled on the phone |
 
@@ -111,23 +111,26 @@ night*, pick the time (default 23:30).
 - *Run now* copies immediately (handy the first time). The card shows the last result.
 - The file keeps 45 days of messages; only the phone writes it.
 
-## Morning inbox notice and widget
+## Daily alert and widgets
 
-- **Notice.** Settings → Phone → **Inbox notice & widget** → *Morning notification*
-  (default 07:00). Once a day the phone reads the inbox from your folder and shows
-  "6 drafts to review · ₹4,594 out" with the newest few; tapping it opens the Inbox.
-  Nothing is shown when the inbox is empty. *Show now* previews it. If you use it,
-  remove Kronos's `arthik_inbox_notify` job (Telegram) so you aren't told twice.
+- **Daily alert.** What it says and when is set once for every device in the app's
+  *Settings → Daily alert* (saved in `settings.md`): the time (default 09:00), whether to
+  alert when an account doesn't match the bank (❌), and a count above which the inbox and
+  notifications together are worth a nudge (default 30, 0 = never). Each phone switches it
+  on for itself in Settings → Phone → **Daily alert** → *Alert on this phone*. Nothing is
+  shown when there is nothing to tell. *Check now* runs it at once. It replaced the
+  morning inbox notice in 1.0.4; if you use it, remove Kronos's `arthik_inbox_notify` job
+  (Telegram) so you aren't told twice.
 - **Widgets.** Long-press the home screen → Widgets → Arthik:
   - **Overview** (4×2): this month's spending against your budgets, a budget bar and the inbox. Tap → Inbox.
   - **Budget** (2×2): spent, of how much, what's left. Tap → Budgets.
   - **Net worth** (2×2): now, this month's change, a 12-month trend. Tap → Overview.
   - **Inbox** (2×2): drafts waiting, money out, the newest. Tap → Inbox.
 
-  They refresh hourly and whenever you leave the app. **Settings → Phone → Widgets**
-  sets their look for all of them: Auto (follows light/dark), Light, Dark, AMOLED
-  (pure black), Glass (35% black), Clear (no background) or Custom — any colour,
-  opacity 0–100% and light/dark/auto text — with a live preview.
+  They refresh hourly and whenever you leave the app (*Update widgets now* in Settings →
+  Phone → Widgets does it at once). Their colours and card background follow the app's
+  *Settings → Look* (theme, colours, none/glass/matte/opaque); the separate per-phone
+  widget look was removed in 1.0.5.
 - Both read the folder with the engine's read-only `summary` command, so the numbers
   are exactly the app's, and nothing is written.
 
@@ -137,7 +140,7 @@ night*, pick the time (default 23:30).
   whose icons follow the app's light/dark theme.
 - **Material You** (Android 12+): Settings → Phone → *Use my phone's colours* swaps
   Arthik teal for your wallpaper accent.
-- The launch screen shows the ₹ hand logo where Android's own splash put it, then
+- The launch screen shows the ₹ logo where Android's own splash put it, then
   the app slides in.
 
 ## First run and settings
@@ -145,7 +148,7 @@ night*, pick the time (default 23:30).
 | Screen | What it does |
 |---|---|
 | Welcome | Demo (read-only sample data, generated on the phone), your own folder, or *Restore my settings* from a saved settings file. |
-| Settings → Phone | Change folder, switch to demo, file access, main-device switch, app lock, phone colours, inbox notice, widget, bank SMS copy, settings file, engine log, restart. |
+| Settings → Phone | Change folder, switch to demo, file access, main-device switch (offline / online mode), app lock, phone colours, daily alert, widgets, bank SMS copy, settings file, engine log, restart. |
 | Lock | Either a 4–8 digit Arthik PIN (stored hashed, optional fingerprint on top; five wrong PINs pause entry for 30 s) or **Fingerprint / face** with the phone's own screen lock as backup (needs a screen lock on the phone). Locks again after the delay you choose. |
 
 Phone settings live in the app. Settings → Phone → **Settings file** also copies them,
@@ -171,7 +174,7 @@ import/export (saved to *Downloads*) — is the same as on the web.
 | SMS “Allow” does nothing | Android 13+: App info → ⋮ → Allow restricted settings, then Permissions → SMS → Allow. |
 | No SMS drafts appear | Settings → Phone → Bank SMS: check *Last run*. Then check `inbox/sms_phone.md` synced to the server, and `docker exec arthik arthik parse-sms "<the message>"` on the server. |
 | The nightly run is late or skipped | Allow exact time; set Battery → Unrestricted. |
-| No morning notice | Settings → Phone → Inbox notice: check *Last notice*; allow notifications in App info; set Battery → Unrestricted. |
+| No daily alert | Settings → Phone → Daily alert: check *Last alert* (it stays silent when nothing is due); allow notifications in App info; set Battery → Unrestricted. |
 | Widget says "choose your finance folder" | Open the app once with your folder; the widget then updates. |
 | Something odd | Settings → Phone → View log (copy it into an issue/chat). |
 
@@ -190,6 +193,7 @@ android/
     Engine.kt         starts/stops the Go engine, waits until ready, rotating log
     ArthikApp.kt      process-wide state (engine survives screen recreation)
     Prefs.kt          phone-only settings
+    AppConfig.kt      phone configuration model (tested)
     Storage.kt        file access permission, folder picker → path, folder checks
     Paths.kt          picker id → path (pure, tested)
     Pin.kt            PBKDF2 PIN hashing (pure, tested)
@@ -197,16 +201,16 @@ android/
     SmsRules.kt       what to copy, the read window, next run time, YAML quoting (pure, tested)
     SmsStore.kt       inbox/sms_<device>.md writer: add once, prune, atomic (tested)
     SmsSync.kt        reads the SMS inbox, the nightly run, SmsAlarm receiver
-    DailyAlarm.kt     once-a-day alarms (SMS copy, notice) + Reschedule receiver (boot/update)
-    Summary.kt        runs `libarthik.so summary`: month spend vs budget, inbox (texts tested)
+    DailyAlarm.kt     once-a-day alarms (SMS copy, daily alert) + Reschedule receiver (boot/update)
+    Summary.kt        runs `libarthik.so summary`: month spend vs budget, inbox, net worth, alert (texts tested)
     Rupees.kt         amounts in/out of the engine, ₹ with Indian grouping (pure, tested)
     Widget.kt         home-screen widgets: Overview, Budget, NetWorth, Inbox providers + drawing
-    WidgetLook.kt     widget background/opacity/text colours (pure, tested)
-    InboxNotify.kt    morning inbox notice + NotifyAlarm receiver
+    WidgetLook.kt     widget colours from the app's look (`setWidgetTheme`; pure, tested)
+    InboxNotify.kt    the daily alert notification + NotifyAlarm receiver
     Downloads.kt      saves CSV exports to Downloads
     Pages.kt          fallback page if the engine can't start
   app/src/main/res/    widget layouts (4×2 + three 2×2), splash logo, notification icon, themes (v31 splash)
-  app/src/test/…      JUnit tests (Paths, Pin, SMS rules + store, summary texts, widget look)
+  app/src/test/…      JUnit tests (AppConfig, Paths, Pin, SMS rules + store, summary texts, widget look)
 ```
 
 The web UI is not duplicated: `web/static` is embedded in the engine. The app-only

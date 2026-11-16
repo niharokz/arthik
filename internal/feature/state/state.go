@@ -114,13 +114,6 @@ func Register(rt *httpx.Router) {
 	})
 }
 
-func nonNil[T any](s []T) []T {
-	if s == nil {
-		return []T{}
-	}
-	return s
-}
-
 // pinWindow is how far back category use is counted for the picker's pinned row.
 const pinWindow = 90
 

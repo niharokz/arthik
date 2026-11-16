@@ -1,5 +1,5 @@
 # arthik — two-stage build: tests + static binary, then a tiny runtime image.
-FROM golang:1.23-alpine AS build
+FROM golang:1.26-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -7,7 +7,7 @@ COPY . .
 RUN go vet ./... && go test ./... \
  && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(cat VERSION)" -o /out/arthik ./cmd/arthik
 
-FROM alpine:3.20
+FROM alpine:3.23
 RUN apk add --no-cache ca-certificates
 COPY --from=build /out/arthik /usr/local/bin/arthik
 # Data folder (bind-mounted from the host); the container runs as PUID:PGID from .env.

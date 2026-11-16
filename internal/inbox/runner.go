@@ -74,6 +74,9 @@ var AIRetry = 5 * time.Minute
 
 // Run checks the producer files every interval until ctx ends.
 func (r *Runner) Run(ctx context.Context, every time.Duration) {
+	if !r.Book.Main() {
+		return // a replica never imports: "Run now" there asks the main device (request.go)
+	}
 	if r.Loc == nil {
 		r.Loc = time.Local
 	}
@@ -274,7 +277,9 @@ func (r *Runner) run(w sources) (int, error) {
 	added := 0
 	err := r.Book.Mutate(func(d *book.Data, ch *book.Change) error {
 		added = Ingest(d, ch, items, Options{Today: r.Book.Today(), Now: time.Now(), MaxAge: r.Cfg.MaxAgeDays, KeepDays: r.Cfg.KeepDays, PairDays: r.Cfg.PairDays})
-		if w.sms {
+		// The stamp drives the daily schedule; without one, write it only with new
+		// drafts, so a re-scan that finds nothing leaves drafts.md alone.
+		if w.sms && (d.Settings.InboxSMSTime != "" || added > 0) {
 			d.SMSImport, ch.Drafts = book.Stamp(now), true
 		}
 		return nil
@@ -315,7 +320,7 @@ func (r *Runner) showSchedule(now time.Time) {
 	}
 	r.setStatus(func(s *Status) {
 		s.SMSTime, s.NextSMS = at, next
-		if !last.IsZero() {
+		if last.After(s.LastSMS) { // a read that found nothing is not stamped in the file
 			s.LastSMS = last
 		}
 	})

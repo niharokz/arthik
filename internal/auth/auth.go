@@ -1,8 +1,8 @@
 // Package auth handles Arthik's two users (the owner and the read-only demo user),
 // signed session cookies and banning addresses that keep failing to sign in.
 //
-// Passwords come from .env. The owner's ARTHIK_PASSWORD may be plain text or a
-// bcrypt hash ($2a$/$2b$/$2y$…, made with `arthik hash-password`). Sessions are a
+// Passwords come from .env: ARTHIK_PASSWORD_HASH is a bcrypt hash ($2a$/$2b$/$2y$…,
+// made with `arthik hash-password`), ARTHIK_PASSWORD plain text. Sessions are a
 // signed cookie (HMAC-SHA256 with ARTHIK_SECRET), so they survive restarts when a
 // secret is set; there is no session store.
 //
@@ -25,6 +25,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -64,6 +65,20 @@ type Auth struct {
 	secret     []byte
 	opt        Options
 	localToken string // set in local mode: the phone app opens sessions with it
+
+	decoyOnce sync.Once
+	decoy     []byte // a hash no password matches (see burn)
+}
+
+// burn spends the time of one bcrypt check, so a sign-in with an unknown user name
+// takes as long as one with a wrong password and does not reveal which names exist.
+func (a *Auth) burn(given string) {
+	a.decoyOnce.Do(func() {
+		b := make([]byte, 24)
+		_, _ = rand.Read(b)
+		a.decoy, _ = bcrypt.GenerateFromPassword([]byte(hex.EncodeToString(b)), 12)
+	})
+	_ = bcrypt.CompareHashAndPassword(a.decoy, []byte(given))
 }
 
 // EnableLocal turns on local mode: no passwords; the phone app opens a session for a
@@ -358,6 +373,9 @@ func (a *Auth) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ac := a.accounts[strings.ToLower(strings.TrimSpace(in.User))]
+	if ac == nil && a.localToken == "" {
+		a.burn(in.Password)
+	}
 	if ac == nil || ac.Password == "" || !checkPassword(ac.Password, in.Password) {
 		a.failed(w, r, "wrong user name or password", "password")
 		return

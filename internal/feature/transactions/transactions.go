@@ -244,7 +244,7 @@ func bulk(c *httpx.Ctx) error {
 }
 
 // Suggestion is a remembered transaction: the details of the latest one with this
-// title. Picking it in the add form fills in everything (only the date stays today).
+// title. The add form takes only its title and category.
 type Suggestion struct {
 	Title     string       `json:"title"`
 	Type      string       `json:"type"`

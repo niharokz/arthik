@@ -88,7 +88,7 @@ type Settings struct {
 // Look is how Arthik looks on every device: a palette, the card background, colour
 // overrides per element and the chart type per chart.
 type Look struct {
-	Palette string            `yaml:"palette" json:"palette"`                   // nss|amoled|galaxy|white|gold
+	Palette string            `yaml:"palette" json:"palette"`                   // nss|amoled|galaxy|white|gold|blackpink
 	Cards   string            `yaml:"cards" json:"cards"`                       // none|glass|matte|opaque
 	Density string            `yaml:"density,omitempty" json:"density"`         // comfortable|compact
 	Colors  map[string]string `yaml:"colors,omitempty" json:"colors,omitempty"` // element → #rrggbb
@@ -136,8 +136,8 @@ func HexColor(s string) bool {
 func DefaultLook() *Look     { return &Look{Palette: "nss", Cards: "matte", Density: "comfortable"} }
 func DefaultAlerts() *Alerts { return &Alerts{Time: "09:00", Mismatch: true, Count: 30} }
 
-// HomeSection is one block of the home screen: a built-in one, or an account,
-// category or label of yours (Ref) with an optional title.
+// HomeSection is one block of the home screen: a built-in one, or an account or
+// category of yours (Ref) with an optional title.
 type HomeSection struct {
 	Type  string `yaml:"type" json:"type"`
 	Ref   string `yaml:"ref,omitempty" json:"ref,omitempty"`

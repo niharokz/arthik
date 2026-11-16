@@ -57,7 +57,7 @@ func Natural(kind string, posting money.Amount) money.Amount {
 	return -posting
 }
 
-// Split classifies a category posting into (income, expense), both non-negative
+// IncomeExpense classifies a category posting into (income, expense), both non-negative
 // except for refunds (an expense refund is negative expense).
 func IncomeExpense(kind string, posting money.Amount) (inc, exp money.Amount) {
 	switch kind {

@@ -2,6 +2,31 @@
 
 Versions before 1.0.1 were pre-releases and are numbered 0.x here.
 
+## 1.0.6 — 2026-11-16
+
+Fixes and clean-up from a full read of the code. No new screens, no change to the data files.
+
+- **Run on server really asks the server.** A second instance sharing the folder (the
+  phone in online mode, or a server with `ARTHIK_PRIMARY=false`) no longer turns SMS into
+  drafts by itself when you tap *Run on server*: it writes `inbox/run_request.md` and the
+  main device does the import, as documented since 1.0.4.
+- **Quieter `inbox/drafts.md`.** With *as soon as they arrive*, the file was rewritten at
+  every re-scan (every 10 minutes) only to store the time of the check. It now changes
+  only when drafts change, so Syncthing has far fewer versions to carry and the phone and
+  the server collide less. With a daily time set nothing changes.
+- **Deleting an account** takes it off the drafts and reminders still waiting and off the
+  learned rules (deleting a category already did).
+- **Sign-in.** An unknown user name now takes as long to refuse as a wrong password, and
+  the list of addresses with failed sign-ins is pruned once it grows long.
+- `arthik hash-password` names the right variable (`ARTHIK_PASSWORD_HASH`).
+- Start page and install text no longer mention labels or scheduled transactions.
+- **Server image** builds with Go 1.26 on Alpine 3.23 (was Go 1.23 on Alpine 3.20, both
+  out of support); CI tests on Go 1.26. The APK builder image is unchanged.
+- Removed unused code and corrected comments that described removed features.
+- Docs: `ARCHITECTURE.md` rewritten against the code (process model, every API route,
+  file and sync contract, inbox pipeline, tests); `README.md` and `android/README.md`
+  corrected (Kronos bills are reminders, daily alert, widgets follow the look).
+
 ## 1.0.5 — 2026-11-06
 
 - **Eye in the top bar.** One tap hides or shows every amount (the same switch as

@@ -7,7 +7,7 @@
 //  - Writes are never cached here: the page queues offline transaction changes
 //    itself (js/api.js) and replays them when back online.
 
-const VERSION = "arthik-v10";
+const VERSION = "arthik-v11";
 const SHELL = `${VERSION}-shell`;
 const API = `${VERSION}-api`;
 const FILES = [

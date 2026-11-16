@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"fmt"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -69,6 +70,21 @@ func TestOldFailuresExpire(t *testing.T) {
 	now = now.Add(25 * time.Hour)
 	if g.Fail("198.51.100.2", "password") {
 		t.Fatal("a failure from yesterday still counted")
+	}
+}
+
+// Addresses that failed once and never came back are forgotten once the list is long.
+func TestOldFailuresAreSwept(t *testing.T) {
+	now := time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC)
+	g := New(Options{MaxFails: 5, Term: time.Hour})
+	g.now = func() time.Time { return now }
+	for i := 0; i < sweepAt; i++ {
+		g.Fail(fmt.Sprintf("203.0.%d.%d", i/250, i%250+1), "password")
+	}
+	now = now.Add(25 * time.Hour)
+	g.Fail("198.51.100.9", "password") // 1001st address: triggers the sweep
+	if n := len(g.fails); n != 1 {
+		t.Fatalf("%d addresses kept, want only the fresh one", n)
 	}
 }
 
